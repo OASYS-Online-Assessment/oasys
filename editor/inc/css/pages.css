@@ -17,6 +17,10 @@ body[data-managerid="pages"] em {
     color: red;
 }
 
+body[data-managerid="pages"] #interactionBlocks em {
+    color: inherit;
+}
+
 div#scoringEditorSwitch {}
 
 .align_center {
