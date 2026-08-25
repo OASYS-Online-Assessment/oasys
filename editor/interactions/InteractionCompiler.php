@@ -1,11 +1,10 @@
 <?php
 
+	require_once __DIR__ . "/../inc/php/initBackend.php";
 	require_once __DIR__ . "/../../inc/php/valueFormats.php";
-	require_once __DIR__ . "/../../inc/php/settings.php";
 	require_once __DIR__ . "/../../inc/php/mp4Info.php";
 	require_once __DIR__ . "/../../inc/php/webmInfo.php";
 	require_once __DIR__ . "/../inc/php/MediaTool.php";
-	require_once __DIR__ . "/../../inc/php/settings.php";
 	require_once __DIR__ . "/../../inc/php/OasysIdGenerator.php";
 	require_once __DIR__ . "/../../inc/php/parser.php";
 
@@ -24,20 +23,8 @@
 		private array $flags;
 		private rixPDO $db;
 
-		public function __construct($blocks, $languages, $id, &$db, $flags = [])
+		public function __construct(mixed $blocks, mixed $languages, int $id, rixPDO &$db, array $flags = [])
 		{
-			if (is_array($blocks)) {
-				$this->blocks = deepCopy($blocks);
-			} else {
-				$this->blocks = json_decode($blocks ?? '[]');
-			}
-
-			if (is_array($languages)) {
-				$this->languages = $languages;
-			} else {
-				$this->languages = json_decode($languages ?? '[]');
-			}
-
 			$this->pageId = $id;
 			$this->errors = [];
 			$this->fields = new stdClass();
@@ -45,13 +32,97 @@
 			$this->options = new stdClass();
 			$this->scripts = new stdClass();
 			$this->metadata = new stdClass();
+			// Always emit the media usage index, including for pages with no interactions.
+			// Otherwise saving an empty page preserves stale mediaIds from its previous contents.
+			$this->metadata->mediaIds = [];
 			$this->flags = $flags;
 			$this->db = $db;
+			$this->blocks = $this->normalizeBlocks($blocks);
+			$this->languages = $this->normalizeLanguages($languages);
+		}
+
+		private function decodeListInput(mixed $input, string $name, bool $associative): ?array
+		{
+			if (is_array($input)) {
+				$decoded = $input;
+			} elseif (is_string($input)) {
+				try {
+					$decoded = json_decode($input, $associative, 512, JSON_THROW_ON_ERROR);
+				} catch (JsonException $e) {
+					$this->errors[] = "InteractionCompiler: '$name' contains malformed JSON: " . $e->getMessage();
+					return null;
+				}
+			} else {
+				$this->errors[] = "InteractionCompiler: '$name' must be a JSON list or PHP array.";
+				return null;
+			}
+
+			if (!is_array($decoded) || !array_is_list($decoded)) {
+				$this->errors[] = "InteractionCompiler: '$name' must be a list.";
+				return null;
+			}
+			return $decoded;
+		}
+
+		private function normalizeBlocks(mixed $blocks): array
+		{
+			$errorCount = count($this->errors);
+			$decoded = $this->decodeListInput($blocks, 'blocks', false);
+			if ($decoded === null) return [];
+
+			try {
+				// Besides making the input independent from the caller, this preserves
+				// the compiler's existing support for blocks supplied as associative arrays.
+				$normalized = json_decode(
+					json_encode($decoded, JSON_THROW_ON_ERROR),
+					false,
+					512,
+					JSON_THROW_ON_ERROR
+				);
+			} catch (JsonException $e) {
+				$this->errors[] = 'InteractionCompiler: blocks could not be normalized: ' . $e->getMessage();
+				return [];
+			}
+
+			foreach ($normalized as $index => $block) {
+				if (!$block instanceof stdClass) {
+					$this->errors[] = "InteractionCompiler: block at index $index must be an object.";
+					continue;
+				}
+				if (!property_exists($block, 'type') || !is_string($block->type) || trim($block->type) === '') {
+					$this->errors[] = "InteractionCompiler: block at index $index must have a non-empty string type.";
+				}
+			}
+			return count($this->errors) === $errorCount ? $normalized : [];
+		}
+
+		private function normalizeLanguages(mixed $languages): array
+		{
+			$errorCount = count($this->errors);
+			$decoded = $this->decodeListInput($languages, 'languages', true);
+			if ($decoded === null) return [];
+
+			$normalized = [];
+			foreach ($decoded as $index => $language) {
+				if (!is_string($language) || trim($language) === '') {
+					$this->errors[] = "InteractionCompiler: language at index $index must be a non-empty string.";
+					continue;
+				}
+				if (in_array($language, $normalized, true)) {
+					$this->errors[] = "InteractionCompiler: language at index $index is duplicated.";
+					continue;
+				}
+				$normalized[] = $language;
+			}
+			if (count($normalized) === 0 && count($this->errors) === $errorCount) {
+				$this->errors[] = 'InteractionCompiler: languages must contain at least one entry.';
+			}
+			return count($this->errors) === $errorCount ? $normalized : [];
 		}
 
 		public function compileBlocks(): void
 		{
-			if (count($this->blocks) === 0 || count($this->languages) === 0) {
+			if (count($this->errors) > 0 || count($this->blocks) === 0 || count($this->languages) === 0) {
 				return;
 			}
 			//initialize media tool
@@ -1088,7 +1159,7 @@
 			$cnf->required = $block->mandatory;
 			$cnf->options = new stdClass();
 			$cnf->code = bin2hex($cnf->id);
-			$this->copyValues($cnf, $block, ['processing', 'labelLeft', 'labelCentre', 'labelRight', 'labelNoReply', 'min', 'max', 'step', 'showSteps', 'noReply', 'showValue']);
+			$this->copyValues($cnf, $block, ['processing', 'labelLeft', 'labelCentre', 'labelRight', 'labelNoReply', 'min', 'max', 'step', 'subDivisions', 'showSteps', 'noReply', 'showValue']);
 			$cnf->score = new stdClass();
 
 			if ($cnf->showSteps === true) {

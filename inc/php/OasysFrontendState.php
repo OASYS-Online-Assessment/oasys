@@ -1,13 +1,22 @@
 <?php
 
 	/**
-	 * OasysFrontendState v1.1.1
+	 * OasysFrontendState v1.2.2
 	 * This class is used to manage the state of the Oasys frontend. It replaces sessions and has the
 	 * advantage of working atomically with the database. This means that 2 parallel running PHP scripts
 	 * can work on the same state without any problems.
-	 * dependencies: StateExpiredException.php, InvalidKeyException.php, rixPDO.php, settings.php
+	 * dependencies: StateExpiredException.php, InvalidKeyException.php, rixPDO.php, database.php
 	 * version history:
-	 * v1.0        initial release
+	 * v1.1.1:
+	 * 		baseline version after a number of initial tests and improvements
+	 * v1.1.2:
+	 * 		modification of namespace declarations
+	 * v1.2.0:
+	 * 		modifications and additions on monitoring activity
+	 * v1.2.1:
+	 * 		derived active-login monitoring from the connection retry window instead of state retention
+	 * v1.2.2:
+	 * 		added getNumberOfActiveClients()
 	 * usage:
 	 *    Creating a new instance:
 	 *        $state = OasysFrontendState::getInstance($instanceId, true);
@@ -38,19 +47,19 @@
 
 	require_once __DIR__ . "/rixPDO.php";
 	require_once __DIR__ . "/database.php";
-	require_once __DIR__ . "/settings.php";
 	require_once __DIR__ . "/exceptions/StateExpiredException.php";
 	require_once __DIR__ . "/exceptions/InvalidKeyException.php";
 
-	use OASYS\exceptions\InvalidKeyException;
+	use Oasys\exceptions\InvalidKeyException;
 	use Oasys\exceptions\StateExpiredException;
+	use Random\RandomException;
 	use rixPDO;
 
 	class OasysFrontendState
 	{
 		private static array $instances = [];
 
-		const ALLOWED_PROPERTIES = [
+		const array ALLOWED_PROPERTIES = [
 			'loginId', 'passwordId', 'testId', 'studentId', 'preview'
 		];
 
@@ -59,6 +68,7 @@
 		private string $stateId;
 		private string $instanceId;
 		private static int $timeOut = 2 * 60 * 60; //states are cleaned after 2 hours of no activity
+		private const int ACTIVE_LOGIN_SAFETY_MARGIN = 2 * 60;
 		private static rixPDO $db;
 
 		/**
@@ -66,7 +76,6 @@
 		 */
 		private function __construct(string $instanceId, bool $init)
 		{
-			global $sql_db, $sql_user, $sql_password, $sql_host;
 			$this->logFile = __DIR__ . "/../../logs/OasysState.txt";
 			$this->openLogFile();
 
@@ -78,6 +87,7 @@
 			$this->instanceId = $instanceId;
 
 			//check if instanceId exists in table and create if $init is true, otherwise fail
+			static::getDBHandle();
 			$query = "SELECT COUNT(*) FROM stateFrontend WHERE stateId = ? AND instanceId = ?";
 			$res = static::$db->fetchValue($query, [$this->stateId, $this->instanceId]);
 			if ($res['data'] === 0) {
@@ -169,14 +179,14 @@
 			} else {
 				try {
 					$stateId = bin2hex(random_bytes(6));
-				} catch (\Random\RandomException $e) {
+				} catch (RandomException $e) {
 					$stateId = uniqid();
 				}
 				setcookie('oasysStateFrontend', $stateId, [
 					'path' => $settings['JSrootURL'],
-					'secure' => @!$settings['debugSystem'] ?? true,
+					'secure' => $settings['cookieSecure'] ?? false,
 					'httponly' => true,
-					'samesite' => 'Strict',
+					'samesite' => $settings['cookieSameSite'] ?? 'Lax',
 				]);
 				return $stateId;
 			}
@@ -270,11 +280,23 @@
 
 		private function wrapValue(mixed $value): array
 		{
-			return [
-				'type' => gettype($value),
-				'value' => $value,
-			];
+			$type = gettype($value);
+			return match ($type) {
+				'boolean', 'integer', 'double', 'string' => [
+					'type' => $type,
+					'value' => $value,
+				],
+				'array', 'object' => [
+					'type' => $type,
+					'value' => json_encode($value),
+				],
+				default => [
+					'type' => 'invalid',
+					'value' => null,
+				],
+			};
 		}
+
 
 		private function unwrapValue(string $entry): mixed
 		{
@@ -283,7 +305,8 @@
 			$val = $decoded['value'] ?? null;
 
 			return match ($type) {
-				'object' => json_decode(json_encode($val)),
+				'object' => json_decode($val, false),
+				'array' => json_decode($val, true),
 				'boolean' => filter_var($val, FILTER_VALIDATE_BOOLEAN),
 				default => $val,
 			};
@@ -303,15 +326,82 @@
 			return ($res['error'] === false && $res['data'] > 0);
 		}
 
-		public static function getNumberOfActiveClients(?int $timeOut = null): int
+		public static function fetchActiveLogins(?int $timeOut = null): array
 		{
 			static::getDBHandle();
-			if (!$timeOut) {
-				$timeOut = static::$timeOut;
+			if ($timeOut === null) {
+				$timeOut = static::getDefaultActiveLoginTimeout();
 			}
-			$query = "SELECT COUNT(*) FROM stateFrontend WHERE TIMESTAMPDIFF(SECOND,active,NOW()) <= ?";
-			$res = static::$db->fetchValue($query, [static::$timeOut]);
-			return ($res['error'] === false) ? (int)$res['data'] : 0;
+			$query = <<<SQL
+				SELECT
+				    stateFrontend.loginId,
+					logins.`name` AS login, 
+					tests.`name` AS test,
+					activity.clientOpen,
+					TIMESTAMPDIFF(SECOND, stateFrontend.active, NOW()) AS inactivityTime
+				FROM
+					stateFrontend
+					INNER JOIN
+					activity
+					ON 
+						stateFrontend.loginId = activity.loginId AND
+						stateFrontend.passwordId = activity.passwordId AND
+						stateFrontend.testId = activity.testId
+					INNER JOIN
+					logins
+					ON 
+						logins.id = activity.loginId
+					INNER JOIN
+					tests
+					ON 
+						tests.id = activity.testId
+				WHERE
+					activity.clientOpen = 1
+					AND TIMESTAMPDIFF(SECOND, stateFrontend.active, NOW()) <= ?
+			SQL;
+
+			$res = static::$db->fetchTable($query, [$timeOut]);
+			return ($res['error'] === false) ? $res['data'] : [];
+		}
+
+		public static function getNumberOfActiveClients(?int $timeOut = null): int
+		{
+			try {
+				static::getDBHandle();
+				if ($timeOut === null) {
+					$timeOut = static::getDefaultActiveLoginTimeout();
+				}
+
+				$query = <<<SQL
+					SELECT COUNT(*)
+					FROM stateFrontend
+					INNER JOIN activity
+						ON stateFrontend.loginId = activity.loginId
+						AND stateFrontend.passwordId = activity.passwordId
+						AND stateFrontend.testId = activity.testId
+					WHERE activity.clientOpen = 1
+						AND TIMESTAMPDIFF(SECOND, stateFrontend.active, NOW()) <= ?
+				SQL;
+
+				$res = static::$db->fetchValue($query, [$timeOut]);
+				if ($res['error'] !== false || !isset($res['data']) || !is_numeric($res['data'])) {
+					return -1;
+				}
+
+				return (int)$res['data'];
+			} catch (\Throwable) {
+				return -1;
+			}
+		}
+
+		private static function getDefaultActiveLoginTimeout(): int
+		{
+			global $settings;
+
+			$retryCount = max(1, (int)($settings['retryCount'] ?? 3));
+			$sendFrequency = max(1, (int)($settings['sendFrequency'] ?? 15));
+
+			return ($retryCount * $sendFrequency) + static::ACTIVE_LOGIN_SAFETY_MARGIN;
 		}
 
 		private static function cleanStaleStates(): void
@@ -323,18 +413,14 @@
 
 		private static function getDBHandle(): void
 		{
-			global $sql_db, $sql_user, $sql_password, $sql_host;
+			global $app;
 
 			//return if the database connection is already established
 			if (isset(static::$db)) {
 				return;
 			}
 
-			static::$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/../../logs/OasysState.txt');
-			$results = static::$db->results();
-			if ($results['error']) {
-				die();
-			}
+			static::$db = $app->getDatabaseInstance();
 		}
 
 	}

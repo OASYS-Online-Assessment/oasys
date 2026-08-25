@@ -1,40 +1,34 @@
 /* Default language options */
-INSERT INTO `languages` (`code`, `name`, `fallback`) VALUES ('DE', 'Deutsch', 'DE');
-INSERT INTO `languages` (`code`, `name`, `fallback`) VALUES ('EN', 'English', 'EN');
-INSERT INTO `languages` (`code`, `name`, `fallback`) VALUES ('FR', 'Français', 'FR');
-INSERT INTO `languages` (`code`, `name`, `fallback`) VALUES ('LU', 'Lëtzebuergesch', 'LU');
+INSERT IGNORE INTO `languages` (`code`, `name`, `fallback`) VALUES ('DE', 'Deutsch', 'DE');
+INSERT IGNORE INTO `languages` (`code`, `name`, `fallback`) VALUES ('EN', 'English', 'EN');
+INSERT IGNORE INTO `languages` (`code`, `name`, `fallback`) VALUES ('FR', 'Français', 'FR');
+INSERT IGNORE INTO `languages` (`code`, `name`, `fallback`) VALUES ('LU', 'Lëtzebuergesch', 'LU');
 
 /* Default 'Home' folder entries as required for various filesystem-based editors */
-INSERT INTO
+INSERT IGNORE INTO
     `itemFolders`(`id`, `name`, `parent`, `options`, `owner`)
 VALUES
-    (NULL, 'Home', NULL, NULL, NULL);
+    (1, 'Home', NULL, NULL, NULL);
 
-INSERT INTO
+INSERT IGNORE INTO
     `loginsFolders`(`id`, `name`, `parent`, `owner`)
 VALUES
-    (NULL, 'Home', NULL, NULL);
+    (1, 'Home', NULL, NULL);
 
-INSERT INTO
+INSERT IGNORE INTO
     `testFolders`(`id`, `name`, `parent`, `owner`)
 VALUES
-    (NULL, 'Home', NULL, NULL);
+    (1, 'Home', NULL, NULL);
 
 /* Create the 'superadmin' usergroup */
-INSERT INTO
-    `userGroups`
-VALUES
-    (NULL, 'superadmin', NULL);
+INSERT INTO `userGroups` (`name`, `accessDef`)
+SELECT 'superadmin', NULL
+WHERE NOT EXISTS (SELECT 1 FROM `userGroups` WHERE `name` = 'superadmin');
 
 /* Create the 'admin' usergroup with default access to 'users' editor */
-INSERT INTO
-    `userGroups`
-VALUES
-    (
-        NULL,
-        'admin',
-        '{"editorButtons": {"users":true}}'
-    );
+INSERT INTO `userGroups` (`name`, `accessDef`)
+SELECT 'admin', '{"editorButtons": {"users":true}}'
+WHERE NOT EXISTS (SELECT 1 FROM `userGroups` WHERE `name` = 'admin');
 
 /* Create the default account as username 'demo' with password 'password' */
 INSERT INTO
@@ -44,63 +38,47 @@ INSERT INTO
         `email`,
         `defLang`,
         `options`,
-        `lastLogin`,
+        `activity`,
         `accessDef`,
         `homeaccess`,
         `status`,
         `bad_logins`,
         `last_bad_pass`,
-        `acct_type`
+        `acct_type`,
+        `resetData`,
+        `dashboard`
     )
-VALUES
-    (
-        'demo',
-        '$2y$10$Pb/dzQ5FZxqeyo3kYxBzjOayppFYCsO4gIokNh1PeEXswNfYZ51PG',
-        NULL,
-        'EN',
-        NULL,
-        NULL,
-        '{"c_items": {"Elevated Administrator": true }, "items": { "adminElevated": true }, "userSettings": { "disableAnimations": false, "defaultLanguage": "EN"}}',
-        1,
-        1,
-        0,
-        NULL,
-        'LOCAL'
-    );
+SELECT
+    'demo',
+    '$2y$10$Pb/dzQ5FZxqeyo3kYxBzjOayppFYCsO4gIokNh1PeEXswNfYZ51PG',
+    NULL,
+    'EN',
+    NULL,
+    NULL,
+    '{"c_items": {"Elevated Administrator": true }, "items": { "adminElevated": true }, "userSettings": { "disableAnimations": false, "defaultLanguage": "EN"}}',
+    1,
+    1,
+    0,
+    NULL,
+    'LOCAL',
+    NULL,
+    NULL
+WHERE NOT EXISTS (SELECT 1 FROM `users` WHERE `name` = 'demo');
 
 /* Place aforementioned 'demo' account into the 'superadmin' group */
-INSERT INTO
-    userGroupAccess
-VALUES
-    (
-        NULL,
-        (
-            SELECT
-                id
-            FROM
-                users
-            WHERE
-                name = 'demo'
-        ),
-        (
-            SELECT
-                id
-            FROM
-                userGroups
-            WHERE
-                name = 'superadmin'
-        )
-    );
+INSERT IGNORE INTO `userGroupAccess` (`userId`, `usergroupId`)
+SELECT u.id, g.id
+FROM `users` AS u
+JOIN `userGroups` AS g ON g.name = 'superadmin'
+WHERE u.name = 'demo';
 
 -- ----------------------------
 -- Records of systemState
 -- ----------------------------
-INSERT INTO
-    `systemState`
-VALUES
-    ('backend', 0);
+INSERT INTO `systemState` (`sys_section`, `status`)
+SELECT 'backend', 0
+WHERE NOT EXISTS (SELECT 1 FROM `systemState` WHERE `sys_section` = 'backend');
 
-INSERT INTO
-    `systemState`
-VALUES
-    ('frontend', 0);
+INSERT INTO `systemState` (`sys_section`, `status`)
+SELECT 'frontend', 0
+WHERE NOT EXISTS (SELECT 1 FROM `systemState` WHERE `sys_section` = 'frontend');

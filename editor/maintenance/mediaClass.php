@@ -2,13 +2,13 @@
 
 namespace maintenance;
 
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use rixPDO;
 use uiLang;
 use userAuth;
 
-require_once(__DIR__ . "/../../inc/php/rixPDO.php");
-require_once(__DIR__ . "/../../inc/php/database.php");
-require_once(__DIR__ . "/../../inc/php/settings.php");
+require_once(__DIR__ . "/../../inc/php/initSettings.php");
 
 class mediaClass
 {
@@ -23,24 +23,25 @@ class mediaClass
 
 	public function __construct(&$returnData, $data = [])
 	{
-		global $sql_host, $sql_password, $sql_user, $sql_db, $uiLang, $myAuth, $settings;
+		global $db, $uiLang, $myAuth, $settings;
 		$this->returnData = &$returnData;
 		$this->uiLang = &$uiLang;
 		$this->myAuth = &$myAuth;
 		$this->data = $data;
 
 		//init database connections
-		$this->db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/../../../logs/mediaActions.txt', 1, $this->returnData, 'error');
+		$this->db = $db;
 		$this->fetchMediaLibrary();
 		$this->mediaLocation = $settings['mediaLocation'];
 	}
 
 	public function execute($action): void
 	{
-		if (method_exists($this, $action)) {
+		$allowedActions = ['verifyMediaAssets', 'consolidateMediaAssets', 'setMediaLocationToDisk', 'setMediaLocationToDatabase'];
+		if (is_string($action) && in_array($action, $allowedActions, true)) {
 			call_user_func([$this, $action]);
 		} else {
-			$this->returnData['error'] = "Undefined action: '$action'";
+			$this->returnData['error'] = 'Unknown or unsupported action.';
 		}
 	}
 
@@ -52,7 +53,7 @@ class mediaClass
 
 	private function fetchAssetListFromDisk(): array
 	{
-		$objects = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->mediaPath), \RecursiveIteratorIterator::SELF_FIRST);
+		$objects = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->mediaPath), RecursiveIteratorIterator::SELF_FIRST);
 		$fileList = [];
 		foreach ($objects as $name => $object) {
 			if ($object->isFile() && $object->getExtension() === 'dat') {
@@ -160,7 +161,7 @@ class mediaClass
 		foreach ($emptyDirectories as $emptyDirectory) {
 			//remove media path prefix from path
 			$emptyDirectory = str_replace($this->mediaPath, 'media', $emptyDirectory);
-			$this->returnData['log'][] = "Empty media folder found on disk [{$emptyDirectory}]";
+			$this->returnData['log'][] = "Empty media folder found on disk [$emptyDirectory]";
 		}
 
 		//check media folder permissions
@@ -254,7 +255,7 @@ class mediaClass
 		foreach ($emptyDirectories as $emptyDirectory) {
 			//delete directory from disk
 			$this->deleteDirectoryFromDisk($emptyDirectory);
-			$this->returnData['log'][] = "Empty media folder deleted from disk [{$emptyDirectory}]";
+			$this->returnData['log'][] = "Empty media folder deleted from disk [$emptyDirectory]";
 		}
 
 		//fix media folder permissions
@@ -394,11 +395,11 @@ class mediaClass
 			//check permissions
 			if (!str_ends_with(sprintf('%o', fileperms($mediaFolder)), '0775')) {
 				if ($simulate) {
-					$this->returnData['log'][] = "Wrong permissions for folder [{$mediaFolder}]";
+					$this->returnData['log'][] = "Wrong permissions for folder [$mediaFolder]";
 					continue;
 				}
 				chmod($mediaFolder, 0775);
-				$this->returnData['log'][] = "Changed permissions for media folder [{$mediaFolder}]";
+				$this->returnData['log'][] = "Changed permissions for media folder [$mediaFolder]";
 			}
 		}
 	}

@@ -160,7 +160,7 @@ function global_internalError(msg, title, stopTest = false) {
 
 function global_goToErrorPage() {
 	if (typeof (core_sendBeacon) === "function") {
-		core_sendBeacon();
+		core_sendBeacon('fatalError');
 	}
 	loader_switchMode('error');
 }
@@ -214,12 +214,69 @@ function global_mayAcceptKeyStrokes() {
 	return !window.loader.waitDialog.busy();
 }
 
+let globalFinishScreenRequestPending = false;
+
+function global_finishTest() {
+	if (globalFinishScreenRequestPending) return;
+	globalFinishScreenRequestPending = true;
+	loader_registerAjaxHandler('finishScreen', 'finish.php', true, false, global_finishScreenLoaded);
+	loader_startAjax('finishScreen', 'fetchFinishScreen', {
+		serialNumber: window.serialNumber
+	});
+}
+
+function global_finishScreenLoaded(res) {
+	globalFinishScreenRequestPending = false;
+	const finishScreenData = res.data || {mode: 'default'};
+	if (finishScreenData.mode === 'url' && typeof (finishScreenData.url) === 'string' && finishScreenData.url !== '') {
+		global_cleanState();
+		window.location = finishScreenData.url;
+	} else if (finishScreenData.mode === 'custom' &&
+		typeof (finishScreenData.contents) === 'object' &&
+		objectLength(finishScreenData.contents) > 0) {
+		window.finishScreen = finishScreenData;
+		global_cleanState();
+		loader_switchMode('finish');
+	} else {
+		global_returnToLogin();
+	}
+}
+
+function global_rememberStudentState() {
+	if (window.top !== window) return;
+	try {
+		sessionStorage.setItem(window.studentStateStorageKey, window.serialNumber);
+	} catch (e) {
+		// Reload persistence is optional when sessionStorage is unavailable.
+	}
+}
+
+function global_forgetStudentState() {
+	if (window.top !== window) return;
+	try {
+		sessionStorage.removeItem(window.studentStateStorageKey);
+	} catch (e) {
+		// Nothing else is needed when sessionStorage is unavailable.
+	}
+}
+
+function global_hasCurrentStudentState() {
+	if (window.top !== window) return false;
+	try {
+		return sessionStorage.getItem(window.studentStateStorageKey) === window.serialNumber;
+	} catch (e) {
+		return false;
+	}
+}
+
 function global_returnToLogin() {
 	global_cleanState();
 	if (parameters?.framed === 1) {
 		global_returnToParent();
 	} else if (settings.customLoginURL !== '') {
 		window.location = settings.customLoginURL;
+	} else if (typeof (customLandingPage) === 'object' && customLandingPage !== null && customLandingPage.id) {
+		window.location = settings.rootURL + '?landingPageId=' + encodeURIComponent(customLandingPage.id);
 	} else if (landingPage !== '') {
 		window.location = settings.rootURL + '?landingPage=' + landingPage;
 	} else {
@@ -236,6 +293,7 @@ function global_returnToParent() {
 
 /* when window closes contact server to remove serial number from session */
 function global_cleanState() {
+	if (global_hasCurrentStudentState()) return;
 	if ("sendBeacon" in navigator) {
 		const fd = new FormData();
 		fd.append('serialNumber', window.serialNumber);

@@ -2364,6 +2364,7 @@ class editorDropDown {
 			elements: [{value: "", label: ""}],
 			listTitle: '',
 			initialValue: this.data,
+			theme: 'backend',
 			onChange: (sender, value) => this.onChange(value)
 		};
 
@@ -2468,6 +2469,7 @@ class editorPreview {
 			],
 			listTitle: '',
 			initialValue: '1024px',
+			theme: 'backend',
 			onChange: (sender, value) => this.onChange(sender, value)
 		};
 
@@ -2836,6 +2838,7 @@ class propsDropDown {
 			listTitle: '',
 			width: settings.width ? settings.width : '100%',
 			initialValue: this.controller.getData(...this.path),
+			theme: 'backend',
 			onChange: (sender, value) => this.onChange(sender, value)
 		};
 

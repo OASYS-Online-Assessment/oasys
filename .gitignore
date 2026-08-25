@@ -30,7 +30,9 @@ media/[0-9]*
 composer.json
 composer.lock
 **/vendor
-!inc/domPDF/vendor/*
+!inc/domPDF/vendor/
 modules/*
 !modules/README.md
 *.ini
+customContent/*
+!customContent/.gitkeep

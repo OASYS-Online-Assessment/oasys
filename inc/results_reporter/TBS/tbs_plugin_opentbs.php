@@ -771,7 +771,7 @@ class clsOpenTBS extends clsTbsZip {
 
 		} elseif ($Cmd==OPENTBS_SYSTEM_CREDIT) {
 
-			$x1 = (boolean) $x1;
+			$x1 = (bool) $x1;
 			$this->TbsSystemCredits = $x1;
 			return $x1;
 
@@ -781,7 +781,7 @@ class clsOpenTBS extends clsTbsZip {
 			
 		} elseif ($Cmd==OPENTBS_RELATIVE_CELLS) {
 
-			$KeepRelative = (boolean) $x1;
+			$KeepRelative = (bool) $x1;
 			if ($x2 == OPENTBS_ALL) {
 				// Al$ sheets
 				$this->TBS->OtbsMsExcelExplicitRef = (!$KeepRelative);
@@ -797,7 +797,7 @@ class clsOpenTBS extends clsTbsZip {
 			
 		} elseif ($Cmd==OPENTBS_EDIT_ENTITY) {
 			
-			$AddElIfMissing = (boolean) $x5;
+			$AddElIfMissing = (bool) $x5;
 			return $this->XML_ReadWriteAtt($x1, $x2, $x3, $x4, $AddElIfMissing);
 			
 		} elseif ($Cmd==OPENTBS_READ_ENTITY) {
@@ -2244,7 +2244,7 @@ If they are blank spaces, line beaks, or other unexpected characters, then you h
 
 		$ext = $this->ExtEquiv;
 
-		$ok = (boolean) $ok;
+		$ok = (bool) $ok;
 		if (!is_array($id_or_name)) $id_or_name = array($id_or_name);
 
 		foreach ($id_or_name as $item=>$action) {
@@ -5396,7 +5396,7 @@ If they are blank spaces, line beaks, or other unexpected characters, then you h
 			if ($v !== false) {
 				switch ($type) {
 				case 'b': // boolean: 0=false
-					$x = (boolean) $v; break;
+					$x = (bool) $v; break;
 				case 's': // shared string
 					$x = $this->OpenXML_SharedStrings_GetVal($v);
 					$this->XML_DeleteElements($x, array('t'), true);

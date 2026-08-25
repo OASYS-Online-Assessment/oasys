@@ -1,7 +1,7 @@
 /*
 
- jsSortableTable v4.1
- (c) 2014 - 2024 by Willibrord Koch | Adam Druzd | Tomas Kamarauskas
+ jsSortableTable v5.4
+ (c) 2014 - 2026 by Willibrord Koch | Adam Druzd | Tomas Kamarauskas
  -------------------------------------------------------------------------------------------------------------------
  DESCRIPTION:
  This class provides an html-table where elements can be added (method), removed(method,UI)
@@ -52,11 +52,17 @@
  v4.0   Code cleanup, removed undo/redo, added status indicators.
  v4.0.1 updated for jsPointerHandler v2.1.0
  v4.1   Hiding fixedposButton on deleted rows
+ v4.2   Modified UI for warnings and errors
+ v5.0   Converted constructor function to JsSortableTable class and updated OASYS instantiations.
+ v5.1   Modernized warning and error indicators.
+ v5.2   Added a dedicated table frame for the modern outline treatment.
+ v5.3   Added optional text filtering and support for an additional row filter.
+ v5.4   Added an optional reusable icon column.
  --------------------------------------------------------------------------------------------------------------------
  USAGE:
  include the CSS and the JS file in your HTML document
  instantiate with:
- new jsSortableTable(parent, id, options)
+ new JsSortableTable(parent, id, options)
 
  PARAMETERS:
  parent - parent element for the new droplist
@@ -100,6 +106,8 @@
  progressField:              true/false progressField functionality
  progressFieldSize:          size of progressField column, default is '50px'
  progressFieldColText:       column headline progressField optional
+ filter:                     true or {startText, initialValue} to add a client-side text filter
+ iconColumn:                 optional {field, title, width, size, path, icons, labels} icon column
 
 
  METHODS:
@@ -144,12 +152,19 @@
 
  resetActionFields()
  set all action fields to default (also delete corresponding hidden data)
+
+ setFilter(), getFilter(), clearFilter()
+ control the optional client-side text filter
+
+ setRowFilter()
+ set an additional row predicate that is combined with the text filter
  */
 
 "use strict";
 
 (function ($) {
-    function jsSortableTable(parent, id, options) {
+    class JsSortableTable {
+        constructor(parent, id, options) {
         let tableHtml = '';
         const pointerHandler = jsPointerHandler.instance;
         /* optional settings */
@@ -166,6 +181,7 @@
         const readOnly = options.readOnly || false;
         const deleteLinkSize = options.deleteLinkSize || '20px';
         const hideDeleteLinks = options.hideDeleteLinks || false;
+        const deleteConfirmation = typeof options.deleteConfirmation === 'function' ? options.deleteConfirmation : null;
         const consecutiveNumbersSize = options.consecutiveNumbersSize || '20px';
         const consecutiveNumbersText = options.consecutiveNumbersText || '#';
         let hiddenData = {};
@@ -174,6 +190,14 @@
         const tableHeadDisplay = options.tableHeadDisplay || false;
         const fixedOrder = options.fixedOrder || false;
         const linkExclusives = options.linkExclusives || {};
+        const iconColumn = options.iconColumn && typeof options.iconColumn === 'object' ? options.iconColumn : null;
+        const iconColumnField = iconColumn && iconColumn.field ? iconColumn.field : null;
+        const iconColumnTitle = iconColumn && iconColumn.title ? iconColumn.title : '';
+        const iconColumnWidth = iconColumn && iconColumn.width ? iconColumn.width : '24px';
+        const iconColumnSize = iconColumn && iconColumn.size ? iconColumn.size : '20px';
+        const iconColumnPath = iconColumn && iconColumn.path ? iconColumn.path : '';
+        const iconColumnIcons = iconColumn && iconColumn.icons ? iconColumn.icons : {};
+        const iconColumnLabels = iconColumn && iconColumn.labels ? iconColumn.labels : {};
         //action fields
         const actionField = options.actionField || false;
         const actionFieldSize = options.actionFieldSize || '50px';
@@ -208,6 +232,16 @@
         const progressField = options.progressField || false;
         const progressFieldSize = options.progressFieldSize || '50px';
         const progressFieldColText = options.progressFieldColText || '';
+        //optional client-side filtering
+        const filterOption = options.filter || false;
+        const filterEnabled = filterOption === true || (filterOption && typeof filterOption === 'object');
+        const filterStartText = (filterOption && typeof filterOption === 'object')
+            ? (filterOption.startText || filterOption.placeholder || '')
+            : (options.filterStartText || options.filterPlaceholder || '');
+        const filterInitialValue = (filterOption && typeof filterOption === 'object')
+            ? (filterOption.initialValue || '')
+            : '';
+        let rowFilter = typeof options.rowFilter === 'function' ? options.rowFilter : null;
 
         /* creation */
         //fix the helper dimensions
@@ -222,19 +256,57 @@
 
         //build table
         const sTable = 'sortableTable_' + id;
+        const sTableFrame = sTable + '_frame';
+        const sTableFilter = sTable + '_filter';
+        const sTableFilterBar = sTable + '_filterBar';
 
-        $('#' + parent).append('<table id="' + sTable + '"><tbody></tbody></table>');
+        if (filterEnabled) {
+            const $filterInput = $('<input>').attr({
+                id: sTableFilter,
+                'class': 'jsSortableTableFilter',
+                type: 'search',
+                placeholder: filterStartText,
+                'aria-label': filterStartText || 'Filter table',
+                autocomplete: 'off',
+                spellcheck: 'false'
+            }).val(filterInitialValue);
+            $('#' + parent).append(
+                $('<div>', {
+                    id: sTableFilterBar,
+                    class: 'jsSortableTableFilterBar'
+                }).append($filterInput)
+            );
+            $filterInput.on('input', applyFilter).on('keydown', function (event) {
+                if (event.key === 'Escape' && this.value !== '') {
+                    this.value = '';
+                    applyFilter();
+                }
+            });
+        }
+        $('#' + parent).append('<div id="' + sTableFrame + '" class="jsSortableTableFrame"><table id="' + sTable + '"><tbody></tbody></table></div>');
         //Build head
         if (tableHeadDisplay) {
             $('#' + sTable).append('<tr class="ui-state-disabled" id= "' + id + '_head"></tr>');
             if (consecutiveNumbers) {
                 $('#' + id + '_head').append('<th style="text-align:right;width:' + consecutiveNumbersSize + ';">' + consecutiveNumbersText + '</th>');
             }
+            if (iconColumnField) {
+                $('<th>', {
+                    text: iconColumnTitle,
+                    'data-id': iconColumnField,
+                    'class': 'jsSortableTableIconHead'
+                }).css({
+                    'text-align': 'left',
+                    width: iconColumnWidth,
+                    'max-width': iconColumnWidth,
+                    padding: 0
+                }).appendTo('#' + id + '_head');
+            }
             $.each(tableHead, function (k, v) {
                 $('#' + id + '_head').append('<th data-id="' + k + '" style="text-align:left;width:' + tdSizes[k] + ';">' + v + '</th>');
             });
             if (actionField) {
-                $('#' + id + '_head').append('<th style="text-align:left;width:' + actionFieldSize + ';">' + actionFieldColText + '</th>');
+                $('#' + id + '_head').append('<th data-fielddesc="actionField" style="text-align:left;width:' + actionFieldSize + ';">' + actionFieldColText + '</th>');
             }
             if (statusIndicator) {
                 $('#' + id + '_head').append('<th style="text-align:left;width:' + statusIndicatorFieldSize + ';">' + statusIndicatorColText + '</th>');
@@ -264,16 +336,34 @@
         //add CSS
         if (tableHeadDisplay) {
             $('#' + id + '_head >th').css(cssHeadCells);
+            if (iconColumnField) {
+                $('#' + id + '_head >th').filter(function () {
+                    return this.dataset.id === iconColumnField;
+                }).css({
+                    width: iconColumnWidth,
+                    'max-width': iconColumnWidth,
+                    padding: 0
+                });
+            }
         }
         $('#' + sTable).css(cssStylesTable);
         $('#' + sTable + ' td').css(cssStylesCells);
+        if (iconColumnField) {
+            $('#' + sTable + ' td.jsSortableTableIconCell').css({
+                width: iconColumnWidth,
+                'max-width': iconColumnWidth,
+                'min-width': iconColumnWidth,
+                padding: 0,
+                'text-align': 'right'
+            });
+        }
         $('#' + sTable + ' td').addClass('stGrab');
         //save current table content while sorting
         tableHtml = $('#' + sTable + ' tbody').html();
         //make it sortable
         if (!fixedOrder) {
             $('#' + sTable + ' tbody').sortable({
-                items: "tr:not(.ui-state-disabled)",
+                items: "tr:not(.ui-state-disabled):visible",
                 helper: correctHelper,
                 cursor: "move",
                 placeholder: "ui-state-highlight",
@@ -316,7 +406,7 @@
                     $(targetCell).css('background-image', 'url(' + appPath + 'images/closeXRed@4x.png)');
                     $(targetCell).css('cursor', 'pointer');
                     $(targetCell).on('click', function () {
-                        removeElement($(v).data('item'));
+                        requestRemoveElement($(v).data('item'));
                     });
                 }).on('mouseleave', function () {
                     $(targetCell).css('background-image', 'none');
@@ -551,6 +641,9 @@
             $.each($('.data-rows_' + id), function (k, v) {
                 tmpArray[k] = {};
                 tmpArray[k]['hiddenID'] = parseInt(v.dataset.id);
+                if (iconColumnField) {
+                    tmpArray[k][iconColumnField] = v.dataset.iconValue || '';
+                }
                 $.each(v.children, function (key, value) {
                     if (value.dataset.fielddesc) {
                         tmpArray[k][value.dataset.fielddesc] = $(value).html();
@@ -665,6 +758,38 @@
             return dataId;
         }
 
+        function applyFilter() {
+            if (!filterEnabled && rowFilter === null) return;
+            const query = filterEnabled
+                ? String($('#' + sTableFilter).val() || '').trim().toLocaleLowerCase()
+                : '';
+
+            $('.data-rows_' + id).each(function () {
+                const textMatches = query === '' || $(this).children('td').text().toLocaleLowerCase().includes(query);
+                const rowMatches = rowFilter === null || rowFilter(this) !== false;
+                $(this).toggle(textMatches && rowMatches);
+            });
+        }
+
+        function setFilter(value) {
+            if (!filterEnabled) return;
+            $('#' + sTableFilter).val(value == null ? '' : String(value));
+            applyFilter();
+        }
+
+        function getFilter() {
+            return filterEnabled ? String($('#' + sTableFilter).val() || '') : '';
+        }
+
+        function clearFilter() {
+            setFilter('');
+        }
+
+        function setRowFilter(filterCallback) {
+            rowFilter = typeof filterCallback === 'function' ? filterCallback : null;
+            applyFilter();
+        }
+
         function checkForElement(e, callback) {
             const origin = e;
             let i = 1;
@@ -676,17 +801,54 @@
         }
 
         function addElement(newValue, noCallBack) {
-            clearWarnings();
+            //clearWarnings();
             checkForElement(newValue.hiddenID, function (e) {
                 const instanceID = e;
                 $('#' + sTable).append('<tr id= "' + id + '_' + instanceID + '" data-id="' + newValue.hiddenID + '" class="stHover data-rows_' + id + '"></tr>');
+                if (iconColumnField) {
+                    let rowIconValue = newValue[iconColumnField];
+                    if (rowIconValue && typeof rowIconValue === 'object') {
+                        rowIconValue = rowIconValue.id || rowIconValue.type || rowIconValue.data;
+                    }
+                    $('#' + id + '_' + instanceID).attr('data-icon-value', rowIconValue == null ? '' : String(rowIconValue));
+                }
 
                 if (consecutiveNumbers) {
                     $('#' + id + '_' + instanceID).append('<td class="consno" data-class="consno_' + id + '" style="width:' + tdSizes['consecutiveNumbers'] + ';">x</td>');
                 }
+                if (iconColumnField) {
+                    let iconValue = newValue[iconColumnField];
+                    if (iconValue && typeof iconValue === 'object') {
+                        iconValue = iconValue.id || iconValue.type || iconValue.data;
+                    }
+                    iconValue = iconValue == null ? '' : String(iconValue);
+                    const $iconCell = $('<td>', {
+                        'class': 'jsSortableTableIconCell'
+                    }).css({
+                        width: iconColumnWidth,
+                        'max-width': iconColumnWidth,
+                        'min-width': iconColumnWidth,
+                        padding: 0,
+                        'text-align': 'right'
+                    });
+                    if (Object.prototype.hasOwnProperty.call(iconColumnIcons, iconValue)) {
+                        $('<img>', {
+                            src: iconColumnPath + iconColumnIcons[iconValue],
+                            alt: '',
+                            title: iconColumnLabels[iconValue] || ''
+                        }).css({
+                            display: 'block',
+                            width: iconColumnSize,
+                            height: iconColumnSize,
+                            'margin-left': 'auto',
+                            'object-fit': 'contain'
+                        }).appendTo($iconCell);
+                    }
+                    $('#' + id + '_' + instanceID).append($iconCell);
+                }
                 $.each(newValue, function (key, value) {
                     if (value === null) value = '';
-                    if (key !== 'removed' && key !== 'hiddenID' && key !== 'deleteLink' && key !== 'actionField' && key !== 'statusIndicator' && key !== 'actionButton' && key !== 'actionButtons' && key !== 'fixedPosition' && key !== 'progressField') {
+                    if (key !== iconColumnField && key !== 'removed' && key !== 'hiddenID' && key !== 'deleteLink' && key !== 'actionField' && key !== 'statusIndicator' && key !== 'actionButton' && key !== 'actionButtons' && key !== 'fixedPosition' && key !== 'progressField') {
                         if (typeof value === 'object') {
                             if (linkExclusives[key] && value.data === linkExclusives[key]) {
                                 $('#' + id + '_' + instanceID).append('<td data-fielddesc="' + key + '" style="width:' + tdSizes[key] + ';">' + escapeHtml(value.data) + '</td>');
@@ -698,7 +860,7 @@
                             }
                         } else {
                             if (key === 'name' && newValue.removed === true) {
-                                $('#' + id + '_' + instanceID).append('<td style=" font-weight:600; color:#dd1a00" data-fielddesc="' + key + '" style="width:' + tdSizes[key] + ';">' + UILANG.e(value) + '</td>');
+                                $('#' + id + '_' + instanceID).append('<td style=" font-weight:600; color:#dd1a00" data-fielddesc="' + key + '" style="width:' + tdSizes[key] + ';">' + escapeHtml(value) + '</td>');
                                 $('#' + id + '_' + instanceID).data('name', value);
                             } else {
                                 $('#' + id + '_' + instanceID).append('<td data-fielddesc="' + key + '" style="width:' + tdSizes[key] + ';">' + escapeHtml(value) + '</td>');
@@ -835,6 +997,7 @@
                 if (readOnly === true) {
                     lock();
                 }
+                applyFilter();
             });
         }
 
@@ -850,7 +1013,23 @@
             createChangeCallback(toRemove, hiddenDataRemoved);
         }
 
+        function requestRemoveElement(toRemove) {
+            if (!deleteConfirmation) {
+                removeElement(toRemove);
+                return;
+            }
+            const result = deleteConfirmation(toRemove);
+            if (result && typeof result.then === 'function') {
+                result.then((confirmed) => {
+                    if (confirmed) removeElement(toRemove);
+                });
+                return;
+            }
+            if (result !== false) removeElement(toRemove);
+        }
+
         function clearElements(noCallBack) {
+            clearWarnings();
             $(".data-rows_" + id).remove();
             hiddenData = {};
             //save current table content while sorting
@@ -861,37 +1040,45 @@
         }
 
 
-        function setWarningMessage(message, type, id) {
-            let pbCheck;
-            let ttTrigger;
-            const msgTarget = $('tr[data-id="' + id + '"]>td[data-fielddesc="name"]');
-
-            if (type === 'warning') {
-                pbCheck = '<img alt="" height="100%" data-id="' + id + '" src="' + appPath + 'images/warning.png" class="sTableWarningImg" />';
-            } else {
-                pbCheck = '<img alt="" height="100%" data-id="' + id + '" src="' + appPath + 'images/error.png" class="sTableWarningImg" />';
-            }
-            msgTarget.prepend(pbCheck);
-            ttTrigger = $('img[data-id="' + id + '"]');
-            //add tooltip here with the html from messages
-            $('body').append('<div id="tt_' + id + '" class="pcWarnings">' + message + '</div>');
-            const tTip = $('#tt_' + id);
-
-            if (type === 'warning') {
-                tTip.css({'background-color': '#ffc136','color': '#333333','padding':'10px 15px' });
-            } else {
-                tTip.css({'background-color': '#dd1a00','color': '#ffffff', 'padding':'10px 15px' });
+        function setWarningMessage(message, type, rowId) {
+            const msgTarget = $('tr[data-id="' + rowId + '"] > td[data-fielddesc="name"]');
+            if (!msgTarget.length) {
+                return;
             }
 
-            ttTrigger.on('mouseenter', function (e) {
-                const mousex = e.pageX + 20;
-                const mousey = e.pageY + 10;
-                tTip.css({top: mousey, left: mousex});
-                tTip.show();
+            msgTarget.find('.sTableWarningImg').remove();
+            $('#tt_' + rowId).remove();
+
+            const isWarning = type === 'warning';
+            const iconHtml =
+                '<span class="sTableWarningImg ' +
+                (isWarning ? 'sTableWarningImg--warning' : 'sTableWarningImg--error') +
+                '" data-id="' + rowId + '" aria-hidden="true">!</span>';
+
+            msgTarget.prepend(iconHtml);
+
+            $('body').append(
+                '<div id="tt_' + rowId + '" class="pcWarnings sTableWarningTip ' +
+                (isWarning ? 'sTableWarningTip--warning' : 'sTableWarningTip--error') +
+                '" role="tooltip"><div class="sTableWarningTip__icon" aria-hidden="true">!</div>' +
+                '<div class="sTableWarningTip__message">' + message + '</div></div>'
+            );
+            const $tip = $('#tt_' + rowId);
+
+            const $triggers = $('.sTableWarningImg[data-id="' + rowId + '"]');
+
+            $triggers.off('mouseenter mousemove mouseleave').on('mouseenter mousemove', function (e) {
+                const tipWidth = $tip.outerWidth();
+                const left = Math.min(e.pageX + 18, $(window).scrollLeft() + $(window).width() - tipWidth - 16);
+                const top = e.pageY + 12;
+
+                $tip.css({ top: top, left: Math.max(16, left), display: 'flex' });
             }).on('mouseleave', function () {
-                tTip.hide();
+                $tip.hide();
             });
         }
+
+
 
         function changetdid(parentId, newtdid, saveOption) {
             let origin;
@@ -961,11 +1148,13 @@
         }
 
         function hide(){
-            $('#' + sTable).css('display','none');
+            if (filterEnabled) $('#' + sTableFilterBar).css('display','none');
+            $('#' + sTableFrame).css('display','none');
         }
 
         function show(){
-            $('#' + sTable).css('display','inline');
+            if (filterEnabled) $('#' + sTableFilterBar).css('display','flex');
+            $('#' + sTableFrame).css('display','block');
         }
 
 
@@ -1015,9 +1204,14 @@
         this.checkForId = checkForId;
         this.hide = hide;
         this.show = show;
+        this.setFilter = setFilter;
+        this.getFilter = getFilter;
+        this.clearFilter = clearFilter;
+        this.setRowFilter = setRowFilter;
+        }
     }
 
     /* export class */
-    window.jsSortableTable = jsSortableTable;
+    window.JsSortableTable = JsSortableTable;
 
 })(jQuery);

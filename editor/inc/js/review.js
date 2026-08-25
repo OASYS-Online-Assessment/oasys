@@ -180,7 +180,7 @@ function ajaxSuccess(res) {
                 cancel: true,
                 value: 'ok'
             }],
-            contents: '<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.fatalError,
+            contents: formatActionErrorMessage('<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.fatalError),
             title: UILANG.m("Error"),
             icon: "../images/error.png",
             iconWidth: 64,
@@ -198,7 +198,7 @@ function ajaxSuccess(res) {
                 cancel: true,
                 value: 'ok'
             }],
-            contents: '<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.error,
+            contents: formatActionErrorMessage('<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.error),
             title: UILANG.m("Error"),
             icon: "../images/error.png",
             iconWidth: 64,

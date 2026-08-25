@@ -1,0 +1,262 @@
+\documentclass[12pt]{article} % Default font size is 12pt, it can be changed here
+\usepackage{fontspec}
+%Ligatures=TexOff disable the Tex specific ligatures which converst quotes into typographic quotes
+\setmainfont{OpenSans}[Ligatures=TeXOff, Path=fonts/,Extension=.ttf, UprightFont=*-Regular, ItalicFont=*-Italic, BoldFont=*-Bold, BoldItalicFont=*-BoldItalic]
+\usepackage{microtype}
+
+%\usepackage{tabulary}
+\usepackage{tabu} %span tables over multiple pages while still wrapping text inside cells
+\usepackage{longtable} %needed by tabu package
+\usepackage{geometry}
+\geometry{a4paper, total={170mm,257mm}, left=20mm, top=20mm, }
+
+\usepackage{graphicx} % Required for including pictures
+\usepackage{tikz}
+\usepackage{float} % Allows putting an [H] in \begin{figure} to specify the exact location of the figure
+\usepackage{wrapfig} % Allows in-line images such as the example fish picture
+\usepackage{lipsum} % Used for inserting dummy 'Lorem ipsum' text into the template
+\usepackage{xparse} % Used for defining new commands with arguments
+
+\newcommand{\sectionbreak}{\clearpage}
+
+\graphicspath{{../graphics/}} % Specifies the directory where pictures are stored 
+
+\usepackage{tcolorbox}
+\tcbuselibrary{skins}
+
+\usepackage{listings} % Code listings
+\usepackage{color}
+\definecolor{lightgray}{rgb}{.9,.9,.9}
+\definecolor{darkgray}{rgb}{.4,.4,.4}
+\definecolor{purple}{rgb}{0.65, 0.12, 0.82}
+\definecolor{orange}{rgb}{1, 0.4, 0.0}
+
+\lstdefinelanguage{JavaScript}{
+    keywords={typeof, new, true, false, catch, function, return, null, catch, switch, var, if, in, while, do, else, case, break},
+    keywordstyle=\color{blue}\bfseries,
+    ndkeywords={class, export, boolean, throw, implements, import, this},
+    ndkeywordstyle=\color{darkgray}\bfseries,
+    identifierstyle=\color{black},
+    sensitive=false,
+    comment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    commentstyle=\color{orange}\ttfamily,
+    stringstyle=\color{purple}\ttfamily,
+    morestring=[b]',
+    morestring=[b]"
+}
+
+\lstset{
+    language=JavaScript,
+    backgroundcolor=\color{blue!5},
+    extendedchars=true,
+    basicstyle=\scriptsize\ttfamily,
+    showstringspaces=false,
+    showspaces=false,
+    tabsize=4,
+    breaklines=true,
+    showtabs=false,
+    captionpos=b,
+    frame=leftline,
+    rulecolor=\color{blue!20},
+    framerule=2pt
+}
+\setlength{\parindent}{0pt} % removes the default indentation of first lines
+\setlength{\tabcolsep}{12pt}
+
+\newenvironment{mono}{\ttfamily}{\par}
+\newenvironment{monoinline}{\ttfamily}{}
+\newenvironment{keyword}{\leavevmode\color{magenta}\ttfamily}{}
+\newenvironment{keywordpurple}{\leavevmode\color{purple}}{}
+\newenvironment{keywordorange}{\leavevmode\color{orange}}{}
+\newenvironment{examplecomment}{\leavevmode\color{magenta!60!white}}{}
+\newenvironment{code}{\begin{mdframed}[linewidth=4pt, linecolor=blue!40, topline=false, bottomline=false, rightline=false, backgroundcolor=blue!10]
+                          \begin{mono}}{\end{mono}
+\end{mdframed}}
+
+\newenvironment{properties}
+{
+    \footnotesize\renewcommand{\arraystretch}{1.30}
+    \renewcommand{\tabcolsep}{0pt}
+    \begin{longtable}{>{\begin{keyword}}p{3.1cm}<{\end{keyword}}p{13.9cm}}
+        \hline
+        }
+        {
+        \hline
+    \end{longtable}\vspace{5mm}
+}
+
+\newenvironment{parameters}
+{
+    \footnotesize\renewcommand{\arraystretch}{1.30}
+    \renewcommand{\tabcolsep}{0pt}
+    \begin{longtable}{>{\begin{keyword}}p{3cm}<{\end{keyword}}>{\begin{em}}p{1.5cm}<{\end{em}}p{12.5cm}}
+        \hline
+        }
+        {
+        \hline
+    \end{longtable}\scriptsize\vspace{-5mm}*mandatory parameters\vspace{5mm}
+}
+
+\NewDocumentEnvironment{variable_properties}{mm} % two mandatory args
+{
+    \footnotesize\renewcommand{\arraystretch}{1.30}
+    \renewcommand{\tabcolsep}{0pt}
+    \begin{longtable}{>{\begin{keyword}}p{#1}<{\end{keyword}}p{#2}}
+        \hline
+        }{
+        \hline
+    \end{longtable}\vspace{5mm}
+}
+
+\newtcolorbox{exampleResultBox}[2][]{
+    skin=bicolor,colback=magenta!10!white,
+    fonttitle=\bfseries,
+    colbacktitle=magenta,
+    bottomtitle=2mm,
+    toptitle=2mm,
+    colbacklower=black!10!white,
+    title=#2,#1,
+    boxrule=0mm,
+    middle=0mm,
+    boxsep=0mm,
+    left=5mm,
+    right=5mm,
+    bottom=5mm,
+    top=5mm,
+    after upper={\hyphenpenalty=10000\raggedright\vskip 5mm\null},
+    subtitle style={colback=black,left=5mm,right=5mm,bottom=2mm,top=2mm}
+}
+
+\newtcolorbox{exampleBox}[2][]{
+    colback=magenta!10!white,
+    fonttitle=\bfseries,
+    colbacktitle=magenta,
+    boxrule=0mm,
+    title=#2,#1
+}
+
+\newtcolorbox{resultBox}[2][]{
+    colback=black!20!white,
+    fonttitle=\bfseries,
+    colbacktitle=black,
+    boxrule=0mm,
+    title=#2,#1
+}
+
+\newtcolorbox{advancedBox}[2][]{
+    colback=purple!10!white,
+    fonttitle=\bfseries,
+    colbacktitle=purple,
+    boxrule=0mm,
+    title=#2,#1
+}
+
+\newtcbox{\tokenbox}{
+    on line,
+    colback=magenta,
+    coltext=white,
+    boxrule=0pt,
+    arc=5pt,
+    boxsep=1pt,
+    left=3pt, right=3pt,
+    top=1pt, bottom=1pt,
+    tcbox raise base,
+    enhanced,
+    before=\hspace{2pt}, % space before box
+    after=\hspace{2pt}, % space after box
+}
+
+\newcommand{\token}[1]{\tokenbox{\MakeUppercase{#1}}}
+
+\setlength{\parskip}{-0.2cm}
+
+\DeclareTextFontCommand{\kw}{\keyword}
+\DeclareTextFontCommand{\kwp}{\keywordpurple}
+\DeclareTextFontCommand{\kwo}{\keywordorange}
+\DeclareTextFontCommand{\kwm}{\monoinline}
+
+\begin{document}
+    \small
+
+%----------------------------------------------------------------------------------------
+%	TITLE PAGE
+%----------------------------------------------------------------------------------------
+
+    \begin{titlepage}
+
+        \newcommand{\HRule}{\rule{\linewidth}{0.5mm}} % Defines a new command for the horizontal lines, change thickness here
+
+        \center % Center everything on the page
+
+        \begin{tikzpicture}[remember picture,overlay]
+            \node[anchor=north west,inner sep=1cm] at (current page.north west){\includegraphics[width=3cm]{logos/UniLogo}};
+        \end{tikzpicture}
+
+        \begin{tikzpicture}[remember picture,overlay]
+            \node[anchor=north east,inner sep=1cm] at (current page.north east){\includegraphics[width=6cm]{logos/LUCET}};
+        \end{tikzpicture}\\[6cm]
+
+        {\large OASYS v3.5.20}\\[0.5cm] % Software version this document applies to
+
+        \HRule \\[0.4cm]
+        { \huge \bfseries SAML configuration}\\[0.4cm] % Title of document
+        \HRule \\[1.5cm]
+
+        \large
+        \textit{Author:} Eric J. FRANCOIS % Your name
+        \begin{tikzpicture}[remember picture,overlay]
+            \node[anchor=south,inner sep=2cm] at (current page.south){\large \today};
+        \end{tikzpicture}
+
+    \end{titlepage}
+
+    \newpage
+
+
+    \section{description}\label{sec:description}
+    This document describes how to configure OASYS for use as a service provider in a SAML federation. It is assumed that the reader has a basic understanding of SAML and how it works. It is also expected that an identity provider using SAML 2.0 is already set up and configured. This document will not cover how to set up an identity provider or how to configure it to work with OASYS, but will focus on the configuration of OASYS itself.
+
+    \section{configuration}\label{sec:configuration}
+    First, make a copy of the file "\kw{conf/ssodata.default}" to "\kw{conf/ssodata.ini}". This file contains the SAML configuration for OASYS. Open the file and edit the following entries to match your SAML configuration:
+    \begin{properties}
+    \hline
+        Issuer & This is the entity ID of your OASYS instance. It should be a unique identifier that represents your OASYS instance in the SAML federation. It is recommended to use a URL as the entity ID, but it can be any string.\\
+        SSOLoginURL & This is the URL of the SSO login endpoint of your identity provider. This is the URL that OASYS will redirect users to when they need to authenticate. It is generally found in the metadata of your identity provider (check for the \kw{SingleSignOnService} element).\\
+        SSOLogoutURL & This is the URL of the SSO logout endpoint of your identity provider. This is the URL that OASYS will redirect users to when they log out. It is generally found in the metadata of your identity provider (check for the \kw{SingleLogoutService} element).\\
+        IDPhost & This is the hostname of your identity provider. It is used to determine if a user is authenticated or not based on the presence of a SAML session cookie. It should match the hostname of your identity provider (e.g.\ idp.example.com).\\
+        IDPIssuerID & This is the entity ID of your identity provider. It is generally found in the metadata of your identity provider (check for the \kw{entityid} element).\\
+        IDPuidStr & This is the name of the SAML attribute that contains the unique identifier of the user in your identity provider. It is used to map the SAML user to a user in OASYS. It is already set by default to "urn:oid:0.9.2342.19200300.100.1.1" which corresponds to the object identifier of the \kw{uid} attribute in LDAP. If the IdP you are connecting to uses a different key, you have to replace this value for OASYS to be able to extract the user identifier from the SAML assertion.\\
+        sigAlgo & This is the signature algorithm that the identity provider uses to communicate with OASYS. The default value is "OPENSSL\_ALGO\_SHA1" which corresponds to RSA-SHA1. If your identity provider uses a different signature algorithm, you have to replace this value for OASYS to be able to read the SAML requests correctly. See below for a list of possible values.\\
+        ACS & This is the Assertion Consumer Service (ACS) URL of your OASYS instance. It is the URL that the identity provider will redirect users to after they have authenticated. It should be in the format \kwm{"https://\kwo{your-domain}/\kwo{path-to-oasys}/editor/sso.php"}. Make sure to replace \kwo{your-domain} and \kwo{path-to-oasys} with the actual hostname of your OASYS instance.\\
+        & In most cases the ACS can be left blank as it will be determined automatically. However if your server is using some custom domain/URL mapping or rewriting, you might need to set this value explicitly for the SAML integration to work correctly. Essentially it should be how the outside world sees the url that leads to the path \kwm{editor/sso.php} of your OASYS instance.\\
+    \hline
+    \end{properties}
+
+    Once this is done, you can register your SP in the IdP. The metadata URL is as follows:\\
+    \kwm{https://\kwo{your-domain}/\kwo{path-to-oasys}/editor/tools/sp\_metadata\_writer.php}\\[0.3cm]
+
+    Last but not least, switch on SAML support in the settings of OASYS. To do this navigate to \kw{System Settings} (in most OASYS setups this will only be accessible to superadmin users), then scroll down to the \kw{SSOSysActive} option and set it to \kw{true}. This will enable SAML support in OASYS and allow back end users to authenticate using SAML\@.
+
+    \section{appendix}\label{sec:appendix}
+
+    The supported signature algorithms and their corresponding values for the \kw{sigAlgo} configuration entry are as follows:
+    \begin{variable_properties}{5cm}{12cm}
+    \hline
+    OPENSSL\_ALGO\_DSS1 & \\
+    OPENSSL\_ALGO\_SHA1 & default for openssl\_verify() function\\
+    OPENSSL\_ALGO\_SHA224 & \\
+    OPENSSL\_ALGO\_SHA256 & \\
+    OPENSSL\_ALGO\_SHA384 & \\
+    OPENSSL\_ALGO\_SHA512 & \\
+    OPENSSL\_ALGO\_RMD160 & \\
+    OPENSSL\_ALGO\_MD5 & \\
+    OPENSSL\_ALGO\_MD4 & \\
+    OPENSSL\_ALGO\_MD2 & if PHP was compiled with MD2 support\\
+    \hline
+    \end{variable_properties}
+
+\end{document}
+
+
+

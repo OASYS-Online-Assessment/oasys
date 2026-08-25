@@ -1,6 +1,6 @@
 /*
- File Manager FILER.JS v2.1.1
- (c) 2014, 2015, 2020, 2021, 2023, 2025 by Willibrord Koch
+ File Manager FILER.JS v3.6
+ (c) 2014, 2015, 2020, 2021, 2023, 2025, 2026 by Willibrord Koch
 
  DESCRIPTION:
 
@@ -21,12 +21,25 @@
  v2.0.1     updated jsPointerHandler to version 2.1.0
  v2.1       Filter is now case-insensitive and mechanism updated
  v2.1.1     enabled touch devices to scroll lists by dragging the background (not only the scrollbar)
+ v2.2       Modified search results to display test takers with correct icons and indicators
+ v3.0       Converted File Manager to FileManager class API, removed legacy fileMgr export,
+            and stabilized platform-independent single-click, double-click and accidental drag
+            selection handling, performance improvement on folders with a large amount of files.
+ v3.1       Modernized filer visuals, tightened file row spacing, improved breadcrumb filter layout,
+            and adjusted drag helper appearance and cursor offset.
+ v3.2       Removed cloned test takers from the visible file manager flow; cloned template logins are
+            now handled as recorded datasets on their originating test taker template.
+ v3.3       Modernized shared search result dialogs with clearer summary, path and subresult styling.
+ v3.4       Extended setSelection with an options object. Use {preserveScroll:true} when restoring a
+            selection after refreshing the current folder without moving the selected row to the top.
+ v3.5       Refreshed the inline folder filter area with a compact modern input and contextual placeholder.
+ v3.6       Prevented secondary pointer releases from entering the file row selection and double-click path.
  --------------------------------------------------------------------------------------------------------------
 
- fileMgr(filercontainer,idSuffix,itemData,breadcrumbData,fileOpPermissions,fullyFeatured,callback,mediaTypes,watchList);
+ FileManager(filercontainer,idSuffix,itemData,breadcrumbData,fileOpPermissions,fullyFeatured,callback,mediaTypes,watchList);
 
  EXAMPLE:
- fileManager = new fileMgr("#filercontainer","_id001",itemData,breadcrumbData,fileOpPermissions,true,function(event,data){	...... });
+ fileManager = new FileManager("#filercontainer","_id001",itemData,breadcrumbData,fileOpPermissions,true,function(event,data){	...... });
 
  filercontainer => ID of the container the filer will be placed
  idSuffix => allows to open more instances at once
@@ -34,7 +47,9 @@
 
  METHODS:
  clearSelection() => deselects items
- setSelection(itemSelect) => selects items, expects array: itemSelect=[{type:"itemGroup",id:1}]
+ setSelection(itemSelect, options) => selects items, expects array: itemSelect=[{type:"itemGroup",id:1}]
+                                options can be boolean for legacy noCallback behavior or
+                                {noCallback:true, preserveScroll:true}
  getSelect() => returns all selected items in an array
  setItems(itemData) => loads a new list of items in the filer (new directory), expects array
  updateItem(updateItemData) => updates an item in the filer view, expects object
@@ -153,7 +168,20 @@
 "use strict";
 (function ($) {
 
-    function fileMgr(filercontainer, idSuffix, itemData, breadcrumbData, fileOpPermissions, fullyFeatured, callback, mediaTypes, watchList) {
+    class FileManager {
+        constructor(filercontainer, idSuffix, itemData, breadcrumbData, fileOpPermissions, fullyFeatured, callback, mediaTypes, watchList) {
+            if ($.isPlainObject(filercontainer)) {
+                const options = filercontainer;
+                filercontainer = options.container || options.filercontainer;
+                idSuffix = options.idSuffix;
+                itemData = options.itemData || [];
+                breadcrumbData = options.breadcrumbData || [];
+                fileOpPermissions = options.fileOpPermissions || {};
+                fullyFeatured = options.fullyFeatured;
+                callback = options.callback;
+                mediaTypes = options.mediaTypes;
+                watchList = options.watchList;
+            }
 
         let pt = 0;
         let copytees = 0;
@@ -164,6 +192,104 @@
         let currentFolderID;
         let srcForm;
         const pointerHandler = jsPointerHandler.instance;
+        const dragStartDistance = 5;
+        const doubleClickDelay = 500;
+        let lastClickElementId = null;
+        let lastClickTime = 0;
+        let itemLookup = {};
+
+        function rebuildItemLookup() {
+            itemLookup = {};
+            if (!Array.isArray(itemData)) return;
+            $.each(itemData, function (_key, value) {
+                itemLookup[String(value.id)] = value;
+            });
+        }
+
+        function itemIdFromElement(elementId, prefix) {
+            prefix = prefix || idSuffix;
+            return String(elementId).substring(prefix.length);
+        }
+
+        function getItemByElementId(elementId, prefix) {
+            return itemLookup[itemIdFromElement(elementId, prefix)];
+        }
+
+        function getItemsFromElements(elements, prefix) {
+            const returnItems = [];
+            $.each(elements, function (_key, element) {
+                const item = getItemByElementId(element.id, prefix);
+                if (item) returnItems.push(item);
+            });
+            return returnItems;
+        }
+
+        function clearDoubleClickTracking() {
+            lastClickElementId = null;
+            lastClickTime = 0;
+        }
+
+        function isPrimaryPointerRelease(e) {
+            return e.button === undefined || e.button === 0;
+        }
+
+        function isPrimaryUnmodifiedClick(e) {
+            return !(e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) &&
+                isPrimaryPointerRelease(e);
+        }
+
+        function handleDoubleClick(element) {
+            const item = getItemByElementId(element.id);
+            if (!item) return;
+            if (item.type === 'folder') {
+                $("#filezcontainer" + idSuffix).animate({
+                    scrollTop: 0
+                }, 0);
+                callback('onNavigate', item);
+            } else {
+                getSelectDblclick();
+            }
+        }
+
+        function maybeHandleDoubleClick(element, e) {
+            if (!isPrimaryUnmodifiedClick(e)) {
+                clearDoubleClickTracking();
+                return false;
+            }
+            const now = Date.now();
+            const elementId = element.id;
+            const isDoubleClick = lastClickElementId === elementId && now - lastClickTime <= doubleClickDelay;
+            lastClickElementId = elementId;
+            lastClickTime = now;
+            if (isDoubleClick) {
+                clearDoubleClickTracking();
+                handleDoubleClick(element);
+                return true;
+            }
+            return false;
+        }
+
+        function normaliseSortText(value) {
+            value = String(value == null ? '' : value).replace(/<.*?>/g, '');
+            if (typeof he !== 'undefined' && he.decode) {
+                value = he.decode(value, {});
+            }
+            return value.toLowerCase();
+        }
+
+        function sortFilerItems(items) {
+            return items.slice().sort(function (a, b) {
+                const aSort = a.type === 'folder' ? '0' : '1';
+                const bSort = b.type === 'folder' ? '0' : '1';
+                let comparison = aSort.localeCompare(bSort, undefined, {sensitivity: 'base'});
+                if (comparison === 0) {
+                    comparison = normaliseSortText(a.label).localeCompare(normaliseSortText(b.label), undefined, {sensitivity: 'base'});
+                }
+                return comparison;
+            });
+        }
+
+        rebuildItemLookup();
 
         if (!mediaTypes) {
             mediaTypes = 'all';
@@ -186,7 +312,13 @@
             $("#filez" + idSuffix + ">li").addClass('ui-selected');
         }
 
-        function setSelection(itemSelect, noCallback) {
+        function setSelection(itemSelect, options) {
+            if (!itemSelect || itemSelect.length === 0) return;
+            const noCallback = $.isPlainObject(options) ? options.noCallback === true : options === true;
+            const preserveScroll = $.isPlainObject(options) && options.preserveScroll === true;
+            const $fileContainer = $("#filezcontainer" + idSuffix);
+            const previousScrollTop = $fileContainer.scrollTop();
+
             $.each(itemSelect, function (k, v) {
                 $("#" + idSuffix + v.id).addClass('ui-selected');
                 $("#" + idSuffix + v.id).addClass("lastSelected");
@@ -202,13 +334,17 @@
             pt = itemSelect[0].id;
             //Positioning & Preselect
             if (pt !== 0) {
-                $("#filezcontainer" + idSuffix).animate({
-                    scrollTop: 0
-                }, 0);
+                if (preserveScroll) {
+                    $fileContainer.stop(true, true).scrollTop(previousScrollTop);
+                } else {
+                    $fileContainer.animate({
+                        scrollTop: 0
+                    }, 0);
 
-                $("#filezcontainer" + idSuffix).animate({
-                    scrollTop: $("#" + idSuffix + pt).offset().top - $("#filezcontainer" + idSuffix).offset().top
-                }, 100);
+                    $fileContainer.animate({
+                        scrollTop: $("#" + idSuffix + pt).offset().top - $fileContainer.offset().top
+                    }, 100);
+                }
 
                 $("#" + idSuffix + pt).addClass("ui-selected");
                 //callback($(".ui-selected"));
@@ -222,70 +358,51 @@
             //End Positioning & Preselect after search
         }
 
-        function getSelect(noCallBack) {
-            const returnItems = [];
-            $.each($("#filez" + idSuffix + "> .ui-selected"), function (k, v) {
-                $.each(itemData, function (key, value) {
-                    if (v.id === idSuffix + value.id) {
-                        returnItems.push(value);
-                    }
-                });
-            });
-            if (!noCallBack) {
-                callback('getSelect', returnItems);
-            } else {
-                return returnItems;
-            }
-        }
+	        function getSelect(noCallBack) {
+	            const returnItems = getItemsFromElements($("#filez" + idSuffix + "> .ui-selected"));
+	            if (!noCallBack) {
+	                callback('getSelect', returnItems);
+	            } else {
+	                return returnItems;
+	            }
+	        }
 
-        function getSelectDblclick() {
-            const returnItems = [];
-            $.each($("#filez" + idSuffix + "> .ui-selected"), function (k, v) {
-                $.each(itemData, function (key, value) {
-                    if (v.id === idSuffix + value.id) {
-                        returnItems.push(value);
-                    }
-                });
-            });
-            callback('getSelectDblclick', returnItems);
-        }
+	        function getSelectDblclick() {
+	            const returnItems = getItemsFromElements($("#filez" + idSuffix + "> .ui-selected"));
+	            callback('getSelectDblclick', returnItems);
+	        }
 
-        function getSelectKeys() {
-            const returnItems = [];
-            $.each($("#filez" + idSuffix + "> .ui-selected"), function (k, v) {
-                $.each(itemData, function (key, value) {
-                    if (v.id === idSuffix + value.id) {
-                        returnItems.push(value);
-                    }
-                });
-            });
-            callback('getSelectKeys', returnItems);
-        }
+	        function getSelectKeys() {
+	            const returnItems = getItemsFromElements($("#filez" + idSuffix + "> .ui-selected"));
+	            callback('getSelectKeys', returnItems);
+	        }
 
         function setItems(newItemData, newBreadcrumbData, preselect) {
             if (preselect) {
                 pt = preselect[0].id
             }
-            itemData = newItemData;
-            breadcrumbData = newBreadcrumbData;
-            filer();
+	            itemData = newItemData;
+	            breadcrumbData = newBreadcrumbData;
+	            rebuildItemLookup();
+	            filer();
+	        }
 
-        }
+	        function deleteFiles() {
+	            delItems('opt', $("#filez" + idSuffix + "> .ui-selected"));
+	        }
 
-        function deleteFiles() {
-            delItems('opt', $('.ui-selected'));
-        }
-
-        function updateItem(updateItemData) {
-            $.each(updateItemData, function (k, v) {
-                $.each(itemData, function (key, value) {
-                    if (idSuffix + v.id === idSuffix + value.id) {
-                        itemData[key] = updateItemData[k];
-                    }
-                });
-            });
-            filer();
-        }
+	        function updateItem(updateItemData) {
+	            $.each(updateItemData, function (k, v) {
+	                $.each(itemData, function (key, value) {
+	                    if (String(v.id) === String(value.id)) {
+	                        itemData[key] = updateItemData[k];
+	                        return false;
+	                    }
+	                });
+	            });
+	            rebuildItemLookup();
+	            filer();
+	        }
 
         function getCurrentFolderID() {
             return currentFolderID;
@@ -437,14 +554,45 @@
             }
         }
 
-        function filerSearch(preFill) {
-            if (!preFill) preFill = '';
-            $(document).off('keydown.filer');
+	        function filerSearch(preFill, options) {
+	            if (!preFill) preFill = '';
+	            options = options || {};
+	            $(document).off('keydown.filer');
 
             function searchRequestClosed(button, srchterm) {
                 if (button === 'search') {
-                    callback('onSearchRequest', srchterm);
+                    if (options.metaSearch) {
+                        const mode = $('#srchTabs' + idSuffix).tabs('option', 'active') === 1 ? 'meta' : 'regular';
+                        if (mode === 'meta') {
+                            const singleOnly = $('#metaSingleOnlyInput' + idSuffix).is(':checked');
+                            const metaSearch = {
+                                key: $.trim($('#metaKeyInput' + idSuffix).val() || ''),
+                                value: singleOnly ? '' : $.trim($('#metaValueInput' + idSuffix).val() || ''),
+                                exact: $('#metaExactInput' + idSuffix).is(':checked'),
+                                singleOnly: singleOnly
+                            };
+                            if (metaSearch.key !== '' || metaSearch.value !== '' || metaSearch.singleOnly) {
+                                callback('onMetaSearchRequest', metaSearch);
+                            }
+                            return;
+                        }
+                        srchterm = $('#srchinput' + idSuffix).val();
+                    }
+                    if ($.trim(srchterm || '') !== '') callback('onSearchRequest', srchterm);
                 }
+            }
+
+            let contents = '<div class="filerSearchDialog"><label for="srchinput' + idSuffix + '">' + UILANG.m('Search for:') + '</label><input type="text" id="srchinput' + idSuffix + '"></div>';
+            if (options.metaSearch) {
+                contents = '<div id="srchTabs' + idSuffix + '" class="filerSearchDialog filerSearchTabs">' +
+                    '<ul><li><a href="#srchRegular' + idSuffix + '">' + UILANG.m('Regular') + '</a></li><li><a href="#srchMeta' + idSuffix + '">' + UILANG.m('Meta tags') + '</a></li></ul>' +
+                    '<div id="srchRegular' + idSuffix + '" class="filerSearchPanel"><label for="srchinput' + idSuffix + '">' + UILANG.m('Search for:') + '</label><input type="text" id="srchinput' + idSuffix + '"></div>' +
+                    '<div id="srchMeta' + idSuffix + '">' +
+                    '<div id="metaSearchGrid' + idSuffix + '" class="filerSearchGrid"><div><label for="metaKeyInput' + idSuffix + '">' + UILANG.m('Tag/key') + '</label><input type="text" id="metaKeyInput' + idSuffix + '"></div>' +
+                    '<div id="metaValueWrap' + idSuffix + '"><label for="metaValueInput' + idSuffix + '">' + UILANG.m('Value') + '</label><input type="text" id="metaValueInput' + idSuffix + '"></div></div>' +
+                    '<div class="filerSearchChecks"><label><input type="checkbox" id="metaExactInput' + idSuffix + '"> ' + UILANG.m('Exact match') + '</label>' +
+                    '<label><input type="checkbox" id="metaSingleOnlyInput' + idSuffix + '"> ' + UILANG.m('Single tags only') + '</label></div>' +
+                    '</div></div>';
             }
 
             const searchDialogDataSrc = {
@@ -457,23 +605,152 @@
                     'default': true,
                     value: 'search'
                 }],
-                datafields: ['srchinput'],
-                mandatory: ['srchinput'],
-                focus: 'srchinput',
-                values: {
-                    srchinput: preFill
+                datafields: options.metaSearch ? [] : ['srchinput' + idSuffix],
+                mandatory: options.metaSearch ? [] : ['srchinput' + idSuffix],
+                focus: 'srchinput' + idSuffix,
+                values: options.metaSearch ? {} : {
+                    ['srchinput' + idSuffix]: preFill
                 },
-                contents: '<p>' + UILANG.m('Search for:') + '<br><input type="text" id="srchinput" style="width: 100%; margin-top: 10px;"></p>',
+                contents: contents,
                 title: UILANG.m('search'),
-                width: 400,
+                width: options.metaSearch ? 470 : 400,
                 callback: searchRequestClosed
-            };
-            new nxDialog('searchDialog', searchDialogDataSrc);
-        }
+	            };
+	            new nxDialog('searchDialog', searchDialogDataSrc);
+	            $('#srchinput' + idSuffix).val(preFill);
+	            if (options.metaSearch) {
+	                $('#srchTabs' + idSuffix).tabs();
+	                const toggleMetaValue = () => {
+	                    const singleOnly = $('#metaSingleOnlyInput' + idSuffix).is(':checked');
+	                    $('#metaValueWrap' + idSuffix).toggle(!singleOnly);
+	                    $('#metaSearchGrid' + idSuffix).toggleClass('is-single-only', singleOnly);
+	                    if (singleOnly) $('#metaValueInput' + idSuffix).val('');
+	                };
+	                $('#metaSingleOnlyInput' + idSuffix).on('change', toggleMetaValue);
+	                toggleMetaValue();
+	            }
+	        }
 
-        filer();
+	        function escapeAttribute(str) {
+	            const escaped = escapeHtml(str);
+	            return String(escaped == null ? '' : escaped).replace(/`/g, "&#096;");
+	        }
+
+	        function renderFilerItem(v) {
+	            const classes = ['selectable', 'context'];
+	            const attrs = [
+	                'id="' + idSuffix + v.id + '"',
+	                'data-item-id="' + escapeAttribute(v.id) + '"',
+	                'data-filter-label="' + escapeAttribute(v.label).toLowerCase() + '"'
+	            ];
+	            let indicator = '';
+	            let hiddenStyle = '';
+	            let mediaVisible = true;
+
+	            if (v.type === 'folder') {
+	                classes.push('folder', 'droppable');
+	                attrs.push('data-sortcrit="0"');
+	                currentFolderID = v.pid;
+	            } else {
+	                classes.push('zfile', 'typefile');
+	                attrs.push('data-sortcrit="1"');
+	                currentFolderID = v.pid;
+	                switch (v.type) {
+	                    case 'video':
+	                    case 'mp4':
+	                    case 'm4v':
+	                    case 'mpg':
+	                    case 'webm':
+	                        classes.pop();
+	                        classes.push('typevideo');
+	                        indicator = '<span class="mediaIndicator">[' + escapeHtml(v.type) + ']</span>';
+	                        if (mediaTypes !== 'all' && mediaTypes !== 'video') {
+	                            hiddenStyle = ' style="display:none;"';
+	                            mediaVisible = false;
+	                        }
+	                        break;
+	                    case 'audio':
+	                    case 'mp3':
+	                    case 'm4a':
+	                    case 'weba':
+	                    case 'wav':
+	                    case 'aac':
+	                        classes.pop();
+	                        classes.push('typeaudio');
+	                        indicator = '<span class="mediaIndicator">[' + escapeHtml(v.type) + ']</span>';
+	                        if (mediaTypes !== 'all' && mediaTypes !== 'audio') {
+	                            hiddenStyle = ' style="display:none;"';
+	                            mediaVisible = false;
+	                        }
+	                        break;
+	                    case 'image':
+	                    case 'png':
+	                    case 'jpg':
+	                    case 'jpeg':
+	                    case 'gif':
+	                    case 'svg':
+	                    case 'webp':
+	                    case 'avif':
+	                        classes.pop();
+	                        classes.push('typepicture');
+	                        indicator = '<span class="mediaIndicator">[' + escapeHtml(v.type) + ']</span>';
+	                        if (mediaTypes !== 'all' && mediaTypes !== 'image') {
+	                            hiddenStyle = ' style="display:none;"';
+	                            mediaVisible = false;
+	                        }
+	                        break;
+	                    case 'testee':
+	                        classes.pop();
+	                        switch (v.loginType) {
+	                            case 'directPass':
+	                                classes.push('typetesteeDirect');
+	                                indicator = '<span class="mediaIndicator">[' + UILANG.m("direct") + ']</span>';
+	                                break;
+	                            case 'LDAP':
+	                                classes.push('typetesteeLdap');
+	                                indicator = '<span class="mediaIndicator">[' + UILANG.m("LDAP") + ']</span>';
+	                                break;
+	                            case 'SAML':
+	                                classes.push('typetesteeSaml');
+	                                indicator = '<span class="mediaIndicator">[' + UILANG.m("SAML") + ']</span>';
+	                                break;
+	                            default:
+	                                classes.push('typetestee');
+	                                indicator = '<span class="mediaIndicator">[' + UILANG.m("standard") + ']</span>';
+	                                break;
+	                        }
+	                        break;
+	                    case 'test':
+	                        classes.pop();
+	                        classes.push('typeTest' + v.testStructure.type.charAt(0).toUpperCase() + v.testStructure.type.slice(1));
+	                        indicator = '<span class="mediaIndicator">[' + escapeHtml(v.testStructure.type) + ']</span>';
+	                        break;
+	                    case 'template':
+	                        classes.pop();
+	                        classes.push('typetemplate');
+	                        indicator = '<span class="mediaIndicator">[' + UILANG.m("template") + ']</span>';
+	                        break;
+	                }
+	            }
+
+	            attrs.push('data-media-match="' + (mediaVisible ? '1' : '0') + '"');
+
+	            let watchListToggle = '';
+	            if (watchList) {
+	                watchListToggle = '<div class="watchListToggle"><i class="star' + (v.watchList && v.watchList === 1 ? ' checked' : '') + '" id="wl_' + v.id + '" data-id="' + escapeAttribute(v.dbId) + '" data-type="' + (v.type === 'folder' ? 'folder' : 'file') + '"></i></div>';
+	            }
+
+	            return '<li class="' + classes.join(' ') + '" ' + attrs.join(' ') + hiddenStyle + '>' +
+	                '<span class="f-label">' + escapeHtml(v.label) + '</span>' +
+	                watchListToggle +
+	                indicator +
+	                '</li>';
+	        }
+
+	        filer();
 
         function filer() {
+            clearDoubleClickTracking();
             callback('clear', 0);
 
             if ($("#filer_frame" + idSuffix).length === 0) {
@@ -536,7 +813,7 @@
                         $("#filezcontainer" + idSuffix).height($("#filer_frame" + idSuffix).height() - fHeight2);
                     }
                 }
-            });
+			                });
 
 
             if (itemData === '' || itemData.empty) {
@@ -561,378 +838,213 @@
                     breadcrumb();
                 }
                 $("#filtericon" + idSuffix).css('display', 'none');
-            } else {
-                breadcrumb();
-                $.each(itemData, function (k, v) {
-                    $("#filez" + idSuffix).append('<li class="selectable" id="' + idSuffix + v.id + '">' + escapeHtml(v.label) + '</li>');
-                    $("#" + idSuffix + v.id).addClass('context');
-                    if(watchList){
-                        if(v.watchList && v.watchList===1){
-                            $("#" + idSuffix + v.id).append('<div class="watchListToggle"><i class="star checked" id="wl_'+v.id+'" data-id="'+v.dbId+'"></i></div>');
-                        } else {
-                            $("#" + idSuffix + v.id).append('<div class="watchListToggle"><i class="star" id="wl_'+v.id+'" data-id="'+v.dbId+'"></i></div>');
-
-                        }
-                    }
-                    if (v.type === 'folder') {
-                        $("#" + idSuffix + v.id).addClass('folder');
-                        $("#" + idSuffix + v.id).attr('data-sortcrit', 0);
-                        $("#" + idSuffix + v.id).addClass('droppable');
-                        if(watchList)$("#" + idSuffix + v.id + ">div>i").attr('data-type','folder');
-                        currentFolderID = v.pid;
-
-                        pointerHandler.listen($("#" + idSuffix + v.id), {
-                            callbacks: {
-                                dblclick: function () {
-                                    $("#filez").animate({
-                                        scrollTop: 0
-                                    }, 0);
-                                    $.each(itemData, function (key, value) {
-                                        if (idSuffix + v.id === idSuffix + value.id) {
-                                            callback('onNavigate', itemData[key]);
-                                        }
-                                    })
-                                }
-                            }
-                        });
-                    } else {
-
-                        $("#" + idSuffix + v.id).addClass('zfile typefile');
-                        $("#" + idSuffix + v.id).attr('data-sortcrit', 1);
-                        if(watchList)$("#" + idSuffix + v.id + ">div>i").attr('data-type','file');
-                        currentFolderID = v.pid;
-                        switch (v.type) {
-                            case 'video':
-                            case 'mp4':
-                            case 'm4v':
-                            case 'mpg':
-                            case 'webm':
-                                $("#" + idSuffix + v.id).append('<span class="mediaIndicator">[' + v.type + ']</span>');
-                                $("#" + idSuffix + v.id).removeClass('typefile').addClass('typevideo');
-                                if (mediaTypes !== 'all' && mediaTypes !== 'video') {
-                                    $("#" + idSuffix + v.id).css('display', 'none');
-                                }
-                                break;
-                            case 'audio':
-                            case 'mp3':
-                            case 'm4a':
-                            case 'weba':
-                            case 'wav':
-                            case 'aac':
-                                $("#" + idSuffix + v.id).append('<span class="mediaIndicator">[' + v.type + ']</span>');
-                                $("#" + idSuffix + v.id).removeClass('typefile').addClass('typeaudio');
-                                if (mediaTypes !== 'all' && mediaTypes !== 'audio') {
-                                    $("#" + idSuffix + v.id).css('display', 'none');
-                                }
-                                break;
-                            case 'image':
-                            case 'png':
-                            case 'jpg':
-                            case 'jpeg':
-                            case 'gif':
-                            case 'svg':
-                            case 'webp':
-                            case 'avif':
-                                $("#" + idSuffix + v.id).append('<span class="mediaIndicator">[' + v.type + ']</span>');
-                                $("#" + idSuffix + v.id).removeClass('typefile').addClass('typepicture');
-                                if (mediaTypes !== 'all' && mediaTypes !== 'image') {
-                                    $("#" + idSuffix + v.id).css('display', 'none');
-                                }
-                                break;
-                            case 'testee':
-                                switch (v.loginType) {
-                                    case 'directPass':
-                                        $("#" + idSuffix + v.id).removeClass('typefile').addClass('typetesteeDirect');
-                                        $("#" + idSuffix + v.id).append('<span class="mediaIndicator">['+UILANG.m("direct")+']</span>');
-                                        break;
-                                    case 'LDAP':
-                                        $("#" + idSuffix + v.id).removeClass('typefile').addClass('typetesteeLdap');
-                                        $("#" + idSuffix + v.id).append('<span class="mediaIndicator">['+UILANG.m("LDAP")+']</span>');
-                                        break;
-                                    case 'SAML':
-                                        $("#" + idSuffix + v.id).removeClass('typefile').addClass('typetesteeSaml');
-                                        $("#" + idSuffix + v.id).append('<span class="mediaIndicator">['+UILANG.m("SAML")+']</span>');
-                                        break;
-                                    default:
-                                        $("#" + idSuffix + v.id).removeClass('typefile').addClass('typetestee');
-                                        $("#" + idSuffix + v.id).append('<span class="mediaIndicator">['+UILANG.m("standard")+']</span>');
-                                        $("#" + idSuffix + v.id).removeClass('highlightBlue');
-                                        break;
-                                }
-                                break;
-                            case 'cloned':
-                                $("#" + idSuffix + v.id).removeClass('typefile').addClass('typetestee');
-                                $("#" + idSuffix + v.id).addClass('clonedTt');
-                                $("#" + idSuffix + v.id).append('<span class="mediaIndicator">['+UILANG.m("cloned")+']</span>');
-                                break;
-                            case 'test':
-                                let testType = 'typeTest' + v.testStructure.type.charAt(0).toUpperCase() + v.testStructure.type.slice(1);
-                                $("#" + idSuffix + v.id).removeClass('typefile').addClass(testType);
-                                $("#" + idSuffix + v.id).append('<span class="mediaIndicator">[' + v.testStructure.type + ']</span>');
-                                break;
-                            case 'template':
-                                $("#" + idSuffix + v.id).removeClass('typefile').addClass('typetemplate');
-                                $("#" + idSuffix + v.id).append('<span class="mediaIndicator">['+UILANG.m("template")+']</span>');
-                                break;
-                        }
-                        pointerHandler.listen($("#" + idSuffix + v.id), {
-                            callbacks: {
-                                dblclick: getSelectDblclick
-                            }
-                        });
-                    }
-                    if(watchList){
-                        pointerHandler.listen($("#wl_" + v.id), {
-                            callbacks: {
-                                click: function (clickedObj) {
-                                    $(clickedObj.currentTarget).toggleClass('checked');
-                                    let id=clickedObj.currentTarget.dataset.id;
-                                    let type=clickedObj.currentTarget.dataset.type;
-                                    if($(clickedObj.currentTarget).hasClass('checked')){
-                                        callback('onWatchListToggle', {'id':id,'status':true,'type':type});
-                                    } else {
-                                        callback('onWatchListToggle', {'id':id,'status':false,'type':type});
-                                    }
-                                }
-                            }
-                        });
-                    }
-                });
-            }
+	            } else {
+	                breadcrumb();
+	                const renderedItems = [];
+	                $.each(sortFilerItems(itemData), function (_k, v) {
+	                    renderedItems.push(renderFilerItem(v));
+	                });
+		                $("#filez" + idSuffix).html(renderedItems.join(''));
+		                $("#filez" + idSuffix).off('dblclick.filer');
+	                if (watchList) {
+	                    $("#filez" + idSuffix).off('click.filerWatchList').on('click.filerWatchList', '.watchListToggle .star', function (e) {
+	                        e.stopPropagation();
+	                        $(this).toggleClass('checked');
+	                        const id = this.dataset.id;
+	                        const type = this.dataset.type;
+	                        callback('onWatchListToggle', {'id': id, 'status': $(this).hasClass('checked'), 'type': type});
+	                    });
+	                } else {
+	                    $("#filez" + idSuffix).off('click.filerWatchList');
+	                }
+	            }
 
             $("#filez" + idSuffix + ">li").css('cursor', 'pointer');
 
-            //Sorting
-            //NOTE by Ricky: replaced the tinysort JQuery plugin with a sort function that will consider special characters
-            let list = $("#filez" + idSuffix).get(0);
-            sortListNodes(list, 'sortcrit');
-            //End Sorting
-            getSelect();
+	            getSelect();
 
-            // Select / Drag / Drop / Shortcuts
-            if (fullyFeatured) {
-                const selectedClass = 'ui-selected';
-                let $lastSelected = [];
-                const collection = $("#filez" + idSuffix + "> .selectable");
-                let dragged = false;
+	            // Select / Drag / Drop / Shortcuts
+	            if (fullyFeatured) {
+	                let $lastSelected = [];
+	                const collection = $("#filez" + idSuffix + "> .selectable");
+	                let dragged = false;
 
-                pointerHandler.listen($("#filez" + idSuffix + ">li"), {
-                    allowScrolling: true,
-                    callbacks: {
-                        up: function (e) {
+	                $("#filez" + idSuffix).off('pointerup.filerSelect').on('pointerup.filerSelect', '> li.selectable', function (e) {
+	                    if (!isPrimaryPointerRelease(e)) {
+	                        clearDoubleClickTracking();
+	                        return;
+	                    }
+	                    if (dragged === true || $(e.target).closest('.watchListToggle').length > 0) {
+	                        clearDoubleClickTracking();
+	                        return;
+	                    }
+	                    const that = $(this);
+	                    let $selected, direction;
 
-                            if (dragged === false) {
-                                const that = $(this);
-                                let $selected, direction;
+	                    if (e.shiftKey) {
+	                        $lastSelected = ($("#filez" + idSuffix + ">li.lastSelected"));
 
-                                if (e.shiftKey) {
+	                        if ($lastSelected.length > 0) {
+	                            if (that[0] === $lastSelected[0]) {
+	                                // The user has clicked on the same item, so do nothing.
+	                                clearDoubleClickTracking();
+	                                return;
+	                            }
+	                            direction = that.nextAll('.lastSelected').length > 0 ? 'forward' : 'back';
 
-                                    $lastSelected=($("#filez" + idSuffix + ">li.lastSelected"));
+	                            if ('forward' === direction) {
+	                                // Last selected is after the current selection
+	                                $selected = that.nextUntil($lastSelected, '.selectable');
+	                            } else {
+	                                // Last selected is before the current selection
+	                                $selected = $lastSelected.nextUntil(that, '.selectable');
+	                            }
 
-                                    if ($lastSelected.length > 0) {
+	                            collection.removeClass('ui-selected');
+	                            $selected.addClass('ui-selected');
+	                            $lastSelected.addClass('ui-selected');
+	                            that.addClass('ui-selected');
+	                        }
+	                    } else if (e.ctrlKey || e.metaKey) {
+	                        that.toggleClass('ui-selected');
+	                    } else {
+	                        //Not a shift select
+	                        $lastSelected = that;
+	                        collection.removeClass('lastSelected ui-selected');
+	                        that.addClass('lastSelected ui-selected');
+	                    }
+	                    $("#filez" + idSuffix + ">li").removeClass("pos-select" + idSuffix);
+	                    that.addClass("pos-select" + idSuffix);
+		                    $("#filez" + idSuffix + ">li").removeClass("selStart" + idSuffix);
+		                    that.addClass("selStart" + idSuffix);
+		                    selDir = 'all';
+		                    if (maybeHandleDoubleClick(this, e)) return;
+		                    getSelect();
+		                });
 
-                                        if (that[0] === $lastSelected[0]) {
-                                            // The user has clicked on the same item, so do nothing.
-                                            return;
-                                        }
-                                        direction = that.nextAll('.lastSelected').length > 0 ? 'forward' : 'back';
-
-                                        if ('forward' === direction) {
-                                            // Last selected is after the current selection
-                                            $selected = that.nextUntil($lastSelected, '.selectable');
-
-                                        } else {
-                                            // Last selected is before the current selection
-                                            $selected = $lastSelected.nextUntil(that, '.selectable');
-                                        }
-
-                                        collection.removeClass('ui-selected');
-                                        $selected.addClass('ui-selected');
-                                        $lastSelected.addClass('ui-selected');
-                                        that.addClass('ui-selected');
-                                    }
-
-                                } else if (e.ctrlKey || e.metaKey) {
-                                    that.toggleClass('ui-selected');
-
-                                } else {
-
-                                    //Not a shift select
-                                    $lastSelected = that;
-                                    collection.removeClass('lastSelected ui-selected');
-                                    that.addClass('lastSelected ui-selected');
-                                    //add selected class to group draggable objects
-                                    //$(this).toggleClass(selectedClass);
-                                    that.addClass('ui-selected');
-                                }
-                                $("#filez" + idSuffix + ">li").removeClass("pos-select" + idSuffix);
-                                that.addClass("pos-select" + idSuffix);
-                                $("#filez" + idSuffix + ">li").removeClass("selStart" + idSuffix);
-                                that.addClass("selStart" + idSuffix);
-                                selDir = 'all';
-                                //callback
-                                getSelect();
-                            }
-
-                        }
-                    }
-                });
-
-
-                $("#filez" + idSuffix + ">li").on('contextmenu', function () {
-                    if (!$(this).hasClass('ui-selected')) {
-                        $("#filez" + idSuffix + ">li").removeClass('ui-selected');
-                        $(this).addClass('ui-selected');
-                        getSelect();
-                    } else {
-                        getSelect();
-                    }
-                }).draggable({
+	                $("#filez" + idSuffix + ">li").on('contextmenu', function () {
+	                    if (!$(this).hasClass('ui-selected')) {
+	                        $("#filez" + idSuffix + ">li").removeClass('ui-selected');
+	                        $(this).addClass('ui-selected');
+	                        getSelect();
+	                    } else {
+	                        getSelect();
+	                    }
+	                    clearDoubleClickTracking();
+	                }).draggable({
+                    distance: dragStartDistance,
                     revertDuration: 10,
                     helper: function () {
-                        let mvCount = $('.ui-selected').length;
-                        if (mvCount === 0) {
-                            mvCount = 1;
-                        }
-                        let helperMsg = '<span class="helpertext">' + mvCount + '</span>';
-                        if (mvCount > 9) {
-                            helperMsg = '<span class="helpertext2">' + mvCount + '</span>';
-                        }
-                        return $('<div  class="filerhelper">' + helperMsg + '</div>');
+                        let mvCount = $('.ui-selected').length || 1;
+                        let helperMsg = mvCount > 9
+                            ? '<span class="helpertext2">' + mvCount + '</span>'
+                            : '<span class="helpertext">'  + mvCount + '</span>';
+                        return $('<div class="filerhelper">' + helperMsg + '</div>');
                     },
+                    // make sure only the helper moves
+                    appendTo: 'body',
+                    zIndex: 10000,
                     scroll: false,
-                    cursorAt: {
-                        right: 70,
-                        top: -5
-                    },
+                    cursorAt: { left: -14, top: -8 },
                     cursor: 'no-drop',
-                    start: function (e, ui) {
-                        ui.helper.addClass(selectedClass);
-                        dragged = true;
 
+	                    start: function (e, ui) {
+	                        dragged = true;
+	                        clearDoubleClickTracking();
+	                        // 1) clear any stale drag class from previous drags
+	                        $('.fl-drag-stay').removeClass('fl-drag-stay');
+
+                        // 2) make sure the row you start dragging is part of the selection
+	                        if (!$(this).hasClass('ui-selected')) {
+	                            $("#filez" + idSuffix + ">li").removeClass('lastSelected ui-selected');
+	                            $(this).addClass('lastSelected ui-selected');
+	                            $("#filez" + idSuffix + ">li").removeClass("pos-select" + idSuffix);
+	                            $(this).addClass("pos-select" + idSuffix);
+	                            $("#filez" + idSuffix + ">li").removeClass("selStart" + idSuffix);
+	                            $(this).addClass("selStart" + idSuffix);
+	                            selDir = 'all';
+	                            getSelect();
+	                        }
+
+                        // 3) NOW take the (updated) selection and dim it
+                        var $dragSet = $("#filez" + idSuffix + ">li.ui-selected");
+                        $dragSet.addClass('fl-drag-stay');
+
+                        // (unchanged stuff below)
                         $("#topscroller" + idSuffix).on({
                             mouseenter: function () {
-                                $("#filezcontainer" + idSuffix).animate({
-                                    scrollTop: 0
-                                }, 800);
+                                $("#filezcontainer" + idSuffix).animate({ scrollTop: 0 }, 800);
                             },
-                            mouseleave: function () {
-                                $("#filezcontainer" + idSuffix).stop();
-                            }
-                        });
-                        $("#topscroller" + idSuffix).css({
-                            'background-image': 'url("../inc/filer/images/ic_ui_topscroller.png")',
-                            'background-size': '20px 10px'
-                        });
+                            mouseleave: function () { $("#filezcontainer" + idSuffix).stop(); }
+                        }).css({ 'background-image': 'url("../inc/filer/images/ic_ui_topscroller.png")', 'background-size': '20px 10px' });
+
                         $("#downscroller" + idSuffix).on({
                             mouseenter: function () {
-                                $("#filezcontainer" + idSuffix).animate({
-                                    scrollTop: $("#filez" + idSuffix).height()
-                                }, 1200);
+                                $("#filezcontainer" + idSuffix).animate({ scrollTop: $("#filez" + idSuffix).height() }, 1200);
                             },
-                            mouseleave: function () {
-                                $("#filezcontainer" + idSuffix).stop();
-                            }
-                        });
-                        $("#downscroller" + idSuffix).css({
-                            'background-image': 'url("../inc/filer/images/ic_ui_downscroller.png")',
-                            'background-size': '20px 10px'
-                        });
-                        //$("#bc"+bc+"").css('cursor','no-drop');
-                        $(".activehome").css('cursor', 'move');
-                        $(".prevfold").css('cursor', 'no-drop');
-                        $(".droppable").css('cursor', 'move');
-                        $(".droppable2").css('cursor', 'move');
-                        $(".current").css('cursor', 'no-drop');
-                        $(".zfile").css('cursor', 'no-drop');
+                            mouseleave: function () { $("#filezcontainer" + idSuffix).stop(); }
+                        }).css({ 'background-image': 'url("../inc/filer/images/ic_ui_downscroller.png")', 'background-size': '20px 10px' });
 
-                        if (!$(this).hasClass('ui-selected')) {
-                            $lastSelected = $(this);
-                            collection.removeClass('lastSelected ui-selected');
-                            $(this).addClass('lastSelected ui-selected');
-                            $(this).addClass('ui-selected');
-                        }
+                        $(".activehome").css('cursor','move');
+                        $(".prevfold, .current, .zfile").css('cursor','no-drop');
+                        $(".droppable, .droppable2").css('cursor','move');
 
                         $(".droppable.ui-selected").toggleClass("droppable drop");
 
                         $(".droppable").droppable({
                             tolerance: "pointer",
-                            over: function (e) {
-                                if ($("#prevs" + idSuffix).is(':hidden')) {
-                                    $(e.target).css('color', '#679ee7');
-                                }
-                            },
-                            out: function (e) {
-                                $(e.target).css('color', '');
-                            },
-                            drop: function (e) {
-                                $(e.target).css('color', '');
-                                moveItems(e, $(".ui-selected"), 'mainpane');
-                            }
+                            over:  function (ev) { if ($("#prevs" + idSuffix).is(':hidden')) $(ev.target).css('color','#679ee7'); },
+                            out:   function (ev) { $(ev.target).css('color',''); },
+                            drop:  function (ev) { $(ev.target).css('color',''); moveItems(ev, $(".ui-selected"), 'mainpane'); }
                         });
 
                         $(".droppable2").droppable({
-                            create: function (e, ui) {},
                             tolerance: "pointer",
-                            over: function (e, ui) {},
-                            out: function (e, ui) {},
-                            drop: function (e) {
-                                $(e.target).css('color', '');
-                                //callback
-                                moveItems(e, $(".ui-selected"), 'bc');
-                            }
+                            drop:  function (ev) { $(ev.target).css('color',''); moveItems(ev, $(".ui-selected"), 'bc'); }
                         });
+                    },
 
-                    },
-                    stop: function () {
-                        clearSelection();
-                        dragged = false;
-                        $("#topscroller" + idSuffix).off('mouseenter mouseleave');
-                        $("#downscroller" + idSuffix).off('mouseenter mouseleave');
-                        $("#topscroller" + idSuffix).css('background-image', 'none');
-                        $("#downscroller" + idSuffix).css('background-image', 'none');
-                        $(".droppable").css('cursor', 'pointer');
-                        $(".droppable2").css('cursor', 'pointer');
-                        $(".activehome").css('cursor', 'pointer');
-                        $(".zfile").css('cursor', 'pointer');
-                        $(".drop").toggleClass("drop droppable");
-                        $(".current").css('cursor', 'default');
-                        // reset group positions
-                        $(".droppable").css('cursor', 'pointer');
-                        $('.ui-draggable').css({
-                            top: 0,
-                            left: 0,
-                            opacity: 1.0
-                        });
-                    },
-                    drag: function (e, ui) {
-                        $(this).addClass(selectedClass);
-                        $('.' + selectedClass).css({
-                            top: ui.position.top,
-                            left: ui.position.left,
-                            opacity: 0.4
-                        });
-                    }
+                    drag: function (_e, _ui) { /* no-op */ },
+
+	                    stop: function () {
+	                        // restore visuals for the selection from this drag
+	                        $('.fl-drag-stay').removeClass('fl-drag-stay');
+
+                        $("#topscroller" + idSuffix).off('mouseenter mouseleave').css('background-image','none');
+                        $("#downscroller" + idSuffix).off('mouseenter mouseleave').css('background-image','none');
+	                        $(".droppable, .droppable2, .activehome, .zfile").css('cursor','pointer');
+	                        $(".drop").toggleClass("drop droppable");
+	                        $(".current").css('cursor','default');
+	                        setTimeout(function () {
+	                            dragged = false;
+	                        }, 0);
+	                    }
+
                 });
 
                 $(document).off('keydown.filer');
             } else {
                 // Minimum featured filer
 
-                pointerHandler.listen($("#filez" + idSuffix + ">li"), {
-                    callbacks: {
-                        up: function () {
-                            $("#filez" + idSuffix + "> .selectable").removeClass('ui-selected');
-                            $(this).addClass('ui-selected');
-                            getSelect();
-                            $("#filez" + idSuffix + ">li").removeClass("pos-select" + idSuffix);
-                            $(this).addClass("pos-select" + idSuffix);
-                            $("#filez" + idSuffix + ">li").removeClass("selStart" + idSuffix);
-                            $(this).addClass("selStart" + idSuffix);
-                            selDir = 'all';
-                        }
-                    }
-                });
+		                $("#filez" + idSuffix).off('pointerup.filerSelect').on('pointerup.filerSelect', '> li.selectable', function (e) {
+		                    if (!isPrimaryPointerRelease(e)) {
+		                        clearDoubleClickTracking();
+		                        return;
+		                    }
+		                    if ($(e.target).closest('.watchListToggle').length > 0) {
+		                        clearDoubleClickTracking();
+		                        return;
+		                    }
+		                    $("#filez" + idSuffix + "> .selectable").removeClass('ui-selected');
+		                    $(this).addClass('ui-selected');
+		                    $("#filez" + idSuffix + ">li").removeClass("pos-select" + idSuffix);
+	                    $(this).addClass("pos-select" + idSuffix);
+	                    $("#filez" + idSuffix + ">li").removeClass("selStart" + idSuffix);
+	                    $(this).addClass("selStart" + idSuffix);
+	                    selDir = 'all';
+	                    if (maybeHandleDoubleClick(this, e)) return;
+	                    getSelect();
+	                });
 
             }
             // End Select / Drag / Drop 
@@ -1156,7 +1268,8 @@
                 input = $("<input>").attr({
                     "id": "fltinput" + idSuffix,
                     "class": "filterinput ui-corner-all",
-                    "type": "text"
+                    "type": "text",
+                    "placeholder": UILANG.m('Filter')
                 });
             $("#filterarea" + idSuffix).empty();
 
@@ -1170,55 +1283,48 @@
             $("#fltinput" + idSuffix).val('');
             $("#fltinput" + idSuffix).removeClass("activefilter");
 
-            if ($('#breadcrumbs' + idSuffix + '>li.current').attr('title') === "" || !$('#breadcrumbs' + idSuffix + '>li.current').attr('title')) {
-                $("#filterarea" + idSuffix).append("<span class='filtersearchtext'>" + UILANG.m('Filter') + " <strong>Home</strong></span>");
-            } else {
-                $("#filterarea" + idSuffix).append("<span class='filtersearchtext'>" + UILANG.m('Filter folder:') + " <strong>" + $('#breadcrumbs' + idSuffix + '>li.current').attr('title') + "</strong></span>");
-            }
-            $(input).on('change', function () {
-                const filter = $(this).val();
-                const $filezContainer = $("#filez" + idSuffix);
-
-                if (filter) {
-                    $filezContainer.find(".folder").each(function () {
-                        const $this = $(this);
-                        const itemText = $this.clone().children().remove().end().text().trim().toLowerCase(); // Get visible text only
-                        if (itemText.includes(filter.toLowerCase())) {
-                            $this.slideDown(100);
-                        } else {
-                            $this.slideUp(100);
-                        }
-                    });
-
-                    $filezContainer.find(".zfile").each(function () {
-                        const $this = $(this);
-                        const itemText = $this.clone().children().remove().end().text().trim().toLowerCase(); // Get visible text only
-                        if (itemText.includes(filter.toLowerCase())) {
-                            $this.slideDown(100);
-                        } else {
-                            $this.slideUp(100);
-                        }
-                    });
-
-                    $(this).addClass("activefilter");
-                    $filezContainer.find('p').remove();
-
-                    setTimeout(function () {
-                        if ($filezContainer.children(':visible').length === 0) {
-                            $filezContainer.append('<p><span class="empty2">' + UILANG.m('No matches for your current filter!') + '</span></p>');
-                        }
-                    }, 160);
-                } else {
-                    $filezContainer.find('p').remove();
-                    $filezContainer.find(".folder").slideDown(100);
-                    $filezContainer.find(".zfile").slideDown(100);
-                    $(this).removeClass("activefilter");
-                }
-
-
-            }).on('keyup', function () {
-                $(this).trigger('change');
+            const currentFolderTitle = $('#breadcrumbs' + idSuffix + '>li.current').attr('title');
+            const filterPlaceholder = currentFolderTitle ? `${UILANG.m('Filter folder:')} ${currentFolderTitle}` : `${UILANG.m('Filter')} Home`;
+            $("#fltinput" + idSuffix).attr({
+                "placeholder": filterPlaceholder,
+                "aria-label": filterPlaceholder
             });
+	            $(input).on('change', function () {
+	                const filter = $(this).val();
+	                const $filezContainer = $("#filez" + idSuffix);
+	                const filterLower = filter.toLowerCase();
+	                let matches = 0;
+
+	                if (filter) {
+	                    $filezContainer.find("li.selectable").each(function () {
+	                        const $this = $(this);
+	                        if ($this.attr('data-media-match') !== '0' && ($this.attr('data-filter-label') || '').includes(filterLower)) {
+	                            $this.show();
+	                            matches++;
+	                        } else {
+	                            $this.hide();
+	                        }
+	                    });
+
+	                    $(this).addClass("activefilter");
+	                    $filezContainer.find('p').remove();
+
+	                    if (matches === 0) {
+	                        $filezContainer.append('<p><span class="empty2">' + UILANG.m('No matches for your current filter!') + '</span></p>');
+	                    }
+	                } else {
+	                    $filezContainer.find('p').remove();
+	                    $filezContainer.find("li.selectable").each(function () {
+	                        $(this).toggle($(this).attr('data-media-match') !== '0');
+	                    });
+	                    $(this).removeClass("activefilter");
+	                }
+	            }).on('keyup', function () {
+	                clearTimeout(this.filterTimer);
+	                this.filterTimer = setTimeout(() => {
+	                    $(this).trigger('change');
+	                }, 120);
+	            });
 
             //End Filter
         }
@@ -1228,7 +1334,7 @@
             let srchSelection;
             $(document).off('keydown.filer');
             if ($("#dialog-form" + idSuffix).length === 0) {
-                $("body").append("<div id='dialog-form" + idSuffix + "' style='display:none;' title='Search results'><p id='searchhead" + idSuffix + "'></p><div id='scroll_area" + idSuffix + "'><ul id='srchres_folder" + idSuffix + "'></ul><ul id='srchres_files" + idSuffix + "'></ul></div></div>");
+                $("body").append("<div id='dialog-form" + idSuffix + "' class='filerSearchResultsDialog' style='display:none;' title='Search results'><p id='searchhead" + idSuffix + "' class='filerSearchSummary'></p><div id='scroll_area" + idSuffix + "' class='filerSearchResultsScroll'><ul id='srchres_folder" + idSuffix + "'></ul><ul id='srchres_files" + idSuffix + "'></ul></div></div>");
             }
 
             const searchHead = $("#searchhead" + idSuffix);
@@ -1238,52 +1344,54 @@
             $("#srchres_files" + idSuffix).empty();
 
             if (srchResultsArray.length < 1) {
-                searchHead.append(UILANG.m('No results for your search:') + ' <strong>' + searchterm + '</strong>');
+                searchHead.append('<strong>' + UILANG.m('No results for your search:') + ' ' + searchterm + '</strong>');
                 return;
             } else {
-                searchHead.append('' + srchResultsArray.length + ' ' + UILANG.m('result(s) for your search:') + ' <strong>' + searchterm + '</strong>');
+                searchHead.append('<strong>' + srchResultsArray.length + ' ' + UILANG.m('result(s) for your search:') + ' ' + searchterm + '</strong>');
                 if (!fullyFeatured) {
-                    searchHead.append('<br /><span style="font-size:0.8em;">' + UILANG.m('Double-click element to open it!') + '</span>');
+                    searchHead.append('<span>' + UILANG.m('Double-click element to open it!') + '</span>');
                 } else {
-                    searchHead.append('<br /><span style="font-size:0.8em;">' + UILANG.m('Double-click element to open it or select elements to copy or move them!') + '</span>');
+                    searchHead.append('<span>' + UILANG.m('Double-click element to open it or select elements to copy or move them!') + '</span>');
                 }
             }
 
+            const literalSearchRegex = new RegExp(String(searchterm).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+            const highlightSearchMatch = (match) => '<span class="filerSearchMatch">' + match + '</span>';
             $.each(srchResultsArray, function (k, v) {
                 let newListEntry = true;
-                v.label = v.label.replace(new RegExp(searchterm, 'gi'), '<span style="color:#4175b9;font-weight:700;">' + searchterm + '</span>');
+                v.label = v.label.replace(literalSearchRegex, highlightSearchMatch);
                 if (v.subresult != null) {
-                    v.subresultvalue = v.subresultvalue.replace(new RegExp(searchterm, 'gi'), '<span style="color:#4175b9;font-weight:700;">' + searchterm + '</span>');
+                    v.subresultvalue = v.subresultvalue.replace(literalSearchRegex, highlightSearchMatch);
                 }
                 if (v.type) {
                     switch (v.type) {
                         //For ITEM, TEST & TESTEE Manager
                         case 'folder':
-                            $("#srchres_folder" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span style="margin-left:5px;color:#aaa;font-size:8pt;font-weight:300;">(Path: ' + v.path + ')</span></li>');
+                            $("#srchres_folder" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span class="filerSearchPath">' + UILANG.m('Path:') + ' ' + v.path + '</span></li>');
                             $("#src" + v.id).addClass('folder');
                             //Set checkboxes in relation to the FileOpPermissions
                             if (fileOpPermissions.copyFolders === true || fileOpPermissions.cutFolders === true) {
-                                $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />&nbsp;&nbsp;');
+                                $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />');
                             }
                             break;
                         case 'itemGroup':
                             if (v.subresult != null) {
                                 if ($("#src" + v.id).length === 0) {
-                                    $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span style="margin-left: 5px;color:#aaa;font-size:8pt;font-weight:300;">(Path: ' + v.path + ')</span></li>');
+                                    $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span class="filerSearchPath">' + UILANG.m('Path:') + ' ' + v.path + '</span></li>');
                                     $("#src" + v.id).addClass('typefile');
                                     if (fileOpPermissions.copyItems === true || fileOpPermissions.cutItems === true) {
-                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />&nbsp;&nbsp;');
+                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />');
                                     }
                                 } else {
                                     newListEntry = false;
                                 }
-                                $("#src" + v.id).append('<br /><span style="margin-left: 5px;color:#666;font-size:9pt;font-weight:300;"><strong>' + UILANG.m(v.subresult) + '</strong>' + v.subresultvalue + '</span>');
+                                $("#src" + v.id).append('<span class="filerSearchSubresult"><strong>' + UILANG.m(v.subresult) + '</strong>' + v.subresultvalue + '</span>');
                             } else {
                                 if ($("#src" + v.id).length === 0) {
-                                    $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span style="margin-left: 5px;color:#aaa;font-size:8pt;font-weight:300;">(Path: ' + v.path + ')</span></li>');
+                                    $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span class="filerSearchPath">' + UILANG.m('Path:') + ' ' + v.path + '</span></li>');
                                     $("#src" + v.id).addClass('typefile');
                                     if (fileOpPermissions.copyItems === true || fileOpPermissions.cutItems === true) {
-                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />&nbsp;&nbsp;');
+                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />');
                                     }
                                 } else {
                                     newListEntry = false;
@@ -1294,21 +1402,21 @@
                             let testType = 'typeTest' + v.testType.charAt(0).toUpperCase() + v.testType.slice(1);
                             if (v.subresult != null) {
                                 if ($("#src" + v.id).length === 0) {
-                                    $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span style="margin-left: 5px;color:#aaa;font-size:8pt;font-weight:300;">(Path: ' + v.path + ')</span><span class="mediaIndicator">[' + v.testType + ']</span></li>');
+                                    $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span class="filerSearchPath">' + UILANG.m('Path:') + ' ' + v.path + '</span><span class="mediaIndicator">[' + v.testType + ']</span></li>');
                                     $("#src" + v.id).addClass(testType);
                                     if (fileOpPermissions.copyItems === true || fileOpPermissions.cutItems === true) {
-                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />&nbsp;&nbsp;');
+                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />');
                                     }
                                 } else {
                                     newListEntry = false;
                                 }
-                                $("#src" + v.id).append('<br /><span style="margin-left: 5px;color:#666;font-size:9pt;font-weight:300;"><strong>' + UILANG.m(v.subresult) + '</strong>' + v.subresultvalue + '</span>');
+                                $("#src" + v.id).append('<span class="filerSearchSubresult"><strong>' + UILANG.m(v.subresult) + '</strong>' + v.subresultvalue + '</span>');
                             } else {
                                 if ($("#src" + v.id).length === 0) {
-                                    $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span style="margin-left: 5px;color:#aaa;font-size:8pt;font-weight:300;">(Path: ' + v.path + ')</span><span class="mediaIndicator">[' + v.testType + ']</span></li>');
+                                    $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span class="filerSearchPath">' + UILANG.m('Path:') + ' ' + v.path + '</span><span class="mediaIndicator">[' + v.testType + ']</span></li>');
                                     $("#src" + v.id).addClass(testType);
                                     if (fileOpPermissions.copyItems === true || fileOpPermissions.cutItems === true) {
-                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />&nbsp;&nbsp;');
+                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />');
                                     }
                                 } else {
                                     newListEntry = false;
@@ -1316,54 +1424,92 @@
                             }
                             break;
                         case 'testee':
-                            if (v.subresult != null) {
-                                if ($("#src" + v.id).length === 0) {
-                                    $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span style="margin-left: 5px;color:#aaa;font-size:8pt;font-weight:300;">(Path: ' + v.path + ')</span></li>');
-                                    $("#src" + v.id).addClass('typetestee');
-                                    if (fileOpPermissions.copyItems === true || fileOpPermissions.cutItems === true) {
-                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />&nbsp;&nbsp;');
-                                    }
-                                } else {
-                                    newListEntry = false;
+                            if ($("#src" + v.id).length === 0) {
+                                $("#srchres_files" + idSuffix).append(
+                                    '<li id="src' + v.id + '">' +
+                                    v.label +
+                                    '<br /><span class="filerSearchPath">' + UILANG.m('Path:') + ' ' + v.path + '</span>' +
+                                    '</li>'
+                                );
+
+                                let $el = $("#src" + v.id);
+                                switch (v.loginType) {
+                                    case 'directPass':
+                                        $el.addClass('typetesteeDirect');
+                                        $el.append('<span class="mediaIndicator">[' + UILANG.m("direct") + ']</span>');
+                                        break;
+
+                                    case 'LDAP':
+                                        $el.addClass('typetesteeLdap');
+                                        $el.append('<span class="mediaIndicator">[' + UILANG.m("LDAP") + ']</span>');
+                                        break;
+
+                                    case 'SAML':
+                                        $el.addClass('typetesteeSaml');
+                                        $el.append('<span class="mediaIndicator">[' + UILANG.m("SAML") + ']</span>');
+                                        break;
+
+                                    default:
+                                        $el.addClass('typetestee');
+                                        $el.append('<span class="mediaIndicator">[' + UILANG.m("standard") + ']</span>');
+                                        $el.removeClass('highlightBlue');
+                                        break;
                                 }
-                                $("#src" + v.id).append('<br /><span style="margin-left: 5px;color:#666;font-size:9pt;font-weight:300;"><strong>' + UILANG.m(v.subresult) + '</strong>' + v.subresultvalue + '</span>');
+
+                                if (fileOpPermissions.copyItems === true || fileOpPermissions.cutItems === true) {
+                                    $el.prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />');
+                                }
                             } else {
-                                if ($("#src" + v.id).length === 0) {
-                                    $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span style="margin-left: 5px;color:#aaa;font-size:8pt;font-weight:300;">(Path: ' + v.path + ')</span></li>');
-                                    $("#src" + v.id).addClass('typetestee');
-                                    if (fileOpPermissions.copyItems === true || fileOpPermissions.cutItems === true) {
-                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />&nbsp;&nbsp;');
-                                    }
-                                } else {
-                                    newListEntry = false;
-                                }
+                                newListEntry = false;
+                            }
+
+                            // subresult handled once
+                            if (v.subresult != null) {
+                                $("#src" + v.id).append(
+                                    '<span class="filerSearchSubresult"><strong>' +
+                                    UILANG.m(v.subresult) +
+                                    '</strong>' +
+                                    v.subresultvalue +
+                                    '</span>'
+                                );
                             }
                             break;
                         case 'template':
                             if (v.subresult != null) {
                                 if ($("#src" + v.id).length === 0) {
-                                    $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span style="margin-left: 5px;color:#aaa;font-size:8pt;font-weight:300;">(Path: ' + v.path + ')</span></li>');
+                                    $("#srchres_files" + idSuffix).append(
+                                        '<li id="src' + v.id + '">' +
+                                        v.label +
+                                        '<br /><span class="filerSearchPath">' + UILANG.m('Path:') + ' ' + v.path + '</span>' +
+                                        '<span class="mediaIndicator">[' + UILANG.m("template") + ']</span>' +
+                                        '</li>'
+                                    );
                                     $("#src" + v.id).addClass('typetemplate');
                                     if (fileOpPermissions.copyItems === true || fileOpPermissions.cutItems === true) {
-                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />&nbsp;&nbsp;');
+                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />');
                                     }
                                 } else {
                                     newListEntry = false;
                                 }
-                                $("#src" + v.id).append('<br /><span style="margin-left: 5px;color:#666;font-size:9pt;font-weight:300;"><strong>' + UILANG.m(v.subresult) + '</strong>' + v.subresultvalue + '</span>');
+                                $("#src" + v.id).append('<span class="filerSearchSubresult"><strong>' + UILANG.m(v.subresult) + '</strong>' + v.subresultvalue + '</span>');
                             } else {
                                 if ($("#src" + v.id).length === 0) {
-                                    $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<br /><span style="margin-left: 5px;color:#aaa;font-size:8pt;font-weight:300;">(Path: ' + v.path + ')</span></li>');
+                                    $("#srchres_files" + idSuffix).append(
+                                        '<li id="src' + v.id + '">' +
+                                        v.label +
+                                        '<br /><span class="filerSearchPath">' + UILANG.m('Path:') + ' ' + v.path + '</span>' +
+                                        '<span class="mediaIndicator">[' + UILANG.m("template") + ']</span>' +
+                                        '</li>'
+                                    );
                                     $("#src" + v.id).addClass('typetemplate');
                                     if (fileOpPermissions.copyItems === true || fileOpPermissions.cutItems === true) {
-                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />&nbsp;&nbsp;');
+                                        $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />');
                                     }
                                 } else {
                                     newListEntry = false;
                                 }
                             }
                             break;
-
                             //For Media Manager
                         case 'audio':
                         case 'mp3':
@@ -1371,7 +1517,7 @@
                             $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<span class="mediaIndicator">[' + v.type + ']</span></li>');
                             $("#src" + v.id).addClass('typeaudio');
                             if (fileOpPermissions.copyItems === true || fileOpPermissions.cutItems === true) {
-                                $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />&nbsp;&nbsp;');
+                                $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />');
                             }
                             if (mediaTypes !== 'all' && mediaTypes !== 'audio') {
                                 $("#src" + v.id).css('display', 'none');
@@ -1384,7 +1530,7 @@
                             $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<span class="mediaIndicator">[' + v.type + ']</span></li>');
                             $("#src" + v.id).addClass('typevideo');
                             if (fileOpPermissions.copyItems === true || fileOpPermissions.cutItems === true) {
-                                $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />&nbsp;&nbsp;');
+                                $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />');
                             }
                             if (mediaTypes !== 'all' && mediaTypes !== 'video') {
                                 $("#src" + v.id).css('display', 'none');
@@ -1399,7 +1545,7 @@
                             $("#srchres_files" + idSuffix).append('<li id="src' + v.id + '">' + v.label + '<span class="mediaIndicator">[' + v.type + ']</span></li>');
                             $("#src" + v.id).addClass('typepicture');
                             if (fileOpPermissions.copyItems === true || fileOpPermissions.cutItems === true) {
-                                $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />&nbsp;&nbsp;');
+                                $("#src" + v.id).prepend('<img alt="" style="float:left;width:16px; height:16px;" src="../inc/filer/images/unchecked_checkbox.png" id="chk' + v.id + '" />');
                             }
                             if (mediaTypes !== 'all' && mediaTypes !== 'image') {
                                 $("#src" + v.id).css('display', 'none');
@@ -1580,45 +1726,19 @@
         }
 
 
-        function fillClipBoard() {
-            const returnItems = [];
-            $.each($('.ui-selected'), function (k, v) {
+	        function fillClipBoard() {
+	            return getItemsFromElements($("#filez" + idSuffix + "> .ui-selected"));
+	        }
 
-                $.each(itemData, function (key, value) {
+	        function chgname(opt, desc) {
+	            const item = getItemByElementId(desc[0].id);
+	            if (item) callback('onRenameRequest', item);
+	        }
 
-                    if (v.id === idSuffix + value.id) {
-                        returnItems.push(value);
-                    }
-                });
-            });
-            return returnItems;
-        }
+	        function delItems(opt, deletees) {
+	            callback('onDeleteRequest', getItemsFromElements(deletees));
 
-        function chgname(opt, desc) {
-
-            $.each(itemData, function (key, value) {
-
-                if (desc[0].id === idSuffix + value.id) {
-                    callback('onRenameRequest', itemData[key]);
-                }
-            });
-        }
-
-        function delItems(opt, deletees) {
-
-            const delItems = [];
-            $.each(deletees, function (k, v) {
-
-                $.each(itemData, function (key, value) {
-
-                    if (v.id === idSuffix + value.id) {
-                        delItems.push(value);
-                    }
-                });
-            });
-            callback('onDeleteRequest', delItems);
-
-        }
+	        }
 
         function copyItems() {
 
@@ -1676,16 +1796,7 @@
             } else {
                 moveTarget = e.target.id.slice(idSuffix.length);
             }
-            const moveItems = [];
-            $.each(selected, function (k, v) {
-
-                $.each(itemData, function (key, value) {
-
-                    if (v.id === idSuffix + value.id) {
-                        moveItems.push(value);
-                    }
-                });
-            });
+	            const moveItems = getItemsFromElements(selected);
 
             const returnData = [{
                 target: moveTarget,
@@ -1893,8 +2004,9 @@
         this.getCurrentFolderID = getCurrentFolderID;
         this.deleteFiles = deleteFiles;
         this.clearClipboard = clearClipboard;
+        }
     }
 
-    window.fileMgr = fileMgr;
+    window.FileManager = FileManager;
 
 })(jQuery);

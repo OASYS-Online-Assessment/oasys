@@ -29,11 +29,23 @@ function buildScreen(data) {
 	html = html.replace(/\[@ SCORED @]/g, data.score);
 	html = html.replace(/\[@ TOTAL @]/g, data.maxScore);
 	html = html.replace(/@@closeTest@@/g, global_getText('score', 'closeTest'));
-	$('#contentWrapper').html(html);
+	html = score_replaceOasysRoot(html);
+
+	const $contentWrapper = $('#contentWrapper');
+	const $scoreScreenContent = $('<div>', {
+		id: 'scoreScreenContent'
+	});
+	const $scoreScreenPage = $('<div>', {
+		id: 'scoreScreenPage'
+	}).html(html);
+	$scoreScreenContent.append($scoreScreenPage);
+	$contentWrapper.empty().append($scoreScreenContent);
+	score_applyCustomCSS($contentWrapper);
+	score_applyConditions($scoreScreenPage[0], data);
 
 	//find span with class button-variable, read action and label, then add nxButton accordingly
 	let buttonCounter = 0;
-	$('.button-variable').each(function (idx, el) {
+	$scoreScreenPage.find('.button-variable').each(function (idx, el) {
 		$(el).html("");
 		const action = $(this).data('action');
 		const label = $(this).data('label');
@@ -56,8 +68,88 @@ function buildScreen(data) {
 	});
 }
 
+function score_replaceOasysRoot(value) {
+	if (typeof (value) !== 'string') {
+		return value;
+	}
+
+	return value.replace(/\[@\s*OASYSROOT\s*@](\/)?/g, function (match, pathSeparator) {
+		if (pathSeparator && !settings.rootURL.endsWith('/')) {
+			return settings.rootURL + '/';
+		}
+
+		return settings.rootURL;
+	});
+}
+
+function score_applyCustomCSS($contentWrapper) {
+	let customCSS = test?.metadata?.score_screen?.customCSS;
+	if (typeof (customCSS) !== 'string' || customCSS.trim() === '') {
+		return;
+	}
+
+	customCSS = score_replaceOasysRoot(customCSS);
+	$('<style>', {
+		id: 'scoreScreenCustomCSS',
+		text: customCSS
+	}).appendTo($contentWrapper);
+}
+
+function score_evaluateCondition(actual, operator, expected, maximum) {
+	switch (operator) {
+		case '<':
+			return actual < expected;
+		case '<=':
+			return actual <= expected;
+		case '>':
+			return actual > expected;
+		case '>=':
+			return actual >= expected;
+		case '=':
+			return actual === expected;
+		case 'between':
+			return Number.isFinite(maximum) && actual > expected && actual < maximum;
+		case 'betweenInclusive':
+			return Number.isFinite(maximum) && actual >= expected && actual <= maximum;
+		case 'betweenUpperInclusive':
+			return Number.isFinite(maximum) && actual > expected && actual <= maximum;
+		case 'betweenLowerInclusive':
+			return Number.isFinite(maximum) && actual >= expected && actual < maximum;
+		default:
+			return false;
+	}
+}
+
+function score_applyConditions(contentWrapper, data) {
+	if (!contentWrapper) {
+		return;
+	}
+
+	const metrics = {
+		percentage: Number(data.percentage),
+		points: Number(data.score)
+	};
+
+	contentWrapper.querySelectorAll('.score-conditional-block').forEach(function (block) {
+		const metric = block.getAttribute('data-condition-metric');
+		const operator = block.getAttribute('data-condition-operator');
+		const rawExpected = block.getAttribute('data-condition-value');
+		const expected = Number(rawExpected);
+		const rawMaximum = block.getAttribute('data-condition-max-value');
+		const maximum = rawMaximum === null || rawMaximum.trim() === '' ? NaN : Number(rawMaximum);
+		const actual = metrics[metric];
+		const isVisible = typeof (rawExpected) === 'string' &&
+			rawExpected.trim() !== '' &&
+			Number.isFinite(actual) &&
+			Number.isFinite(expected) &&
+			score_evaluateCondition(actual, operator, expected, maximum);
+
+		block.classList.toggle('score-conditional-visible', isVisible);
+	});
+}
+
 function score_returnToLogin() {
-	global_returnToLogin();
+	global_finishTest();
 }
 
 function score_proceed() {

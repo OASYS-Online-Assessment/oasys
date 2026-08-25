@@ -1,0 +1,313 @@
+/* dashboard/activenow/activenow.css */
+
+/* -- Layout / toolbar -- */
+.activenow .an-body{display:flex;flex-direction:column;height:100%;color:#333;font-size:14px;padding:4px;}
+.activenow .an-toolbar{display:flex;gap:8px;align-items:center;padding:0 0 6px;}
+.activenow .an-btn{padding:6px 10px;border-radius:6px;border:1px solid #cfcfcf;background:#f7f7f7;cursor:pointer;}
+.activenow .an-btn:hover{background:#efefef;}
+.activenow .an-btn:disabled{opacity:.55;cursor:not-allowed;}
+
+/* -- Filter -- */
+.activenow .an-filter{
+    flex:1 1 auto;
+    box-sizing:border-box;
+    height:30px;
+    min-width:160px;
+    padding:5px 10px;
+    border:1px solid #cbd6e2;
+    border-radius:6px;
+    background:#fff;
+    color:#1f2933;
+    font-size:13px;
+    line-height:18px;
+    outline:none;
+    box-shadow:inset 0 1px 2px rgba(15,23,42,.04);
+    transition:border-color .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+.activenow .an-filter::placeholder{
+    color:#8b98a7;
+    font-size:12px;
+    opacity:1;
+}
+.activenow .an-filter:focus{
+    border-color:#227DAA;
+    box-shadow:0 0 0 2px rgba(34,125,170,.14), inset 0 1px 2px rgba(15,23,42,.04);
+}
+
+/* === Segmented switches === */
+.activenow .an-segSwitch{
+    display:inline-flex;
+    gap:2px;
+    padding:2px;
+    border:1px solid #cbd5e1;
+    border-radius:9999px;
+    background:#f1f5f9;
+    box-shadow:inset 0 0 0 0 rgba(0,0,0,0.04);
+}
+.activenow .an-segBtn{
+    appearance:none;
+    border:0;
+    background:transparent;
+    padding:4px 12px;
+    border-radius:9999px;
+    font-weight:700;
+    font-size:12px;
+    line-height:18px;
+    color:#1f2937;
+    cursor:pointer;
+    user-select:none;
+}
+.activenow .an-segBtn:hover{ background:#e2e8f0; }
+.activenow .an-segBtn:focus-visible{
+    outline:2px solid rgba(34,125,170,.35);
+    outline-offset:2px;
+}
+
+/* Active states */
+.activenow .an-segSwitch--scope .an-segBtn.is-active{
+    background:#227DAA;
+    color:#fff;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.15);
+}
+.activenow .an-segSwitch--mode .an-segBtn.is-active[data-mode="manual"]{
+    background:#227DAA;color:#fff;box-shadow:inset 0 1px 2px rgba(0,0,0,.15);
+}
+.activenow .an-segSwitch--mode .an-segBtn.is-active[data-mode="live"]{
+    background:#e11d48;color:#fff;box-shadow:inset 0 1px 2px rgba(0,0,0,.18);
+}
+.activenow .an-segSwitch--mode .an-segBtn[data-mode="live"]:hover{background:#fecaca;}
+
+/* -- Main table / header -- */
+.activenow .an-tableWrap{
+    position:relative;
+    flex:1 1 auto;
+    overflow-y:hidden;
+    overflow-x:hidden;
+    min-height:0;
+    scrollbar-gutter:auto; /* avoid permanent reserved gutter in Edge */
+    box-sizing:border-box;
+    padding-right:0;
+}
+.activenow .an-table{
+    width:100%;
+    border-collapse:collapse;
+    table-layout:fixed;
+    color:#333;
+    margin:0;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    height:100%;
+}
+.activenow .an-table thead{
+    display:table;
+    width:100%;
+    table-layout:fixed;
+    flex:0 0 auto;
+}
+.activenow .an-table tbody{
+    display:block;
+    overflow:auto;
+    min-height:0;
+    flex:1 1 auto;
+}
+.activenow .an-table tbody tr{
+    display:table;
+    width:100%;
+    table-layout:fixed;
+}
+.activenow .an-table thead th{
+    background:#227DAA;
+    color:#fff;
+    font-weight:700;
+    font-size:12px;
+    padding:4px 10px;
+    line-height:18px;
+    white-space:nowrap;
+    border-bottom:1px solid #1b6486;
+}
+.activenow .an-table thead th[data-col="name"]{text-align:left;}
+.activenow .an-table tbody td{
+    padding:2px 10px;
+    line-height:20px;
+    border-bottom:1px solid #e9e9e9;
+    white-space:nowrap;
+    vertical-align:middle;
+}
+.activenow .an-table tbody tr:hover td{background:#f4f8fb;}
+
+/* -- Name column: icon + multiline text */
+.activenow .an-name{white-space:normal;}
+.activenow .an-nameWrap{
+    display:grid;
+    grid-template-columns:20px 1fr;
+    align-items:center;
+    column-gap:6px;
+}
+.activenow .an-nameText{
+    white-space:normal;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+    line-height:20px;
+}
+.activenow .an-icon{
+    width:20px;height:20px;
+    background-repeat:no-repeat;background-position:50% 50%;background-size:20px 20px;
+    display:inline-block;cursor:help;
+}
+
+/* -- Alignment / widths -- */
+.activenow .an-num,
+.activenow .an-actions,
+.activenow .an-ctr{text-align:center;}
+
+.activenow .an-table thead th[data-col="active"],
+.activenow .an-table thead th[data-col="timeout"],
+.activenow .an-table thead th[data-col="aborted"],
+.activenow .an-table thead th[data-col="closed"],
+.activenow .an-table thead th[data-col="avg"],
+.activenow .an-table thead th[data-col="p50"],
+.activenow .an-table thead th[data-col="p90"],
+.activenow .an-table thead th[data-col="range"],
+.activenow .an-table thead th[data-col="last"],
+.activenow .an-table thead th[data-col="actions"],
+.activenow .an-table tbody td.an-num,
+.activenow .an-table tbody td.an-upd,
+.activenow .an-table tbody td.an-actions{
+    width:1%;
+    white-space:nowrap;
+    text-align:center;
+}
+
+.activenow .an-table thead th:nth-child(1),
+.activenow .an-table tbody td:nth-child(1){ width:36%; }
+.activenow .an-table thead th:nth-child(2),
+.activenow .an-table tbody td:nth-child(2){ width:8%; text-align:center; }
+.activenow .an-table thead th:nth-child(3),
+.activenow .an-table tbody td:nth-child(3){ width:8%; text-align:center; }
+.activenow .an-table thead th:nth-child(4),
+.activenow .an-table tbody td:nth-child(4){ width:8%; text-align:center; }
+.activenow .an-table thead th:nth-child(5),
+.activenow .an-table tbody td:nth-child(5){ width:8%; text-align:center; }
+.activenow .an-table thead th:nth-child(6),
+.activenow .an-table tbody td:nth-child(6){ width:13%; text-align:center; }
+.activenow .an-table thead th:nth-child(7),
+.activenow .an-table tbody td:nth-child(7){ width:13%; text-align:center; }
+.activenow .an-table thead th:nth-child(8),
+.activenow .an-table tbody td:nth-child(8){ width:6%; text-align:center; }
+
+/* Modern browsers: no extra padding */
+.activenow .an-table thead th[data-col="actions"],
+.activenow .an-table tbody td.an-actions{padding-right:22px;}
+
+/* Fallback for old browsers without scrollbar-gutter support */
+@supports not (scrollbar-gutter: auto) {
+  .activenow .an-table thead th[data-col="actions"],
+  .activenow .an-table tbody td.an-actions{padding-right:22px;}
+}
+
+/* -- States / emphasis -- */
+.activenow .an-empty td,
+.activenow .an-emptyRow{color:#9b9b9b;font-weight:600;text-align:center;padding:16px 8px;}
+.activenow .an-activeRow td{background:#fff0f0;font-weight:700;}
+.activenow .an-table tbody tr.an-activeRow:hover td{background:#ffe9e9;}
+.activenow .an-activeNum{color:#DD1A00;font-weight:700;}
+
+/* -- Icon buttons -- */
+.activenow .an-iconBtn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:24px;
+    height:24px;
+    border-radius:4px;
+    text-decoration:none;
+    opacity:.75;
+    outline:none;
+}
+.activenow .an-iconBtn:hover,
+.activenow .an-iconBtn:focus{opacity:1;background:#f0f0f0;}
+.activenow .an-ico{fill:currentColor;color:#227DAA;}
+
+/* -- Details dialog table -- */
+.an-usersWrap{
+    max-height:100%;
+    overflow:hidden;
+    padding:0;
+    box-sizing:border-box;
+    scrollbar-gutter:auto;
+}
+.an-usersTable{
+    width:100%;
+    table-layout:fixed;
+    border-collapse:separate;
+    border-spacing:0;
+    margin:0;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    max-height:400px;
+    font-size:12px;
+}
+.an-usersTable thead{
+    display:block;
+    width:100%;
+    flex:0 0 auto;
+}
+.an-usersTable thead tr,
+.an-usersTable tbody tr{
+    display:grid;
+    grid-template-columns:36% 9% 25% 12% 18%;
+    width:100%;
+}
+.an-usersTable tbody{
+    display:block;
+    overflow:auto;
+    min-height:0;
+    flex:1 1 auto;
+}
+.an-usersTable th,.an-usersTable td{
+    padding:5px 7px;
+    border-bottom:1px solid #f0f0f0;
+    white-space:nowrap;
+    vertical-align:middle;
+    line-height:17px;
+}
+.an-usersTable thead th{
+    background:#fff;
+    border-bottom:1px solid #e1e1e1;
+    box-shadow:0 1px 0 rgba(0,0,0,.04);
+    font-weight:700;
+}
+.an-th-login,.an-cell-login{text-align:left;overflow:hidden;text-overflow:ellipsis;}
+.an-th-lang,.an-cell-lang,
+.an-th-last,.an-cell-last{text-align:center;}
+.an-th-progress,.an-cell-progress,
+.an-th-status,.an-cell-status{text-align:center;}
+.an-th-status,.an-cell-status{white-space:nowrap;}
+.an-th-last,.an-cell-last{font-variant-numeric:tabular-nums;}
+
+/* -- Progress bar in dialog -- */
+.an-miniProgress{
+    position:relative;height:12px;background:#e9e9e9;border-radius:5px;overflow:hidden;min-width:86px;margin:0 auto;
+}
+.an-miniProgress__fill{position:absolute;inset:0 auto 0 0;width:0%;background:#9fd8f5;}
+.an-miniProgress__label{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:10px;line-height:1;font-variant-numeric:tabular-nums;color:#123;pointer-events:none;
+}
+
+/* Tooltip content */
+.an-statesTT{font-size:12px;line-height:1.4;}
+.an-statesTT > div{display:flex;align-items:center;gap:6px;margin:2px 0;}
+
+/* small colored dots */
+.an-dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:0 0 10px;}
+.an-dot-active{background:#2ecc71;}
+.an-dot-timeout{background:#f1c40f;}
+.an-dot-aborted{background:#e67e22;}
+.an-dot-closed{background:#95a5a6;}
+
+/* State hover */
+.an-stateHover:hover{text-decoration:underline;cursor:help;}
+.an-th-lang{text-align:left;}

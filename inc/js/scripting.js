@@ -60,35 +60,8 @@ function scripting_executeIfCmd(cmd) {
 function scripting_evaluateCondition(cond) {
 	debug_log("scripting", `scripting_evaluateCondition(cond)`);
 	debug_variable("scripting", cond);
-	let term1;
-	if (cond.term1.type === 'globalVariable') {
-		if (cond.term1.value.includes('.')) {
-			term1 = fetchFromPath(globalVariables, ...cond.term1.value.split('.'));
-		} else {
-			term1 = globalVariables[cond.term1.value];
-		}
-	} else if (cond.term1.type === 'localVariable') {
-		if (typeof (answers[state.currentItemId][cond.term1.value]) !== 'undefined') {
-			term1 = answers[state.currentItemId][cond.term1.value];
-		}
-	} else {
-		term1 = cond.term1.value;
-	}
-
-	let term2;
-	if (cond.term2.type === 'globalVariable') {
-		if (cond.term2.value.includes('.')) {
-			term2 = fetchFromPath(globalVariables, ...cond.term2.value.split('.'));
-		} else {
-			term2 = globalVariables[cond.term2.value];
-		}
-	} else if (cond.term2.type === 'localVariable') {
-		if (typeof (answers[state.currentItemId][cond.term2.value]) !== 'undefined') {
-			term2 = answers[state.currentItemId][cond.term2.value];
-		}
-	} else {
-		term2 = cond.term2.value;
-	}
+	const term1 = scripting_evaluateConditionTerm(cond.term1);
+	const term2 = scripting_evaluateConditionTerm(cond.term2);
 
 	switch (cond.operator) {
 		// ==|!=|>|<|>=|<=|contains|!contains
@@ -106,16 +79,16 @@ function scripting_evaluateCondition(cond) {
 			return (term1 <= term2);
 		case "contains":
 			try {
-				term1 = JSON.parse(term1);
-				return (term1.indexOf(term2) > -1);
+				const parsedTerm = JSON.parse(term1);
+				return (parsedTerm.indexOf(term2) > -1);
 			} catch (e) {
 				//if term1 has not been set yet, well catch an exception and return false, as term1 does not contain term2
 				return false
 			}
 		case "!contains":
 			try {
-				term1 = JSON.parse(term1);
-				return (term1.indexOf(term2) === -1);
+				const parsedTerm = JSON.parse(term1);
+				return (parsedTerm.indexOf(term2) === -1);
 			} catch (e) {
 				//if term1 has not been set yet, well catch an exception and return true, as term1 does not contain term2
 				return true
@@ -124,6 +97,24 @@ function scripting_evaluateCondition(cond) {
 
 	alert("An error occurred evaluating the conditions from a script!"); //this line should never be reachable ... theoretically! :-)
 	return false;
+}
+
+function scripting_evaluateConditionTerm(term) {
+	if (term.type === 'count') {
+		return scripting_countAnswers(scripting_evaluateConditionTerm(term.value));
+	} else if (term.type === 'globalVariable') {
+		if (term.value.includes('.')) {
+			return fetchFromPath(globalVariables, ...term.value.split('.'));
+		} else {
+			return globalVariables[term.value];
+		}
+	} else if (term.type === 'localVariable') {
+		if (typeof (answers[state.currentItemId]?.[term.value]) !== 'undefined') {
+			return answers[state.currentItemId][term.value];
+		}
+		return;
+	}
+	return term.value;
 }
 
 function scripting_executeActions(actions) {
@@ -292,21 +283,61 @@ function scripting_executeActions(actions) {
 				}
 				core_sendBehaviour('scripting', {command: 'sum', variable: params[0], value: sum_result});
 				return sum_result;
+			case 'count':
+				if (params.length !== 1) {
+					alert("Error in 'count' command! Expected 1 parameter, but found: " + params.length);
+					return;
+				}
+				const count_result = scripting_countAnswers(scripting_getValue(params[0], false));
+				core_sendBehaviour('scripting', {command: 'count', variable: params[0], value: count_result});
+				return count_result;
 		}
 	}
 }
 
-function scripting_getValue(param) {
+function scripting_countAnswers(value) {
+	if (typeof (value) === 'string') {
+		try {
+			const parsedValue = JSON.parse(value);
+			if (Array.isArray(parsedValue)) value = parsedValue;
+		} catch (e) {
+			//Non-JSON strings are regular scalar answers.
+		}
+	}
+
+	if (Array.isArray(value)) return value.length;
+	return (typeof (value) === 'undefined' || value === null || value === '') ? 0 : 1;
+}
+
+function scripting_getValue(param, reportMissing = true) {
 	debug_log("scripting", `scripting_getValue(${param})`);
-	//if param is a string and starts with a $ it is a variable so we get the value from globalVariables[name]
-	if (typeof (param) === 'string' && param.startsWith("$")) {
-		const variableName = param.substring(1);
-		if (typeof (globalVariables[variableName]) !== 'undefined') {
-			return globalVariables[variableName];
+	//A variable with two dollar signs is a local answer on the current page.
+	if (typeof (param) === 'string' && param.startsWith("$$")) {
+		const variableName = param.substring(2);
+		if (typeof (answers[state.currentItemId]?.[variableName]) !== 'undefined') {
+			return answers[state.currentItemId][variableName];
 		} else {
+			if (reportMissing) {
+				alert("Error in 'getValue' command! Variable not found: " + variableName);
+				return false;
+			}
+			return;
+		}
+	//A variable with one dollar sign is a global variable.
+	} else if (typeof (param) === 'string' && param.startsWith("$")) {
+		const variableName = param.substring(1);
+		let value;
+		if (variableName.includes('.')) {
+			value = fetchFromPath(globalVariables, ...variableName.split('.'));
+		} else {
+			value = globalVariables[variableName];
+		}
+		if (typeof (value) !== 'undefined') return value;
+		if (reportMissing) {
 			alert("Error in 'getValue' command! Variable not found: " + variableName);
 			return false;
 		}
+		return;
 	} else if (typeof (param) === 'string') {
 		return param;
 	} else if (typeof (param) === 'number') {

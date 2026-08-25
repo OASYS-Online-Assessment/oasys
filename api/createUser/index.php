@@ -1,13 +1,11 @@
 <?php
 
 	register_shutdown_function('outputJSON');
-	require_once '../../inc/php/database.php'; //contains the database connection credentials
-	require_once '../../inc/php/rixPDO.php'; //wrapper around PDO functions (c.f. docs folder for manual)
-	require_once '../../inc/php/rixTools.php';
-	require_once '../../inc/php/helperRoutines.php';
-	require_once '../../inc/php/settings.php';
-	require_once '../../editor/inc/php/userHandling.php';
-	require_once '../../inc/php/apiRoutines.php';
+	require_once __DIR__ . '/../../editor/inc/php/initBackend.php'; // replaces database.php + rixPDO.php
+	require_once __DIR__ . '/../../inc/php/rixTools.php';
+	require_once __DIR__ . '/../../inc/php/helperRoutines.php';
+	require_once __DIR__ . '/../../editor/inc/php/userHandling.php';
+	require_once __DIR__ . '/../../inc/php/apiRoutines.php';
 
 	$apiName = 'createUser';
 	$returnData = ['error' => false];
@@ -19,12 +17,7 @@
 		die();
 	}
 
-	$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/../../logs/API_createUser.txt', 1, $returnData, 'error');
-	$results = $db->results();
-	if ($results['error']) {
-		$returnData['error'] = 'mySQL connection error';
-		die();
-	}
+	$db = $config->getDatabaseInstance();
 
 	clearApiRequests($db);
 
@@ -57,6 +50,12 @@
 		}
 		$returnData['usergroup'] = $userGroup;
 
+		$email = getParameter('email', FILTER_VALIDATE_EMAIL, $returnData);
+		if (!$email) {
+			$email = '';
+		}
+		$returnData['email'] = $email;
+
 		/* let's check if the required usergroup exists */
 
 		$res = $db->fetchValue("SELECT id FROM userGroups WHERE `name` = ? LIMIT 1", [$userGroup]);
@@ -76,7 +75,7 @@
 
 		/*
 			check validity of username and password; while this is done again by the addUser function, we want
-			to catch problems early and send out customised error messages appropriate for the API.
+			to catch problems early and send out customized error messages appropriate for the API.
 		 */
 
 		if (preg_match('/[^.A-Za-z0-9_-]/', $userName)) {
@@ -104,16 +103,18 @@
 		}
 
 		/* if all data is ok we can get on with the task of creating the user */
+		//	checkParams($data['userData'], ['nu_edt_uname', 'nu_edt_pwd', 'userGroupId', 'acctTypeVal', 'nu_edt_eml']);
 
-		$data = ['userData' => ['userName' => $userName, 'userPassword' => $password, 'userGroupId' => $groupId]];
+		$data = ['userData' => ['nu_edt_uname' => $userName, 'nu_edt_pwd' => $password, 'userGroupId' => $groupId, 'acctTypeVal' => 'LOCAL', 'nu_edt_eml' => $email]];
 		$returnData['error'] = false;
 		chdir($_SERVER['DOCUMENT_ROOT'] . $settings['rootURL'] . DIRECTORY_SEPARATOR . 'editor' . DIRECTORY_SEPARATOR);
 		addUser($data, $db, $returnData);
 		unset($returnData['data']);
 	}
 
-	function outputJSON(): void {
-		GLOBAL $returnData, $action, $settings, $handledExceptions;
+	function outputJSON(): void
+	{
+		global $returnData, $action, $settings, $handledExceptions;
 		$error = error_get_last();
 		$returnData['action'] = $action;
 		if (!empty($error)) {

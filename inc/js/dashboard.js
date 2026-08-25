@@ -12,7 +12,7 @@ function dashboard_init() {
 		url: "ttDashboardActions.php"
 	});
 
-	window.timeoutHandle = setTimeout(dashboard_fetchStudentLoginTests, settings.sendFrequency);
+	window.timeoutHandle = setTimeout(dashboard_fetchStudentLoginTests, settings.sendFrequency * 1000);
 
 	//Setup page, with name in the header and create the lists
 	const stName = window.student.displayName ? window.student.displayName : window.student.login.name;
@@ -62,14 +62,13 @@ function dashboard_hideLoginFrame() {
 }
 
 function dashboard_logout() {
+	global_forgetStudentState();
 	global_returnToLogin();
 }
 
 function dashboard_fetchStudentLoginTests() {
 	rixToolsDebug(1, `dashboard_fetchStudentLoginTests()`);
-	startAjax('fetchStudentLoginTests', {
-		loginId: window.student.id
-	});
+	startAjax('fetchStudentLoginTests', {});
 }
 
 /***** server communication *****/
@@ -150,7 +149,7 @@ function ajaxSuccess(res) {
 
 	switch (res.action) {
 		case 'fetchStudentLoginTests':
-			window.timeoutHandle = setTimeout(dashboard_fetchStudentLoginTests, settings.sendFrequency);
+			window.timeoutHandle = setTimeout(dashboard_fetchStudentLoginTests, settings.sendFrequency * 1000);
 			//iterate testItemInstances and clear those that are not in the response
 			for (let uniqueId in testItemInstances) {
 				let testData = fetchObjectFromArray(res.data.tests, {'uniqueId': uniqueId}, false);

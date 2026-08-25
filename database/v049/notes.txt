@@ -1,0 +1,5 @@
+Added: stateBackend
+
+This patch is the prerequisite for moving from the session based backend to the new atomic states.
+
+VERSION: 049

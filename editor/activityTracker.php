@@ -7,6 +7,7 @@
 $pageName = "activityTracker"; // set to the related 'editor button' string name (e.g., 'items')
 $isSubMod = false; // set true if a module page in a subdirectory
 $isActionFile = false; // set true if an "xxxActions.php" file
+require_once __DIR__ . "/inc/php/initBackend.php";
 require_once 'inc/php/authCommonFunctions.php'; // required for authentication inclusion
 require_once 'inc/php/cacheIncludes.php'; // required for cache handling
 ?>
@@ -41,20 +42,39 @@ require_once 'inc/php/cacheIncludes.php'; // required for cache handling
         includeCSS("../inc/nxButton/nxButton.css");
         includeJS("../inc/nxDialog/nxDialog.js");
         includeCSS("../inc/nxDialog/nxDialog.css");
+        includeJS("../inc/jsNumberInput/jsNumberInput.js");
+        includeCSS("../inc/jsNumberInput/jsNumberInput.css");
         includeJS("inc/js/interface.js");
         includeCSS("inc/css/interface.css");
         includeJS("../inc/jsGUI/jsGUI.js");
         includeCSS("../inc/jsGUI/jsGUI.css");
         includeJS("../inc/jsMultipleChoice/jsMultipleChoice.js");
         includeCSS("../inc/jsMultipleChoice/jsMultipleChoice.css");
+        includeJS("../inc/OasysHelp/OasysHelp.js");
+        includeCSS("interactions/preview.css");
+        includeJS("interactions/EditorFactory.js");
+        includeJS("interactions/InteractionEditor.js");
+        includeJS("inc/js/Controller.js");
+        includeJS("inc/js/results_scoringClass.js");
+        includeJS("inc/js/testJourney.js");
 
         //main script for the manager
         includeJS("inc/js/activityTracker.js");
         includeCSS("inc/css/activityTracker.css");
+        includeCSS("inc/css/testJourney.css");
 
         //settings
         include_once 'inc/php/settings2JS.php';
 	?>
+    <?php
+        $blockManifest = json_decode(file_get_contents("interactions/manifest.json") ?: '{}', true);
+        foreach (($blockManifest['paths'] ?? []) as $interaction => $folder) {
+            $path = "interactions/$folder/$interaction/";
+            if (file_exists($path . "config.js")) includeJS($path . "config.js");
+            if (file_exists($path . "editor.js")) includeJS($path . "editor.js");
+            if (file_exists($path . "editor.css")) includeCSS($path . "editor.css");
+        }
+    ?>
 </head>
 
 <body data-managerid="activityTracker">

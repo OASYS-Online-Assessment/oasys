@@ -5,7 +5,7 @@
 		$db->execute("DELETE FROM apiRequests WHERE TIMESTAMPDIFF(MINUTE, created, NOW()) > 1");
 	}
 
-	function apiAuthentication(string $apiName, rixPDO &$db, array &$returnData) {
+	function apiAuthentication(string $apiName, rixPDO &$db, array &$returnData): void {
 		$key = getParameter('key', FILTER_UNSAFE_RAW, $returnData);
 		if (!$key) {
 			$returnData['error'] = "key missing";

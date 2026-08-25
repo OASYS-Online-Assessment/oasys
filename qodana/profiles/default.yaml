@@ -1,0 +1,186 @@
+name: "LUCET default profile"
+
+baseProfile: qodana.starter # The base profile to extend
+
+inspections:
+  - inspection: PhpUndefinedVariableInspection
+    options:
+      IGNORE_INCLUDE: true
+  - inspection: PhpIllegalArrayKeyTypeInspection #disabled due to a bug in the inspection -> false positives
+    enabled: false
+  - group: "category:JavaScript and TypeScript"
+    enabled: true
+  - inspection: JSHint
+    enabled: false
+  - inspection: ReplaceAssignmentWithOperatorAssignmentJS
+    enabled: false
+  - inspection: AssignmentToForLoopParameterJS
+    enabled: false
+  - inspection: AssignmentToFunctionParameterJS
+    enabled: false
+  - inspection: AssignmentResultUsedJS
+    enabled: false
+  - inspection: NestedAssignmentJS
+    enabled: false
+  - inspection: ChainedFunctionCallJS
+    enabled: false
+  - inspection: ConstantOnLHSOfComparisonJS
+    enabled: false
+  - inspection: ConstantOnRHSOfComparisonJS
+    enabled: false
+  - inspection: NestedFunctionCallJS
+    enabled: false
+  - inspection: NonBlockStatementBodyJS
+    enabled: false
+  - inspection: IfStatementWithTooManyBranchesJS
+    enabled: false
+  - inspection: TrivialIfJS
+    enabled: false
+  - inspection: ReuseOfLocalVariableJS
+    enabled: false
+  - inspection: PhpVulnerablePathsInspection
+    enabled: false
+  - inspection: PlatformDetectionJS
+    enabled: false
+  - inspection: XHTMLIncompatabilitiesJS
+    enabled: false
+  - inspection: InnerHTMLJS
+    enabled: false
+  - inspection: ThreeNegationsPerFunctionJS
+    enabled: false
+  - inspection: FunctionWithMultipleLoopsJS
+    enabled: false
+  - inspection: FunctionWithMultipleReturnPointsJS
+    enabled: false
+  - inspection: ParametersPerFunctionJS
+    enabled: false
+  - inspection: CyclomaticComplexityJS
+    enabled: false
+  - inspection: StatementsPerFunctionJS
+    enabled: false
+  - inspection: NestingDepthJS
+    enabled: false
+  - inspection: JSUnfilteredForInLoop
+    enabled: false
+  - inspection: JSClassNamingConvention
+    enabled: false
+  - inspection: FunctionNamingConventionJS
+    enabled: false
+  - inspection: ParameterNamingConventionJS
+    enabled: false
+  - inspection: JSNonASCIINames
+    enabled: false
+  - inspection: LocalVariableNamingConventionJS
+    enabled: false
+  - inspection: MagicNumberJS
+    enabled: false
+  - inspection: NegatedIfStatementJS
+    enabled: false
+  - inspection: NegatedConditionalExpressionJS
+    enabled: false
+  - inspection: NestedFunctionJS
+    enabled: false
+  - inspection: OverlyComplexArithmeticExpressionJS
+    enabled: false
+  - inspection: OverlyComplexBooleanExpressionJS
+    enabled: false
+  - inspection: IncrementDecrementResultUsedJS
+    enabled: false
+  - inspection: BreakStatementJS
+    enabled: false
+  - inspection: ContinueStatementJS
+    enabled: false
+  - inspection: AnonymousFunctionJS
+    enabled: false
+  - inspection: ConditionalExpressionJS
+    enabled: false
+  - inspection: JSPotentiallyInvalidConstructorUsage
+    enabled: false
+  - inspection: ObjectAllocationIgnoredJS
+    enabled: false
+  - inspection: NestedSwitchStatementJS
+    enabled: false
+  - inspection: UnusedCatchParameterJS
+    enabled: false
+  - inspection: JSUnusedAssignment
+    enabled: false
+  - inspection: JSUnusedGlobalSymbols
+    enabled: false
+  - inspection: JSUnusedLocalSymbols
+    enabled: false
+  - inspection: JSIgnoredPromiseFromCall
+    enabled: false
+  - inspection: JSDeclarationsAtScopeStart
+    enabled: false
+  - inspection: JSUnresolvedReference
+    enabled: false
+  - inspection: FunctionWithInconsistentReturnsJS
+    enabled: false
+  - inspection: JSJQueryEfficiency
+    enabled: false
+  - inspection: UnnecessaryLocalVariableJS
+    enabled: false
+  - inspection: JSRedundantSwitchStatement
+    enabled: false
+  - inspection: UnnecessaryReturnJS
+    enabled: false
+  - inspection: JSRemoveUnnecessaryParentheses
+    enabled: false
+  - inspection: JsCoverageInspection
+    enabled: false
+  - inspection: TsLint
+    enabled: false
+  - inspection: PestAssertionCanBeSimplifiedInspection
+    enabled: false
+  - inspection: MultipleExpectChainableInspection
+    enabled: false
+  - inspection: InvalidDatasetReferenceInspection
+    enabled: false
+  - inspection: InvalidTestNameCaseInspection
+    enabled: false
+  - inspection: MaliciousLibrariesLocal
+    enabled: false
+  - inspection: VueDataFunction
+    enabled: false
+  - inspection: VueDeprecatedSymbol
+    enabled: false
+  - inspection: VueDuplicateTag
+    enabled: false
+  - inspection: VueMissingComponentImportInspection
+    enabled: false
+  - inspection: VueUnrecognizedDirective
+    enabled: false
+  - inspection: VueUnrecognizedSlot
+    enabled: false
+  - inspection: JSRemoveUnnecessaryParentheses
+    enabled: true
+  - inspection: JSCheckFunctionSignatures #disabled due to false positives, partly due to missing type declarations, partly bugs in the inspection
+    enabled: false
+  - inspection: JSValidateTypes
+    enabled: true
+  - inspection: JSUndefinedPropertyAssignment #disabled … irrelevant for Qodana to check all properties of objects
+    enabled: false
+  - inspection: JSIncompatibleTypesComparison #disabled … false positives
+    enabled: false
+  - inspection: CheckDependencyLicenses
+    enabled: true
+  - inspection: PhpNoReturnAttributeCanBeAddedInspection #requires JetBrains specific namespace before PHP 8.1
+    enabled: false #switched off until PHP 8.1+ is used on all servers
+  - inspection: RegExpSuspiciousBackref #excluded due to false positives
+    enabled: false
+  - inspection: PhpMissingClassConstantTypeInspection #excluded as not compatible with PHP 8.2 or earlier
+    enabled: false
+  - inspection: PhpObjectFieldsAreOnlyWrittenInspection #excluded as db credentials are read only in other files
+    enabled: false
+  - inspection: PhpStrictComparisonWithOperandsOfDifferentTypesInspection
+    enabled: false
+  - inspection: PhpDeprecationInspection
+    enabled: true
+  - inspection: BlockStatementJS
+    enabled: false #using block statements in JS around for loops to avoid problems with the linter on each "let i"
+  - inspection: NestedConditionalExpressionJS
+    enabled: false #nested conditional expressions are not a problem and sometimes useful
+  - inspection: ExceptionCaughtLocallyJS
+    enabled: false #not an error and may serve a purpose
+  - inspection: PhpUndefinedFieldInspection
+    enabled: false #yells at me for using getters and setters, which helps me make using my classes more readable

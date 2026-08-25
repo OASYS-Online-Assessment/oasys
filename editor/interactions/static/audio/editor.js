@@ -70,11 +70,11 @@ class audioEditor extends InteractionEditor {
 			mediaTypes: 'audio',
 			hideOptions: true,
 			onClose: (sender, data) => {
-				this.controller.pauseUpdates();
-				this.controller.setData(data.checksum, 'filechecksum', selectedLanguage);
-				this.controller.setData(data.fileId, 'fileid', selectedLanguage);
-				this.controller.resumeUpdates();
-				this.controller.setData(data.mediaFileName, 'filename', selectedLanguage);
+				this.controller.setDataBatch([
+					[data.mediaFileName, 'filename', selectedLanguage],
+					[data.fileId, 'fileid', selectedLanguage],
+					[data.checksum, 'filechecksum', selectedLanguage]
+				]);
 			}
 		});
 	}

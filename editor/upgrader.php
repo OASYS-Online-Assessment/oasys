@@ -1,24 +1,25 @@
 <!DOCTYPE html>
 
 <?Php
-# ----------------------- #
-# Authentication Includes #
-# ----------------------- #
-$pageName = "upgrader"; // set to the related 'editor button' string name (e.g., 'items')
-$isSubMod = false; // set true if a module page in a subdirectory
-$isActionFile = false; // set true if an "xxxActions.php" file
-require_once 'inc/php/authCommonFunctions.php'; // required for authentication inclusion
-require_once 'inc/php/cacheIncludes.php'; // required for cache handling
+    # ----------------------- #
+    # Authentication Includes #
+    # ----------------------- #
+    $pageName = "upgrader"; // set to the related 'editor button' string name (e.g., 'items')
+    $isSubMod = false; // set true if a module page in a subdirectory
+    $isActionFile = false; // set true if an "xxxActions.php" file
+    require_once __DIR__ . "/inc/php/initBackend.php";
+    require_once 'inc/php/authCommonFunctions.php'; // required for authentication inclusion
+    require_once 'inc/php/cacheIncludes.php'; // required for cache handling
 ?>
 
 <html lang="en">
 
 <head>
-    <meta charset="utf-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta charset="utf-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
     <title>OASYS upgrader</title>
     <link rel="icon" href="images/favicon.png">
-    
+
     <?php
         includeCSS("../inc/jquery_contextmenu/jquery.contextMenu.css");
         includeCSS("../inc/filer/filez.css");
@@ -46,16 +47,16 @@ require_once 'inc/php/cacheIncludes.php'; // required for cache handling
         includeJS("inc/js/interface.js");
         includeJS("inc/js/upgrader.js");
         includeJS("../images/svgIcons.js");
-    
+
         //settings
         include_once 'inc/php/settings2JS.php';
     ?>
 </head>
 
 <body data-managerid="upgrader">
-    <div id="svgMainMenuSymbols" class="svgSymbols">
-        <?php echo file_get_contents("../images/mainMenuIcons/symbols.svg"); ?>
-    </div>
+<div id="svgMainMenuSymbols" class="svgSymbols">
+    <?php echo file_get_contents("../images/mainMenuIcons/symbols.svg"); ?>
+</div>
 </body>
 
 </html>

@@ -1,8 +1,8 @@
 <?php
 
 	/*
-		getTestProgress V1.1
-		by Eric J. FRANCOIS 2024
+		getTestProgress V1.3
+		by Eric J. FRANCOIS 2026
 
 		This API allows an application to check on the status and progress of a specific test for a specfic login
 
@@ -11,7 +11,7 @@
 
 		Optional parameters:
 		$filters['tags']		=>	filters out any logins whose password does not have at least one of the tags in the list
-		$filters['cutoffDate']	=>	filters out any logins that have not been active since the given date
+		$filters['cutoffDate']	=>	filters out any logins whose last server contact predates the given date
 
 		Result:
 
@@ -37,13 +37,13 @@
 	*/
 
 	register_shutdown_function('outputJSON');
-	require_once '../../inc/php/database.php'; //contains the database connection credentials
-	require_once '../../inc/php/rixPDO.php'; //wrapper around PDO functions (c.f. docs folder for manual)
-	require_once '../../inc/php/rixTools.php';
-	require_once '../../inc/php/helperRoutines.php';
-	require_once '../../inc/php/settings.php';
-	require_once '../../inc/php/Crypt.php';
-	require_once '../../inc/php/apiRoutines.php';
+	require_once __DIR__ . '/../../editor/inc/php/initBackend.php';
+	require_once __DIR__ . '/../../inc/php/rixTools.php';
+	require_once __DIR__ . '/../../inc/php/helperRoutines.php';
+	require_once __DIR__ . '/../../inc/php/Crypt.php';
+	require_once __DIR__ . '/../../inc/php/apiRoutines.php';
+	require_once __DIR__ . '/../../inc/php/OasysActivity.php';
+	require_once __DIR__ . '/../../inc/php/OasysTest.php';
 
 	$apiName = 'getTestProgress';
 	$returnData = ['error' => false];
@@ -55,12 +55,7 @@
 		die();
 	}
 
-	$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/../../logs/API_getTestProgress.txt', 1, $returnData, 'error');
-	$results = $db->results();
-	if ($results['error']) {
-		$returnData['error'] = 'mySQL connection error';
-		die();
-	}
+	$db = $config->getDatabaseInstance();
 
 	clearApiRequests($db);
 
@@ -84,21 +79,31 @@
 		if ($filters === null) {
 			$filters = [];
 		} else {
-			$filters = json_decode($filters, true);
+			if (!is_string($filters)) {
+				raiseError('The filters parameter must contain a JSON object or array.');
+			}
+			try {
+				$filters = json_decode($filters, true, 512, JSON_THROW_ON_ERROR);
+			} catch (JsonException) {
+				raiseError('The filters parameter must contain valid JSON.');
+			}
+			if (!is_array($filters)) {
+				raiseError('The filters parameter must contain a JSON object or array.');
+			}
 		}
 
 		if (!$testId) {
 			raiseError("Missing parameter: testId must be provided!");
 		}
 
-		$res = $db->fetchValue("SELECT structure FROM tests WHERE id = ?", [$testId]);
-		if ($res['rows'] === 0) {
+		$testApi = new OasysTest();
+		$structure = $testApi->getTestStructure($testId);
+		if ($structure === null) {
 			raiseError("TestId $testId not valid: no such test!");
 		}
 
-		$structure = json_decode($res['data'] ?? '', true);
-		if (json_last_error() != JSON_ERROR_NONE) {
-			raiseError("Error decoding test structure: " . json_last_error_msg() . ")!");
+		if (!isset($structure['type'], $structure['items']) || !is_array($structure['items'])) {
+			raiseError('The test structure is invalid.');
 		}
 
 		if ($structure['type'] !== 'linear') {
@@ -107,21 +112,27 @@
 
 		$totalFieldCount = 0;
 		foreach ($structure['items'] as $page) {
-			$id = $page['hiddenID'];
-			$res = $db->fetchValue("SELECT fields FROM items WHERE id = ?", [$id]);
-			$fields = json_decode($res['data'] ?? '', true);
-			if (json_last_error() != JSON_ERROR_NONE) {
+			if (!isset($page['hiddenID'])) {
+				continue;
+			}
+			$fields = $testApi->getFieldsForSinglePage($page['hiddenID']);
+			if ($fields === null) {
 				continue;
 			}
 			foreach ($fields as $field) {
 				//count all real fields from list, ignore everything from other categories (e.g. static, metafields)
-				if ($field['category'] === 'fields') {
+				if (($field['category'] ?? null) === 'fields') {
 					$totalFieldCount++;
 				}
 			}
 		}
 
-		$activity = getActivity($testId, $filters, $db);
+		$activityApi = new OasysActivity();
+		try {
+			$activity = $activityApi->getTestProgressSummary($testId, $filters);
+		} catch (InvalidArgumentException $e) {
+			raiseError($e->getMessage());
+		}
 
 		foreach ($activity as $k => $row) {
 			$activity[$k]['percentage'] = round($row['answers'] / $totalFieldCount * 100, 2);
@@ -131,62 +142,6 @@
 		$returnData['total'] = $totalFieldCount;
 
 	}
-
-
-	function getActivity(int $testId, array $filters, rixPDO &$db) {
-		$tagCondition = '';
-		$dateCondition = '';
-		if (!empty($filters)) {
-			/* tag filter condition */
-			if (isset($filters['tags']) && count($filters['tags']) > 0) {
-				$quotedTags = array_map(function ($tag) {
-					return "'" . $tag . "'";
-				}, $filters['tags']);
-				$tagList = implode(', ', $quotedTags);
-				$tagCondition = "AND tag IN ($tagList)";
-			}
-			/* date filter condition */
-			if (isset($filters['cutoffDate'])) {
-				if (!preg_match("/^\d{4}-\d{2}-\d{2}$/", $filters['cutoffDate'])) {
-					raiseError("The cutoffDate filter needs to be given in the form of YYYY-MM-DD");
-				}
-				$dateCondition = "HAVING lastAnswer >= '{$filters['cutoffDate']}' OR (ISNULL(lastAnswer) AND finished = 1)";
-			}
-		}
-		$query = <<<query
-			SELECT
-				logins.`name` AS login,
-				passwords.tag,
-			IF
-				( activity.progress IS NULL, 0, 1 ) AS started,
-			IF
-				( activity.timeLeft = 0, 1, 0 ) AS finished,
-				COUNT( answers.`value` ) AS answers,
-				MAX( tsClient ) AS lastAnswer 
-			FROM
-				passwords
-				INNER JOIN logins ON passwords.loginID = logins.id
-				LEFT JOIN activity ON passwords.id = activity.passwordId 
-				AND activity.testId = ?
-				LEFT JOIN answers ON activity.loginId = answers.loginId 
-				AND activity.passwordId = answers.passwordId 
-				AND activity.testId = answers.testId 
-			WHERE
-				JSON_SEARCH( structure, 'one', ?, NULL, '$[*].hiddenID' ) IS NOT NULL 
-				AND logins.template = 'testee'
-			 	$tagCondition
-			GROUP BY
-				passwords.loginId,
-				passwords.id 
-			$dateCondition
-			ORDER BY
-				login,
-				lastAnswer
-			query;
-		$res = $db->fetchTable($query, [$testId, $testId], 'login');
-		return $res['data'];
-	}
-
 	function raiseError($errorMessage): void {
 		global $returnData;
 		$returnData['error'] = $errorMessage;

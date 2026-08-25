@@ -1,27 +1,14 @@
 <?php
 
-	require_once __DIR__ . "/rixPDO.php";
-	require_once __DIR__ . "/database.php";
-
 	class OasysActivity
 	{
 
 		private rixPDO $db;
-		private string $dbName;
-		private string $user;
-		private string $password;
-		private string $host;
-		private string $logFile;
 
 		function __construct()
 		{
-			global $sql_db, $sql_user, $sql_password, $sql_host;
-			$this->dbName = $sql_db;
-			$this->user = $sql_user;
-			$this->password = $sql_password;
-			$this->host = $sql_host;
-			$this->logFile = __DIR__ . "/../../logs/OasysActivity.txt";
-			$this->db = new rixPDO($this->dbName, $this->user, $this->password, $this->host, $this->logFile);
+			global $app;
+			$this->db = $app->getDatabaseInstance();
 		}
 
 		/* return list of activity table entries, optionally limited to a startdate and/or an enddate, respectively only
@@ -46,6 +33,75 @@
 			} else {
 				return $res['data'];
 			}
+		}
+
+		/* Return a batch summary of all credentials linked to a test.
+		   Supported filters:
+		   - tags: list of password tags to include
+		   - cutoffDate: include only activity whose last server contact is on or after YYYY-MM-DD
+		   Credentials without activity are included when no cutoff date is supplied.
+		*/
+		public function getTestProgressSummary(int $testId, array $filters = []): array
+		{
+			$tagCondition = '';
+			$dateCondition = '';
+			$queryParameters = [$testId, $testId];
+
+			if (isset($filters['tags'])) {
+				$tags = $filters['tags'];
+				if (!is_array($tags) || !array_is_list($tags)) {
+					throw new InvalidArgumentException('The tags filter must be a JSON array.');
+				}
+				foreach ($tags as $tag) {
+					if (!is_string($tag)) {
+						throw new InvalidArgumentException('Every value in the tags filter must be a string.');
+					}
+				}
+				if ($tags !== []) {
+					$tagPlaceholders = implode(', ', array_fill(0, count($tags), '?'));
+					$tagCondition = "AND passwords.tag IN ($tagPlaceholders)";
+					array_push($queryParameters, ...$tags);
+				}
+			}
+
+			if (isset($filters['cutoffDate'])) {
+				$cutoffDateFilter = $filters['cutoffDate'];
+				if (!is_string($cutoffDateFilter) || !preg_match('/\A\d{4}-\d{2}-\d{2}\z/', $cutoffDateFilter)) {
+					throw new InvalidArgumentException('The cutoffDate filter needs to be given in the form of YYYY-MM-DD.');
+				}
+				$cutoffDate = DateTimeImmutable::createFromFormat('!Y-m-d', $cutoffDateFilter);
+				if ($cutoffDate === false || $cutoffDate->format('Y-m-d') !== $cutoffDateFilter) {
+					throw new InvalidArgumentException('The cutoffDate filter is not a valid calendar date.');
+				}
+				$dateCondition = 'AND activity.tsActiveServer >= ?';
+				$queryParameters[] = $cutoffDateFilter;
+			}
+
+			$query = <<<SQL
+				SELECT
+					logins.`name` AS login,
+					passwords.tag,
+					IF(activity.progress IS NULL, 0, 1) AS started,
+					IF(activity.timeLeft = 0, 1, 0) AS finished,
+					COUNT(answers.`value`) AS answers,
+					MAX(answers.tsClient) AS lastAnswer
+				FROM passwords
+				INNER JOIN logins ON passwords.loginID = logins.id
+				LEFT JOIN activity ON passwords.id = activity.passwordId
+					AND activity.testId = ?
+				LEFT JOIN answers ON activity.loginId = answers.loginId
+					AND activity.passwordId = answers.passwordId
+					AND activity.testId = answers.testId
+				WHERE JSON_SEARCH(passwords.structure, 'one', ?, NULL, '$[*].hiddenID') IS NOT NULL
+					AND logins.template IN ('testee', 'cloned')
+					$tagCondition
+					$dateCondition
+				GROUP BY passwords.loginId, passwords.id
+				ORDER BY login, lastAnswer
+			SQL;
+
+			$res = $this->db->fetchTable($query, $queryParameters, 'login');
+			return $res['data'] ?? [];
 		}
 
 		/* return complete set of activity data for a given passwordId and a single testId
@@ -90,38 +146,37 @@
 		public function getActivityChain(int $passwordId, array $testIds): array
 		{
 			$returnData = [
-				'progress' => ['total' => 0, 'filled' => 0, 'percentage' => 0]
+				'progress' => ['required' => ['total' => 0, 'filled' => 0, 'percentage' => 0]], 'status' => ['started' => false, 'finished' => true]
 			];
+
 			foreach ($testIds as $testId) {
 				$activity = $this->getActivity($passwordId, $testId);
 
 				/* if any test from this chain has already started, the status started is set to true */
-				if (!$activity['status']['started'] && !isset($returnData['started'])) {
-					$returnData['status']['started'] = false;
-				} else {
+				if ($activity['status']['started']) {
 					$returnData['status']['started'] = true;
 				}
 
 				/* if any test from this chain has not yet finished, the status finished is set to false */
 				if ($activity['status']['finished']) {
-					$returnData['status']['finished'] = true;
 					/* If a test has already been closed, we consider it 100% filled, even if the test taker did not
 					   manage to fill all required fields before the time was up. This is necessary to show a realistic
 					   progress bar indicating how much there is still to fill in potentially */
-					$returnData['progress']['total'] += $activity['progress']['required']['total'];
-					$returnData['progress']['filled'] += $activity['progress']['required']['total'];
+					$returnData['progress']['required']['filled'] += $activity['progress']['required']['total'];
 				} else {
 					$returnData['status']['finished'] = false;
 					/* if a test is not closed yet, we show the actual progress of required fields */
-					$returnData['progress']['total'] += $activity['progress']['required']['total'];
-					$returnData['progress']['filled'] += $activity['progress']['required']['filled'];
+					$returnData['progress']['required']['filled'] += $activity['progress']['required']['filled'];
 				}
+				$returnData['progress']['required']['total'] += $activity['progress']['required']['total'];
 			}
-			if ($returnData['progress']['total'] > 0) {
-				$returnData['progress']['percentage'] = round($returnData['progress']['filled'] / $returnData['progress']['total'] * 100, 2);
+
+			if ($returnData['progress']['required']['total'] > 0) {
+				$returnData['progress']['required']['percentage'] = round($returnData['progress']['required']['filled'] / $returnData['progress']['required']['total'] * 100, 2);
 			} else {
-				$returnData['progress']['percentage'] = 100;
+				$returnData['progress']['required']['percentage'] = 100;
 			}
+
 			return $returnData;
 		}
 
@@ -216,7 +271,7 @@
 		*/
 		public function getAnswerCount(int $passwordId, int $testId): int
 		{
-			$res = $this->db->fetchValue("SELECT COUNT(*) FROM answers WHERE loginId = ? AND passwordId = ? AND testId = ?", [$passwordId, $testId]);
+			$res = $this->db->fetchValue("SELECT COUNT(*) FROM answers WHERE passwordId = ? AND testId = ?", [$passwordId, $testId]);
 			return $res['data'];
 		}
 
@@ -412,8 +467,40 @@
 		   usually less than 15 seconds later. If the test taker is NOT logged in, the change will be visible after
 		   the next login.
 		*/
-		public function addTime(int $passwordId, int $testId, int $additionalTime): array
+		public function addTime(int $passwordId, int $testId, int $additionalTime, string $source): ?array
 		{
+			global $backendState;
+			/* Check if the test has already been finished, in which case we log a behaviour event that indicates that the
+			 test was reopened and adding the detail of the added time.
+			 If the test was not finished yet we log a behaviour event that indicates that the time was added. */
+			$query = "SELECT timeLeft FROM activity WHERE passwordId = ? AND testId = ?";
+			$res = $this->db->fetchValue($query, [$passwordId, $testId]);
+			if ($res['rows'] === 0) {
+				return null;
+			}
+			if ($res['data'] === 0) {
+				OasysBehaviour::write($passwordId, $testId, [
+					'eventType' => 'behaviour',
+					'subType' => 'reopenTest',
+					'data' => [
+						'actorUserId' => $backendState->userid,
+						'source' => $source,
+						'timeLimitMode' => 'limited',
+						'additionalSeconds' => $additionalTime
+					]
+				]);
+			} else {
+				OasysBehaviour::write($passwordId, $testId, [
+					'eventType' => 'behaviour',
+					'subType' => 'addTime',
+					'data' => [
+						'actorUserId' => $backendState->userid,
+						'source' => $source,
+						'timeLimitMode' => 'limited',
+						'additionalSeconds' => $additionalTime
+					]
+				]);
+			}
 			$query = <<<SQL
 				UPDATE activity
 				SET timeLeft = timeLeft + ?,
@@ -429,8 +516,19 @@
 		   accessible
 		   Returns an array with the result of the database operation
 		*/
-		public function reopenTestWithoutTimeLimit(int $passwordId, int $testId): array
+		public function reopenTestWithoutTimeLimit(int $passwordId, int $testId, string $source): array
 		{
+			global $backendState;
+			OasysBehaviour::write($passwordId, $testId, [
+				'eventType' => 'behaviour',
+				'subType' => 'reopenTest',
+				'data' => [
+					'actorUserId' => $backendState->userid,
+					'source' => $source,
+					'timeLimitMode' => 'unlimited',
+					'additionalSeconds' => 0
+				]
+			]);
 			$query = <<<SQL
 				UPDATE activity
 				SET timeLeft = -1,

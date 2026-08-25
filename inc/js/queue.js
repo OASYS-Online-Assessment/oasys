@@ -118,7 +118,7 @@ function initQueue(data) {
 		payloadId = data.test.activity.lastPayloadId;
 		lastSuccessfulTransmission = data.test.activity.lastPayloadId;
 	}
-	timer = setInterval(sendQueue, settings.sendFrequency, 'regular timer');
+	timer = setInterval(sendQueue, settings.sendFrequency * 1000, 'regular timer');
 }
 
 function queueLogin(data) {
@@ -342,7 +342,7 @@ function xhrSuccess(res) {
 		connectionReestablished = true;
 		timestampUpdateRequested = 1;
 		clearInterval(timer);
-		timer = setInterval(sendQueue, settings.sendFrequency, 'regular timer');
+		timer = setInterval(sendQueue, settings.sendFrequency * 1000, 'regular timer');
 		sendQueue('recovering from disconnection'); //reconnect again with the server immediately and ignore current timestamps
 		return;
 	}
@@ -389,7 +389,8 @@ function xhrSuccess(res) {
 		}
 
 		if (res.forceLogoff === true) {
-			postMessage({error: false, action: 'forceLogoff'});
+			debugger
+			postMessage({error: false, action: 'forceLogoff', reason: res.forceLogoffReason ?? null, restrictionType: res.restrictionType ?? null});
 			clearInterval(timer);
 			timer = -1;
 			skippedTrigger = false;

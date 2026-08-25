@@ -162,10 +162,20 @@ returns the current value
                 numberInput.trigger("blur");
                 event.preventDefault();
             }
-            numberInput.val(numberInput.val().replace(/\D/ig, function (str) {
+            let enteredValue = numberInput.val();
+            enteredValue = enteredValue.replace(/[^\d-]/ig, function (str) {
                     if (!$('#veil_Message').length) showMessage('You typed: ' + str + ' \n\n<br />Please use only numbers 0-9!');
                     return '';
-                }));
+                });
+            enteredValue = enteredValue.replace(/(?!^)-/g, '');
+            if (!range || min === null || min >= 0) {
+                enteredValue = enteredValue.replace('-', '');
+            }
+            numberInput.val(enteredValue);
+            if (enteredValue === '-' && range && min < 0) {
+                sendValue();
+                return;
+            }
             if (range) {
                 numberInput.removeClass('nInRed');
                 if (numberInput.val() === '') {
@@ -245,11 +255,15 @@ returns the current value
                     if(parseFloat(numberInput.val()) > max || parseFloat(numberInput.val()) < min )$('#' + id).addClass('nInRed');
                 }
             } else {
-                if (numberInput.val() === '' || parseFloat(numberInput.val()) < step) {
-                    numberInput.val(0);
+                let currentValue = parseFloat(numberInput.val());
+                if (Number.isNaN(currentValue)) currentValue = 0;
+                let nextValue = currentValue - step;
+                if (range && min !== null) {
+                    nextValue = Math.max(min, nextValue);
                 } else {
-                    numberInput.val(parseFloat(numberInput.val()) - step);
+                    nextValue = Math.max(0, nextValue);
                 }
+                numberInput.val(nextValue);
                 if(range){
                     if(parseFloat(numberInput.val()) < min || parseFloat(numberInput.val()) > max)$('#' + id).addClass('nInRed');
                 }

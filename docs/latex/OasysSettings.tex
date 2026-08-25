@@ -1,0 +1,287 @@
+\documentclass[12pt]{article} % Default font size is 12pt, it can be changed here
+\usepackage{fontspec}
+%Ligatures=TexOff disable the Tex specific ligatures which converst quotes into typographic quotes
+\setmainfont{OpenSans}[Ligatures=TeXOff, Path=fonts/,Extension=.ttf, UprightFont=*-Regular, ItalicFont=*-Italic, BoldFont=*-Bold, BoldItalicFont=*-BoldItalic]
+\usepackage{microtype}
+
+%\usepackage{tabulary}
+\usepackage{tabu} %span tables over multiple pages while still wrapping text inside cells
+\usepackage{longtable} %needed by tabu package
+\usepackage{geometry}
+\geometry{a4paper, total={170mm,257mm}, left=20mm, top=20mm, }
+
+\usepackage{graphicx} % Required for including pictures
+\usepackage{tikz}
+\usepackage{float} % Allows putting an [H] in \begin{figure} to specify the exact location of the figure
+\usepackage{wrapfig} % Allows in-line images such as the example fish picture
+\usepackage{lipsum} % Used for inserting dummy 'Lorem ipsum' text into the template
+\usepackage{xparse} % Used for defining new commands with arguments
+
+\newcommand{\sectionbreak}{\clearpage}
+
+\graphicspath{{../graphics/}} % Specifies the directory where pictures are stored 
+
+\usepackage{tcolorbox}
+\tcbuselibrary{skins}
+
+\usepackage{listings} % Code listings
+\usepackage{color}
+\definecolor{lightgray}{rgb}{.9,.9,.9}
+\definecolor{darkgray}{rgb}{.4,.4,.4}
+\definecolor{purple}{rgb}{0.65, 0.12, 0.82}
+\definecolor{orange}{rgb}{1, 0.4, 0.0}
+
+\lstdefinelanguage{JavaScript}{
+    keywords={typeof, new, true, false, catch, function, return, null, catch, switch, var, if, in, while, do, else, case, break},
+    keywordstyle=\color{blue}\bfseries,
+    ndkeywords={class, export, boolean, throw, implements, import, this},
+    ndkeywordstyle=\color{darkgray}\bfseries,
+    identifierstyle=\color{black},
+    sensitive=false,
+    comment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    commentstyle=\color{orange}\ttfamily,
+    stringstyle=\color{purple}\ttfamily,
+    morestring=[b]',
+    morestring=[b]"
+}
+
+\lstset{
+    language=JavaScript,
+    backgroundcolor=\color{blue!5},
+    extendedchars=true,
+    basicstyle=\scriptsize\ttfamily,
+    showstringspaces=false,
+    showspaces=false,
+    tabsize=4,
+    breaklines=true,
+    showtabs=false,
+    captionpos=b,
+    frame=leftline,
+    rulecolor=\color{blue!20},
+    framerule=2pt
+}
+\setlength{\parindent}{0pt} % removes the default indentation of first lines
+\setlength{\tabcolsep}{12pt}
+
+\newenvironment{mono}{\ttfamily}{\par}
+\newenvironment{keyword}{\leavevmode\color{magenta}\ttfamily}{}
+\newenvironment{keywordpurple}{\leavevmode\color{purple}}{}
+\newenvironment{examplecomment}{\leavevmode\color{magenta!60!white}}{}
+\newenvironment{code}{\begin{mdframed}[linewidth=4pt, linecolor=blue!40, topline=false, bottomline=false, rightline=false, backgroundcolor=blue!10]
+                          \begin{mono}}{\end{mono}
+\end{mdframed}}
+
+\newenvironment{properties}
+{
+    \footnotesize\renewcommand{\arraystretch}{1.30}
+    \renewcommand{\tabcolsep}{0pt}
+    \begin{longtable}{>{\begin{keyword}}p{3.1cm}<{\end{keyword}}p{13.9cm}}
+        \hline
+        }
+        {
+        \hline
+    \end{longtable}\vspace{5mm}
+}
+
+\newenvironment{parameters}
+{
+    \footnotesize\renewcommand{\arraystretch}{1.30}
+    \renewcommand{\tabcolsep}{0pt}
+    \begin{longtable}{>{\begin{keyword}}p{3cm}<{\end{keyword}}>{\begin{em}}p{1.5cm}<{\end{em}}p{12.5cm}}
+        \hline
+        }
+        {
+        \hline
+    \end{longtable}\tiny\vspace{-3mm}\textsuperscript{*}mandatory parameters\vspace{3mm}
+}
+
+\NewDocumentEnvironment{variable_properties}{mm} % two mandatory args
+{
+    \footnotesize\renewcommand{\arraystretch}{1.30}
+    \renewcommand{\tabcolsep}{0pt}
+    \begin{longtable}{>{\begin{keyword}}p{#1}<{\end{keyword}}p{#2}}
+        \hline
+        }{
+        \hline
+    \end{longtable}\vspace{5mm}
+}
+
+\newtcolorbox{exampleResultBox}[2][]{
+    skin=bicolor,colback=magenta!10!white,
+    fonttitle=\bfseries,
+    colbacktitle=magenta,
+    bottomtitle=2mm,
+    toptitle=2mm,
+    colbacklower=black!10!white,
+    title=#2,#1,
+    boxrule=0mm,
+    middle=0mm,
+    boxsep=0mm,
+    left=5mm,
+    right=5mm,
+    bottom=5mm,
+    top=5mm,
+    after upper={\hyphenpenalty=10000\raggedright\vskip 5mm\null},
+    subtitle style={colback=black,left=5mm,right=5mm,bottom=2mm,top=2mm}
+}
+
+\newtcolorbox{exampleBox}[2][]{
+    colback=magenta!10!white,
+    fonttitle=\bfseries,
+    colbacktitle=magenta,
+    boxrule=0mm,
+    title=#2,#1
+}
+
+\newtcolorbox{resultBox}[2][]{
+    colback=black!20!white,
+    fonttitle=\bfseries,
+    colbacktitle=black,
+    boxrule=0mm,
+    title=#2,#1
+}
+
+\newtcolorbox{advancedBox}[2][]{
+    colback=purple!10!white,
+    fonttitle=\bfseries,
+    colbacktitle=purple,
+    boxrule=0mm,
+    title=#2,#1
+}
+
+\newtcbox{\tokenbox}{
+    on line,
+    colback=magenta,
+    coltext=white,
+    boxrule=0pt,
+    arc=5pt,
+    boxsep=1pt,
+    left=3pt, right=3pt,
+    top=1pt, bottom=1pt,
+    tcbox raise base,
+    enhanced,
+    before=\hspace{2pt}, % space before box
+    after=\hspace{2pt}, % space after box
+}
+
+\newcommand{\token}[1]{\tokenbox{\MakeUppercase{#1}}}
+
+\setlength{\parskip}{-0.2cm}
+
+\DeclareTextFontCommand{\kw}{\keyword}
+\DeclareTextFontCommand{\kwp}{\keywordpurple}
+
+\begin{document}
+    \small
+
+%----------------------------------------------------------------------------------------
+%	TITLE PAGE
+%----------------------------------------------------------------------------------------
+
+    \begin{titlepage}
+
+        \newcommand{\HRule}{\rule{\linewidth}{0.5mm}} % Defines a new command for the horizontal lines, change thickness here
+
+        \center % Center everything on the page
+
+        \begin{tikzpicture}[remember picture,overlay]
+            \node[anchor=north west,inner sep=1cm] at (current page.north west){\includegraphics[width=3cm]{logos/UniLogo}};
+        \end{tikzpicture}
+
+        \begin{tikzpicture}[remember picture,overlay]
+            \node[anchor=north east,inner sep=1cm] at (current page.north east){\includegraphics[width=6cm]{logos/LUCET}};
+        \end{tikzpicture}\\[6cm]
+
+        {\large OASYS Backend Component}\\[0.5cm] % Component category
+
+        \HRule \\[0.4cm]
+        { \huge \bfseries OasysSettings}\\[0.4cm] % Title of document
+        \HRule \\[1.5cm]
+
+        \large
+        \textit{Author:} Eric J. FRANCOIS % Your name
+        \begin{tikzpicture}[remember picture,overlay]
+            \node[anchor=south,inner sep=2cm] at (current page.south){\large \today};
+        \end{tikzpicture}
+
+    \end{titlepage}
+
+    \newpage
+
+
+    \section{description}\label{sec:description}
+
+    The \kw{OasysSettings} class is a Singleton responsible for loading, managing, and distributing system-wide configuration, languages, skins, and module properties. It aggregates default configurations, merges them with overrides persisted in the database, and safely exposes them to the backend and frontend.\\
+    
+    Additionally, this class manages dynamic user-specific configurations, applying user group capabilities (such as editor buttons) and validating interface languages upon login.
+
+
+    \section{usage}\label{sec:usage}
+
+    Initialization typically happens at the bootstrap level via the main \kw{OasysApp} class instance, which is required by the constructor. After that, it can be retrieved from the public property \kw{config} of the OasysApp instance.\\
+
+    \begin{exampleBox}{Example}
+        Fetching a specific property:\\[0.1cm]
+        \kw{\$maxUpload = \$settings->getProperty('upload\_max\_filesize');}\\[0.5cm]
+        Loading user-specific settings after login:\\[0.1cm]
+        \kw{\$settings->fetchUserSettings(\$userId, \$forceLang, \$userGroup);}
+    \end{exampleBox}
+    
+    \vspace{0.5cm}
+    \textbf{Dependencies:}\\
+    This class relies on the \kw{OasysApp} class for initial injection, \kw{rixPDO} for database interactions, and \kw{settingsDefault.php} for its baseline configurations.\\
+
+
+    \section{public properties}\label{sec:public_properties}
+    
+    The \kw{OasysSettings} instance maintains several public arrays that contain the runtime state of the application's configuration.
+    
+    \begin{variable_properties}{4cm}{13cm}
+        \hline
+        \$settings & The associative array containing all currently active merged settings (defaults combined with database values and user overrides).\\
+        \$languages & Available system languages fetched from the \kw{languages} table.\\
+        \$skins & Available skins parsed dynamically from the file system (base and module skins).\\
+        \hline
+    \end{variable_properties}
+
+
+    \section{instance methods}\label{sec:instance_methods}
+
+    The following public methods are available on an \kw{OasysSettings} instance.\\
+
+    \begin{variable_properties}{6.5cm}{10.5cm}
+        \hline
+        getProperty(\$property) & Returns the value of a specific setting by its key.\\
+        getSettingsArray() & Returns a reference to the main \kw{\$settings} array.\\
+        getDefaults() & Returns the base default settings array before any database or user overrides were applied.\\
+        getJSSafeSettings() & Returns an array of settings specifically filtered (excluding ones marked \kw{noJS}) to be safely passed to the frontend client.\\
+        getLanguages() & Returns the array of active languages.\\
+        getSkins() & Returns the array of available skins.\\
+        fetchUserSettings(\ldots) & Fetches and merges user-specific database overrides and aggregates editor button permissions across a user's assigned groups.\\
+        getIntLang(\ldots) & Determines the correct interface language based on user preference, forced input, or browser HTTP headers.\\
+        getDatabaseInstance() & Returns the \kw{rixPDO} instance injected during construction.\\
+        \hline
+    \end{variable_properties}
+    
+    \subsection{fetchUserSettings parameters}\label{subsec:method_fetchusersettings}
+    \begin{parameters}
+        \$userId\textsuperscript{*} & string & The unique identifier of the user.\\
+        \$userGroup\textsuperscript{*} & array & An array of user group IDs utilized to parse aggregate access permissions.\\
+        \$forceLang & string & An optional language code to force (e.g., from the login screen or query string).\\
+    \end{parameters}
+    
+
+    \section{static methods}\label{sec:static_methods}
+
+    \begin{variable_properties}{6.5cm}{10.5cm}
+        \hline
+        getInstance(\$app) & Returns the singleton instance. If it doesn't exist, it requires an \kw{OasysApp} instance to initialize.\\
+        findSkins() & Scans the file system (both base skins and module skins) to parse \kw{properties.json} files and build the skins array.\\
+        findMods() & Scans the \kw{modules} folder to find and parse installed module capabilities via their \kw{editor.json} files.\\
+        establishRootURL() & Determines the absolute web root URL based on server configuration.\\
+        establishJSRootURL(\$url) & Modifies the root URL to account for server context prefixes, primarily used for linking JavaScript and CSS assets.\\
+        \hline
+    \end{variable_properties}
+    
+\end{document}

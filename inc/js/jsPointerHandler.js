@@ -1,5 +1,5 @@
 /*
- 	jsPointerHandler v2.2.7
+	jsPointerHandler v2.2.8
  	dependencies: jQuery 3.x
  */
 
@@ -271,6 +271,13 @@ class jsPointerHandler {
 
 		this.manager.clickInProgress = settings.counter;
 		this.manager.pressId = settings.counter;
+		if (settings.capturePointer === true && typeof (delegate.get(0).setPointerCapture) === 'function') {
+			try {
+				delegate.get(0).setPointerCapture(e.originalEvent.pointerId);
+			} catch (_error) {
+				// Pointer capture is not supported for every pointer type in every browser.
+			}
+		}
 		if (settings.pressClass) {
 			delegate.addClass(settings.pressClass);
 		}
@@ -850,4 +857,6 @@ class jsPointerHandler {
 	2.2.7:
 		- corrected the CSS rule for allowing scrolling on delegated elements (was set to "scroll" before, which is not
 		  a valid value and needs to be "pan-x pan-y" to work properly on mobile devices)
+	2.2.8:
+		- added the capturePointer option to keep pointer events assigned to their delegate until release
  */

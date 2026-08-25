@@ -1,9 +1,13 @@
-<?php namespace oasysAudioVideo;
+<?php
+
+namespace oasysAudioVideo;
 
 require_once __DIR__ . "/../inc/php/mp4Info.php";
 require_once __DIR__ . "/../inc/php/rixPDO.php";
 require_once __DIR__ . "/../inc/php/database.php";
 
+use Exception;
+use mp4Info;
 use OasysParserPlugin;
 
 $plugin = new OasysParserPlugin('oasysAudioVideo', '/\[@(AUDIO|VIDEO)\b(.*?)@?\]/i', 2, ['mediaType' => 1]);
@@ -22,10 +26,11 @@ $plugin->registerPostProcess(__NAMESPACE__ . '\finalise');
 
 
 /**
- * @throws \Exception
+ * @throws Exception
  */
-function finalise(&$conf, $key, $lng): void {
-	global $sql_host, $sql_db, $sql_user, $sql_password, $settings, $returnData;
+function finalise(&$conf, $key, $lng): void
+{
+	global $db, $settings, $returnData;
 
 	$conf['mediaType'] = strtolower($conf['mediaType']);
 	if ($conf['maxPlayCount'] > 0) {
@@ -34,15 +39,6 @@ function finalise(&$conf, $key, $lng): void {
 
 	/* if file is video try to read media information (mainly in order to get dimensions) */
 	if ($conf['mediaType'] === 'video') {
-		$db = new \rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/../logs/videoPlugin_errors.txt');
-		$results = $db->results();
-		if ($results['error']) {
-			if (!isset ($returnData)) {
-				$returnData = [];
-			}
-			$returnData = ['fatalError' => $results['error']]; // most scripts that include settings.php should send this back as json
-			die();
-		}
 		preg_match("/fileid=(\d+)/", $conf['file'][$lng], $matches);
 		$fileid = $matches[1];
 		$query = "SELECT parent from media WHERE id = ?";
@@ -62,13 +58,13 @@ function finalise(&$conf, $key, $lng): void {
 
 		if (isset($path)) {
 			try {
-				$info = new \mp4Info($settings['mediaLocation'], $path, $db);
-			} catch (\Exception $e) {
+				$info = new mp4Info($settings['mediaLocation'], $path, $db);
+			} catch (Exception $e) {
 				$error = $e->getMessage();
-				throw new \Exception("AudioVideo plugin error: " . $error);
+				throw new Exception("AudioVideo plugin error: " . $error);
 			}
 
-			if (!$error && $info instanceof \mp4Info) {
+			if (!$error && $info instanceof mp4Info) {
 				$conf['info'][$lng] = $info->getInfo();
 			}
 		}

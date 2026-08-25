@@ -39,9 +39,13 @@ let editor; //instance of currently open editor
 let closeEditorAfterSaving = false;
 let previewAfterSaving = false;
 let reviewAfterSaving = false;
+let mediaManagerAfterSaving = false;
 let callbacks = {};
 let externalEditorSettings = {};
 let kbHandlerActive = true;
+let saveInProgress = false;
+let pageChangeRevision = 0;
+let saveRevision = null;
 
 
 function onReady() {
@@ -89,6 +93,7 @@ function initialize() {
 	});
 
 	controller = new Controller('pages');
+	$(document).off('oasys:mediaRenamed.pages').on('oasys:mediaRenamed.pages', handleMediaRename);
 
 	waitDialog = new jsModalWait(UILANG.m('please wait'));
 	kbHandler = new jsKeyboardHandler();
@@ -187,6 +192,7 @@ function initialize() {
 		noChoiceTitle: UILANG.m('no stimulus in group'),
 		listTitle: '',
 		dataId: 'link',
+		theme: 'backend',
 		onChange: onStimulusSelect,
 		order: 'label',
 		width: '100%'
@@ -331,16 +337,31 @@ function createMainButtons() {
 		callback: preview,
 		disabled: false
 	});
-	controller.registerOnChangeCallback(updateSaveButton);
+	controller.registerOnChangeCallback(onControllerChange);
 }
 
 function save() {
 	rixToolsDebug(1, `save()`);
+	if (saveInProgress) {
+		return;
+	}
 	if (controller.isChanged() || settings.debugSystem === true) {
-		let data = encodeData();
-		delete data.id; //we do not ever want to update an auto increment id in the database
+		const pageData = encodeData();
+		const data = {
+			blocks: pageData.blocks,
+			itemCode: pageData.pageCode ?? pageData.itemCode,
+			languages: pageData.languages,
+			link: pageData.link,
+			metadata: pageData.metadata,
+			name: pageData.name
+		};
+		if (Array.isArray(pageData.customCSS)) {
+			data.customCSS = pageData.customCSS;
+		}
+		saveInProgress = true;
+		saveRevision = pageChangeRevision;
+		updateSaveButton(false);
 		startAjax("savePage", {'id': pageId, 'pageData': data});
-		controller.resetChangedFlag();
 	}
 }
 
@@ -448,11 +469,14 @@ function addLanguage() {
 				listTitle: UILANG.m('Choose language'),
 				elements: dlLanguages,
 				dataId: 'language',
+				theme: 'backend',
 				order: 'label'
 			}
 		},
 		mandatory: ['newLang'],
-		contents: '<p>' + UILANG.m('supp_lang') + '</p><p>[@newLang]</p>',
+		contents: '<div class="tmDialogForm">' +
+			'<div class="tmDialogFormField"><label>' + UILANG.m('Language') + '</label><div>[@newLang]</div></div>' +
+		'</div>',
 		title: UILANG.m('Add new language'),
 		width: 400,
 		returnPromise: true,
@@ -514,11 +538,14 @@ function changeLanguage() {
 				listTitle: UILANG.m('choose language'),
 				elements: dlLanguages,
 				dataId: 'language',
+				theme: 'backend',
 				order: 'label'
 			}
 		},
 		mandatory: ['newLang'],
-		contents: '<p>' + UILANG.m('Modify current language to:') + '</p><p>[@newLang]</p>',
+		contents: '<div class="tmDialogForm">' +
+			'<div class="tmDialogFormField"><label>' + UILANG.m('Language') + '</label><div>[@newLang]</div></div>' +
+		'</div>',
 		title: UILANG.m('Change language'),
 		width: 400,
 		returnPromise: true,
@@ -840,6 +867,28 @@ function abortEditingBlock() {
 }
 
 function mediaManager() {
+	if (controller.isChanged()) {
+		let dialogData = {
+			buttons: [
+				{label: UILANG.m('Cancel'), 'cancel': true, value: 'cancel'},
+				{label: UILANG.m('Save'), 'default': true, value: 'save'}
+			],
+			contents: UILANG.m('There are unsaved changes. In order to open the media manager you need to save the changes first!'),
+			title: UILANG.m('Unsaved changes'),
+			returnPromise: true,
+			width: 400
+		};
+		showDialog('unsavedChangesDialog', dialogData).then((res) => {
+			if (res.button !== 'save') return;
+			mediaManagerAfterSaving = true;
+			save();
+		});
+		return;
+	}
+	openMediaManager();
+}
+
+function openMediaManager() {
 	new jsMediaPlugin('oasysImagePlugin', {
 		mediaTypes: 'all',
 		hideOptions: true,
@@ -1133,7 +1182,9 @@ function removeInteractionBlock(pos) {
 			{label: UILANG.m('Cancel'), 'cancel': true, value: 'cancel'},
 			{label: UILANG.m('OK'), 'default': true, value: 'ok'}
 		],
-		contents: UILANG.m("Are you sure you want to delete the interaction?"),
+		contents: '<div class="deleteConfirm"><div class="deleteConfirmText"><p>' + UILANG.m("Are you sure you want to delete the interaction?") + '</p></div></div>',
+		icon: "../images/warning.png",
+		iconWidth: 64,
 		title: UILANG.m('Delete interaction'),
 		returnPromise: true,
 		width: 400
@@ -1234,9 +1285,16 @@ function closeExternalEditor() {
 
 /***** view updaters *****/
 
+function onControllerChange(flag) {
+	if (flag) {
+		pageChangeRevision++;
+	}
+	updateSaveButton(flag);
+}
+
 function updateSaveButton(flag) {
 	rixToolsDebug(1, `updateSaveButton(${flag ? 'true' : 'false'})`);
-	if (flag) {
+	if (flag && !saveInProgress) {
 		buttons.save.enable();
 	} else {
 		buttons.save.disable();
@@ -1376,6 +1434,25 @@ function updateInteractionPreviews() {
 	}
 }
 
+function handleMediaRename(event, media) {
+	if (!media || Number(media.groupId) !== Number(serverData.group.id)) return;
+	let pageBlocks = controller.getData('blocks');
+	if (!Array.isArray(pageBlocks)) return;
+	let changed = false;
+	for (const block of pageBlocks) {
+		if (!block || !['image', 'audio', 'video'].includes(block.type) || !block.fileid || typeof block.fileid !== 'object') continue;
+		if (!block.filename || typeof block.filename !== 'object') block.filename = {};
+		for (const [language, fileId] of Object.entries(block.fileid)) {
+			if (String(fileId) !== String(media.id) || block.filename[language] === media.name) continue;
+			block.filename[language] = media.name;
+			changed = true;
+		}
+	}
+	if (!changed) return;
+	controller.setData(pageBlocks, 'blocks');
+	updateInteractionPreviews();
+}
+
 function commentsDialog() {
 	let dialogData = {
 		buttons: [
@@ -1419,6 +1496,9 @@ function encodeData() {
 	rixToolsDebug(1, `encodeData()`);
 	let data = controller.getData();
 	if (typeof (data) === 'undefined') return;
+	if (!Array.isArray(data.customCSS) && Array.isArray(data.metadata?.customCSS)) {
+		data.customCSS = data.metadata.customCSS;
+	}
 	data.blocks = JSON.stringify(data.blocks);
 	data.languages = JSON.stringify(data.languages);
 	data.metadata = JSON.stringify(data.metadata);
@@ -1523,7 +1603,7 @@ function showMessage() {
 			cancel: true,
 			value: 'ok'
 		}],
-		contents: msg,
+		contents: formatActionErrorMessage(msg),
 		width: 500,
 		callback: callback,
 		title: UILANG.m("Error"),
@@ -1642,12 +1722,23 @@ function startAjax(action, data) {
 	};
 	$.ajax({
 		data: params
-	}).done(res => ajaxSuccess(res)).fail((jqXHR, textStatus, errorThrown) => ajaxError(jqXHR, textStatus, errorThrown));
+	}).done(res => ajaxSuccess(res)).fail((jqXHR, textStatus, errorThrown) => ajaxError(jqXHR, textStatus, errorThrown, action));
 }
 
-function ajaxError(jqXHR, textStatus, errorThrown) {
+function finishFailedSave(action) {
+	if (action !== 'savePage' || !saveInProgress) {
+		return;
+	}
+	saveInProgress = false;
+	saveRevision = null;
+	mediaManagerAfterSaving = false;
+	updateSaveButton(controller.isChanged());
+}
+
+function ajaxError(jqXHR, textStatus, errorThrown, action) {
 	rixToolsDebug(1, `ajaxError(jqXHR, textStatus, errorThrown)`);
 	waitDialog.hide();
+	finishFailedSave(action);
 	let dialogData = {
 		buttons: [{
 			label: UILANG.m('OK'),
@@ -1672,6 +1763,7 @@ function ajaxSuccess(res) {
 	//this data is created in PHP via the register_shutdown_function
 	let dialogData;
 	if (res.fatalError) {
+		finishFailedSave(res.action);
 		dialogData = {
 			buttons: [{
 				label: UILANG.m('OK'),
@@ -1679,7 +1771,7 @@ function ajaxSuccess(res) {
 				cancel: true,
 				value: 'ok'
 			}],
-			contents: '<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.fatalError,
+			contents: formatActionErrorMessage('<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.fatalError),
 			title: UILANG.m("Error"),
 			icon: "../images/error.png",
 			iconWidth: 64,
@@ -1690,6 +1782,7 @@ function ajaxSuccess(res) {
 	}
 	//if a normal error occured in PHP that did not prevent the script from finishing, show it
 	if (res.error !== false) {
+		finishFailedSave(res.action);
 		dialogData = {
 			buttons: [{
 				label: UILANG.m('OK'),
@@ -1697,7 +1790,7 @@ function ajaxSuccess(res) {
 				cancel: true,
 				value: 'ok'
 			}],
-			contents: '<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.error,
+			contents: formatActionErrorMessage('<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.error),
 			title: UILANG.m("Error"),
 			icon: "../images/error.png",
 			iconWidth: 64,
@@ -1747,17 +1840,35 @@ function ajaxSuccess(res) {
 			break;
 
 		case 'savePage':
-			if (closeEditorAfterSaving === true) {
-				window.parent.closePageEditor();
-			} else if (previewAfterSaving === true) {
-				previewAfterSaving = false;
-				preview();
-			} else if (reviewAfterSaving === true) {
-				reviewAfterSaving = false;
-				reviewerMode();
+			const changedWhileSaving = pageChangeRevision !== saveRevision;
+			const compilationFailed = Boolean(res.compilationErrors);
+			if (!changedWhileSaving) {
+				controller.setData(res.data.blocks, 'blocks');
+				controller.resetChangedFlag();
 			}
-			controller.setData(res.data.blocks, 'blocks');
-			controller.resetChangedFlag();
+			saveInProgress = false;
+			saveRevision = null;
+			updateSaveButton(controller.isChanged());
+			if (!changedWhileSaving) {
+				if (closeEditorAfterSaving === true) {
+					window.parent.closePageEditor();
+				} else if (previewAfterSaving === true) {
+					previewAfterSaving = false;
+					if (!compilationFailed) {
+						preview();
+					}
+				} else if (reviewAfterSaving === true) {
+					reviewAfterSaving = false;
+					if (!compilationFailed) {
+						reviewerMode();
+					}
+				} else if (mediaManagerAfterSaving === true) {
+					mediaManagerAfterSaving = false;
+					openMediaManager();
+				}
+			} else {
+				mediaManagerAfterSaving = false;
+			}
 			if (res.compilationErrors) {
 				showMessage(res.compilationErrors);
 			}

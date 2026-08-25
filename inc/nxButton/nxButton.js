@@ -1,11 +1,11 @@
 "use strict";
 
 /*
- nxButton v3.26
+ nxButton v3.27
 
  Depencies:
 	 jQuery 1.7 or newer
-	 jsPointerHandler v2.1.0 or newer
+	 jsPointerHandler v2.2.8 or newer
  */
 
 (function ($) {
@@ -240,7 +240,8 @@
 			},
 			hoverClass: 'nxButtonHovered',
 			pressClass: 'nxButtonPressed',
-			activeClass: 'nxButtonActive'
+			activeClass: 'nxButtonActive',
+			capturePointer: true
 		});
 
 		if (data['default']) {
@@ -288,11 +289,11 @@
 			if (selected || disabled) return;
 			active = true;
 			e.stopPropagation();
-			document.activeElement.blur();
 		}
 
 		function mouseup(e) {
 			debug('mouseup');
+			if (active) document.activeElement.blur();
 			if (active && callback) {
 				if (callBackParams === null) {
 					if (typeof(value) === 'function') {
@@ -586,6 +587,10 @@
 
 	v3.26:
 		- added missing debug information on mouseup event
+
+	v3.27:
+		- capture the active pointer until release
+		- defer blurring the active input until release so virtual-keyboard layout changes cannot retarget the click
 
 
 

@@ -1,6 +1,6 @@
 /*
- OasysHelp Class v1.4
- (c) 2024 / 2025 by Willibrord Koch
+ OasysHelp Class v1.6
+ (c) 2024 / 2025 /2026 by Willibrord Koch
  -------------------------------------------------------------------------------------------------------------------
  DESCRIPTION:
  This class creates an inline help icon (a circle with a question mark) that can be embedded within text (span
@@ -15,6 +15,8 @@
  v1.2    Modified the popup to use a <dialog> element instead of a <div> element.
  v1.3    Added class to the dialog element to allow for custom styling of the dialog element.
  v1.4    If the container already has text, transform it into a clickable link, with the icon behind it.
+ v1.5    Added options for link styling (color, hover color, decoration, hover decoration, font weight, class, margins).
+ v1.6    Added shared pleasant help layout styling and OasysHelp.layout() for consistent translated help panels.
  -------------------------------------------------------------------------------------------------------------------
 
  Options:
@@ -45,6 +47,44 @@
  });
  */
 class OasysHelp {
+    static escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = value === null || value === undefined ? '' : String(value);
+        return div.innerHTML;
+    }
+
+    static layout(options = {}) {
+        const lead = options.lead ? `<p class="oasysHelpLead">${OasysHelp.escapeHtml(options.lead)}</p>` : '';
+        const items = Array.isArray(options.items) ? options.items : [];
+        const itemHtml = items.length ? `
+            <div class="oasysHelpGrid">
+                ${items.map((item) => `
+                    <div class="oasysHelpItem">
+                        <strong>${OasysHelp.escapeHtml(item.title || '')}</strong>
+                        <span>${OasysHelp.escapeHtml(item.text || '')}</span>
+                    </div>
+                `).join('')}
+            </div>
+        ` : '';
+        const note = options.note ? `<p class="oasysHelpNote">${OasysHelp.escapeHtml(options.note)}</p>` : '';
+        const caution = options.caution ? `<p class="oasysHelpCaution">${OasysHelp.escapeHtml(options.caution)}</p>` : '';
+
+        return `
+            <div class="oasysHelpPanel">
+                ${lead}
+                ${itemHtml}
+                ${note}
+                ${caution}
+            </div>
+        `;
+    }
+
+    static normalizeContent(htmlContent) {
+        const content = htmlContent || '<p>No help text specified...</p>';
+        if (content.indexOf('oasysHelpPanel') !== -1) return content;
+        return `<div class="oasysHelpPanel oasysHelpLegacy">${content}</div>`;
+    }
+
     constructor(containerId, options = {}) {
         // Get the container element by ID
         this.container = document.getElementById(containerId);
@@ -56,13 +96,21 @@ class OasysHelp {
         // Options
         this.iconSize       = options.size           || '16px';
         this.iconColor      = options.color          || '#4f94b4';
+        this.linkColor           = options.linkColor           || 'inherit';
+        this.linkHoverColor      = options.linkHoverColor      || null;
+        this.linkDecoration      = options.linkDecoration      || 'underline';
+        this.linkHoverDecoration = options.linkHoverDecoration || this.linkDecoration;
+        this.linkFontWeight      = options.linkFontWeight      || 'inherit';
+        this.linkClass           = options.linkClass           || '';
+        this.linkMarginLeft      = options.linkMarginLeft      || '0';
+        this.linkMarginRight     = options.linkMarginRight     || '4px';
         this.popupBgColor   = options.popupBgColor   || '#ffffff';
-        this.htmlContent    = options.htmlContent    || '<p>No help text specified...</p>';
+        this.htmlContent    = options.rawHtmlContent ? (options.htmlContent || '<p>No help text specified...</p>') : OasysHelp.normalizeContent(options.htmlContent);
         this.maxHeight      = options.maxHeight      || '400px';
         this.maxWidth       = options.maxWidth       || '700px';
         this.title          = options.title          || '';
-        this.titleFontColor = options.titleFontColor || '#4f94b4';
-        this.titleBgColor   = options.titleBgColor   || '#dddddd';
+        this.titleFontColor = options.titleFontColor || '#43586d';
+        this.titleBgColor   = options.titleBgColor   || '#eaf2f7';
 
         // Internal elements
         this.link         = null;
@@ -93,13 +141,25 @@ class OasysHelp {
             this.link = document.createElement('a');
             this.link.href = '#';
             this.link.style.cursor = 'pointer';
-            this.link.style.textDecoration = 'underline';
-            this.link.style.marginRight = '4px'; // space between text and icon
-            this.link.textContent = existingText;
+            this.link.style.color = this.linkColor;
+            this.link.style.textDecoration = this.linkDecoration;
+            this.link.style.fontWeight = this.linkFontWeight;
+            this.link.style.marginLeft = this.linkMarginLeft;
+            this.link.style.marginRight = this.linkMarginRight;
+            if (this.linkClass) this.link.className = this.linkClass;
 
+            this.link.addEventListener('mouseenter', () => {
+                if (this.linkHoverColor) this.link.style.color = this.linkHoverColor;
+                this.link.style.textDecoration = this.linkHoverDecoration;
+            });
+            this.link.addEventListener('mouseleave', () => {
+                this.link.style.color = this.linkColor;
+                this.link.style.textDecoration = this.linkDecoration;
+            });
+
+            this.link.textContent = existingText;
             iconContainer.appendChild(this.link);
         }
-
         const svgNamespace = 'http://www.w3.org/2000/svg';
         const icon = document.createElementNS(svgNamespace, 'svg');
         icon.setAttribute('width', this.iconSize);
@@ -177,6 +237,7 @@ class OasysHelp {
             border: none;
             max-width: ${this.maxWidth};
             max-height: ${this.maxHeight};
+            color: #33485d;
           }
         `;
         document.head.appendChild(styleTag);
@@ -185,8 +246,8 @@ class OasysHelp {
         this.popupElement = document.createElement('dialog');
         this.popupElement.classList.add('oasys-help-dialog');
         this.popupElement.style.backgroundColor = this.popupBgColor;
-        this.popupElement.style.boxShadow       = '0 4px 8px rgba(0, 0, 0, 0.1)';
-        this.popupElement.style.borderRadius    = '4px';
+        this.popupElement.style.boxShadow       = '0 12px 32px rgba(15, 35, 54, 0.25)';
+        this.popupElement.style.borderRadius    = '8px';
         this.popupElement.style.overflowY       = 'auto';
 
         // Title (optional)
@@ -195,9 +256,10 @@ class OasysHelp {
             titleElement.style.backgroundColor = this.titleBgColor;
             titleElement.style.color          = this.titleFontColor;
             titleElement.style.fontWeight     = 'bold';
-            titleElement.style.fontSize       = 'calc(2px + 1em)';
-            titleElement.style.padding        = '5px';
-            titleElement.style.borderRadius   = '4px 4px 0 0';
+            titleElement.style.fontSize       = '15px';
+            titleElement.style.padding        = '9px 12px';
+            titleElement.style.borderBottom   = '1px solid #d3e0ea';
+            titleElement.style.borderRadius   = '8px 8px 0 0';
             titleElement.style.fontFamily     = getComputedStyle(document.body).fontFamily;
             titleElement.textContent          = this.title;
             this.popupElement.appendChild(titleElement);
@@ -205,9 +267,10 @@ class OasysHelp {
 
         // Content
         const contentElement = document.createElement('div');
+        contentElement.className = 'oasysHelpContent';
         contentElement.style.fontFamily = getComputedStyle(document.body).fontFamily;
         contentElement.style.fontSize   = '14px';
-        contentElement.style.padding    = '8px';  // Some room for text
+        contentElement.style.padding    = '10px';
         contentElement.innerHTML        = this.htmlContent;
         this.styleHtmlContent(contentElement);
 
@@ -258,15 +321,106 @@ class OasysHelp {
         // Optionally style any tables you may have
         const style = document.createElement('style');
         style.textContent = `
-            div {
-                font-size: 14px;
+            .oasysHelpContent {
+                color: #33485d;
             }
-            table {
+            .oasysHelpPanel {
+                max-width: 560px;
+            }
+            .oasysHelpPanel p {
+                margin: 0 0 10px;
+                line-height: 1.45;
+            }
+            .oasysHelpPanel p:last-child {
+                margin-bottom: 0;
+            }
+            .oasysHelpLead {
+                padding: 9px 10px;
+                border-left: 4px solid #175978;
+                border-radius: 5px;
+                background: #eaf2f7;
+                color: #43586d;
+                font-weight: bold;
+            }
+            .oasysHelpLegacy > p:first-child,
+            .oasysHelpLegacy > div > p:first-child {
+                padding: 9px 10px;
+                border-left: 4px solid #175978;
+                border-radius: 5px;
+                background: #eaf2f7;
+                color: #43586d;
+                font-weight: bold;
+            }
+            .oasysHelpGrid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+                margin: 10px 0;
+            }
+            .oasysHelpItem {
+                padding: 9px;
+                border: 1px solid #dfe8f1;
+                border-radius: 6px;
+                background: #f8fbfd;
+            }
+            .oasysHelpItem strong,
+            .oasysHelpItem span {
+                display: block;
+            }
+            .oasysHelpItem strong {
+                margin-bottom: 4px;
+                color: #43586d;
+                font-size: 12px;
+            }
+            .oasysHelpItem span {
+                color: #52677a;
+                font-size: 12px;
+                line-height: 1.35;
+            }
+            .oasysHelpNote,
+            .oasysHelpCaution {
+                padding: 8px 10px;
+                border-radius: 5px;
+                font-size: 12px;
+                line-height: 1.35;
+            }
+            .oasysHelpNote {
+                border: 1px solid #d3e0ea;
+                background: #f5f9fc;
+                color: #40576c;
+            }
+            .oasysHelpCaution {
+                border: 1px solid #f0c9a6;
+                background: #fff5eb;
+                color: #7b3f00;
+            }
+            .oasysHelpLegacy ul {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 7px;
+                margin: 10px 0;
+                padding: 0;
+            }
+            .oasysHelpLegacy li {
+                list-style: none;
+                padding: 8px 9px;
+                border: 1px solid #dfe8f1;
+                border-radius: 6px;
+                background: #f8fbfd;
+                color: #52677a;
+                font-size: 12px;
+                line-height: 1.35;
+            }
+            .oasysHelpLegacy strong,
+            .oasysHelpLegacy b {
+                color: #43586d;
+            }
+            .oasysHelpContent table {
                 border: none;
                 border-collapse: collapse;
                 width: 100%;
             }
-            table th {
+            .oasysHelpContent table th {
                 font-size: 14px;
                 background-color: #175978 !important;
                 color: white;
@@ -274,11 +428,21 @@ class OasysHelp {
                 padding: 3px !important;
                 text-align: left;
             }
-            table td {
+            .oasysHelpContent table th strong,
+            .oasysHelpContent table th b {
+                color: white;
+            }
+            .oasysHelpContent table td {
                 font-size: 14px;
                 padding: 3px;
                 text-align: left;
                 vertical-align: top;
+            }
+            @media (max-width: 520px) {
+                .oasysHelpGrid,
+                .oasysHelpLegacy ul {
+                    grid-template-columns: 1fr;
+                }
             }
         `;
         contentElement.appendChild(style);

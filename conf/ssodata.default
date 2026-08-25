@@ -10,17 +10,8 @@ SSOLogoutURL = "https://"
 IDPhost = "https://"
 IDPIssuerId = ""
 IDPuidStr = "urn:oid:0.9.2342.19200300.100.1.1"
-sigAlgo = OPENSSL_ALGO_SHA1
-
-; POSSIBLE SIGNATURE ALGORITHM CONSTANTS:  
-; ---------------------------------------
-; OPENSSL_ALGO_DSS1  
-; OPENSSL_ALGO_SHA1 (default for openssl_verify() function)  
-; OPENSSL_ALGO_SHA224  
-; OPENSSL_ALGO_SHA256  
-; OPENSSL_ALGO_SHA384  
-; OPENSSL_ALGO_SHA512  
-; OPENSSL_ALGO_RMD160  
-; OPENSSL_ALGO_MD5  
-; OPENSSL_ALGO_MD4  
-; OPENSSL_ALGO_MD2 (if Php compiled with MD2 support)
+; Optional trust store for IdP certificate chain validation.
+; Set either IDPTrustedCertFile to a PEM bundle or IDPTrustedCertDir to a directory of PEM/CRT/CER files.
+; When both are empty, PHP/OpenSSL will fall back to its system CA store.
+IDPTrustedCertFile = ""
+IDPTrustedCertDir = ""

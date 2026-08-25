@@ -3,29 +3,33 @@
 	global $filterSettings;
 	$filterSettings = true;
 
-	require_once __DIR__ . '/inc/php/database.php'; //contains the database connection credentials
-	require_once __DIR__ . '/inc/php/rixPDO.php'; //wrapper around PDO functions (c.f. docs folder for manual)
-	require_once __DIR__ . '/inc/php/settings.php';
+	require_once __DIR__ . '/inc/php/initSettings.php';
 	require_once __DIR__ . '/inc/php/OasysFrontendState.php';
-	require_once __DIR__ . '/inc/php/dbSessionHandler.php';
+	require_once __DIR__ . '/editor/inc/php/OasysBackendState.php';
 	require_once __DIR__ . '/editor/inc/php/MediaTool.php';
 
 	use Oasys\frontend\OasysFrontendState;
+	use Oasys\backend\OasysBackendState;
+	use Oasys\OasysSettings;
+
+	$config = OasysSettings::getInstance();
+	$settings =& $config->getSettingsArray();
+
 	$active = OasysFrontendState::stateIdActive();
 
 	if (!$active) {
-		/* fetching a media file is only allowed when logged into the front end or editor of OASYS in order to prevent link sharing */
-		if (session_status() !== PHP_SESSION_ACTIVE) {
-			$sessionHandler = new dbSessionHandler($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/logs/sessionHandler_errors.txt', 'fetchMediaFile');
-			session_set_save_handler($sessionHandler, true);
-			session_start(['cookie_path' => $settings['JSrootURL'], 'cookie_httponly' => true]);
+		if (OasysBackendState::browserHasActiveState()) {
+			/*  the browser has a cookie for backend and the
+				state in the database is still active, so
+				now we need to check if it is also logged in */
+			$backendState = OasysBackendState::getInstance();
+			if (isset($backendState->editor_active)) {
+				$active = $backendState->editor_active;
+			}
 		}
 
-		if (isset($_SESSION['editor_active'])) {
-			$active = $active || $_SESSION['editor_active'];
-		}
-		session_write_close();
-
+		/* fetching a media file is only allowed when logged into the
+		front end or editor of OASYS in order to prevent link sharing */
 		if (!$active) {
 			http_response_code(401);
 			die();
@@ -44,16 +48,7 @@
 		die();
 	}
 
-	//make a connection to the database and define the log file in which database errors are to be recorded
-	$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/logs/fetchMediaFile_errors.txt');
-	$results = $db->results();
-	if ($results['error']) {
-		http_response_code(500);
-		die();
-	}
-
-	$mediaTool = new MediaTool($db);
-	$mediaInformation = $mediaTool->getFileInformation($fileid, $checksum);
+	$mediaInformation = MediaTool::getFileInformation($fileid, $checksum);
 
 	if (!$mediaInformation) {
 		header("HTTP/1.1 404 Not Found");
@@ -68,13 +63,13 @@
 	$parent = $mediaInformation['parent'];
 	$path = __DIR__ . "/media/$parent/$fileid.dat";
 
-	$mimeType = $mediaTool->getMimeType($fileid, $checksum, $mediaInformation);
+	$mimeType = MediaTool::getMimeType($fileid, $checksum, $mediaInformation);
 
 	/*
 	 * get hash of the file to use as ETag and send 404 if file not found
 	 */
 
-	$etag = $mediaTool->getEtag($fileid, $checksum, $mediaInformation);
+	$etag = MediaTool::getETag($fileid, $checksum, $mediaInformation);
 	if (!$etag) {
 		header("HTTP/1.1 404 Not Found");
 		header("Cache-Control: no-store, must-revalidate");
@@ -148,7 +143,7 @@
 		header("Content-Length: " . $size);
 	}
 
-	$data = $mediaTool->getMediaRange($fileid, $path, $start, $length);
+	$data = MediaTool::getMediaRange($fileid, $path, $start, $length);
 	if ($data) {
 		echo $data;
 	} else {

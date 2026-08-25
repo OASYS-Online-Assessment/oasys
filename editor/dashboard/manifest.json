@@ -1,9 +1,111 @@
 {
-	"watchlist":{
-		"path":"watchlist/",
-		"js":"watchlist.js",
-		"css":"watchlist.css",
-		"jsconstruct":"WatchList",
-		"ajax":"watchlist.php"
-	}
+  "user": {
+    "watchlist": {
+      "path": "watchlist/",
+      "js": "watchlist.js",
+      "css": "watchlist.css",
+      "jsconstruct": "WatchList",
+      "minWidth": 500,
+      "height": 400,
+      "row": 1,
+      "order": 1
+    },
+    "results": {
+      "path": "testresults/",
+      "js": "testresults.js",
+      "css": "testresults.css",
+      "jsconstruct": "TestResultsWidget",
+      "minWidth": 500,
+      "height": 400,
+      "row": 1,
+      "order": 2
+    },
+    "manuals": {
+      "path": "manuals/",
+      "js": "manuals.js",
+      "css": "manuals.css",
+      "jsconstruct": "Manuals",
+      "minWidth": 180,
+      "height": 400,
+      "row": 1,
+      "order": 3
+    },
+    "activenow": {
+      "path": "activenow/",
+      "js": "activenow.js",
+      "css": "activenow.css",
+      "jsconstruct": "ActiveNow",
+      "minWidth": 700,
+      "height": 400,
+      "row": 2,
+      "order": 2
+    },
+    "lastedited": {
+      "path": "lastedited/",
+      "js": "lastedited.js",
+      "css": "lastedited.css",
+      "jsconstruct": "LastEdited",
+      "minWidth": 600,
+      "height": 400,
+      "row": 2,
+      "order": 1
+    }
+  },
+  "admin": {
+    "logviewer": {
+      "path": "logviewer/",
+      "js": "logviewer.js",
+      "css": "logviewer.css",
+      "jsconstruct": "LogViewer",
+      "minWidth": 600,
+      "height": 420,
+      "row": 2,
+      "order": 1,
+      "roles": ["elevated", "superadmin"]
+    },
+    "localization": {
+      "path": "localization/",
+      "js": "localization.js",
+      "css": "localization.css",
+      "jsconstruct": "Localization",
+      "minWidth": 580,
+      "height": 420,
+      "row": 2,
+      "order": 2,
+      "roles": ["admin", "elevated", "superadmin"]
+    },
+    "manualsadm": {
+      "path": "manualsadm/",
+      "js": "manualsadm.js",
+      "css": "manualsadm.css",
+      "jsconstruct": "AdminManuals",
+      "minWidth": 180,
+      "height": 320,
+      "row": 1,
+      "order": 3,
+      "roles": ["admin", "elevated", "superadmin"]
+    },
+    "userwidget": {
+      "path": "userwidget/",
+      "js": "userwidget.js",
+      "css": "userwidget.css",
+      "jsconstruct": "UserWidget",
+      "minWidth": 400,
+      "height": 320,
+      "row": 1,
+      "order": 2,
+      "roles": ["admin", "elevated", "superadmin"]
+    },
+    "systemstatus": {
+      "path": "systemstatus/",
+      "js": "systemstatus.js",
+      "css": "systemstatus.css",
+      "jsconstruct": "SystemStatus",
+      "minWidth": 600,
+      "height": 320,
+      "row": 1,
+      "order": 1,
+      "roles": ["elevated", "superadmin"]
+    }
+  }
 }

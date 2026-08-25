@@ -2,7 +2,7 @@
 
 
 	register_shutdown_function('outputJSON');
-	require_once __DIR__ . '/../inc/php/settings.php';
+	require_once __DIR__ . "/inc/php/initBackend.php";
 
 	//action is a string that defines what action to perform
 	$action = filter_input(INPUT_POST, 'action');
@@ -45,6 +45,7 @@
 	}
 
 	require_once "inc/php/pageClass.php";
+	if (oasysRejectUnknownAction(__FILE__, $action, $returnData)) exit;
 	$importer = new pageClass($returnData, $data);
 	$importer->execute($action);
 

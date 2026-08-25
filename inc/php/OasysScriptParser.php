@@ -13,8 +13,8 @@
 			$cmdCaptures = [];
 			foreach ($lines as $line) {
 				$cmd = [];
-				$ifElsePattern = "/if\s*\(\s*(?<condition>[^)]+)\)\s*\{(?<ifactions>[^}]+)\}\s*else\s*\{(?<elseactions>[^}]+)\}/i";
-				$ifPattern = "/if\s*\(\s*(?<condition>[^)]+)\)\s*\{(?<ifactions>[^}]+)\}/i";
+				$ifElsePattern = "/if\s*\(\s*(?<condition>.+?)\s*\)\s*\{(?<ifactions>[^}]+)\}\s*else\s*\{(?<elseactions>[^}]+)\}/i";
+				$ifPattern = "/if\s*\(\s*(?<condition>.+?)\s*\)\s*\{(?<ifactions>[^}]+)\}/i";
 				$executePattern = "/execute\s*\{(?<actions>[^}]+)\}/i";
 				if (preg_match($ifElsePattern, $line, $cmdCaptures) > 0) {
 					$cmd['type'] = 'if';
@@ -53,6 +53,28 @@
 		}
 
 		private static function parseCondition($cond): array {
+			$countLeftPattern = '/^\s*count\s*\(\s*(?<prefix>\$\$?)(?<variable>[^)]+?)\s*\)\s*(?<operator>==|!=|>=|<=|>|<|contains|!contains)\s*(?<term2>.+?)\s*$/i';
+			if (preg_match($countLeftPattern, $cond, $countMatches)) {
+				$parsedRemainder = self::parseCondition('0 ' . $countMatches['operator'] . ' ' . $countMatches['term2']);
+				if ($parsedRemainder === []) return [];
+				return [
+					'operator' => strtolower($countMatches['operator']),
+					'term1' => self::createCountTerm($countMatches['prefix'], $countMatches['variable']),
+					'term2' => $parsedRemainder['term2']
+				];
+			}
+
+			$countRightPattern = '/^\s*(?<term1>.+?)\s*(?<operator>==|!=|>=|<=|>|<|contains|!contains)\s*count\s*\(\s*(?<prefix>\$\$?)(?<variable>[^)]+?)\s*\)\s*$/i';
+			if (preg_match($countRightPattern, $cond, $countMatches)) {
+				$parsedRemainder = self::parseCondition($countMatches['term1'] . ' ' . $countMatches['operator'] . ' 0');
+				if ($parsedRemainder === []) return [];
+				return [
+					'operator' => strtolower($countMatches['operator']),
+					'term1' => $parsedRemainder['term1'],
+					'term2' => self::createCountTerm($countMatches['prefix'], $countMatches['variable'])
+				];
+			}
+
 			$pattern = '/^\s*(([\'"])|\\${0,2})([^\2]*?)(?(2)\2|)\s*(==|!=|>=|<=|>|<|contains|!contains)\s*(([\'"])|\\${0,2})([^\6]*?)(?(6)\6|)\s*$/';
 			/*
 			 * group 1 => ' or " or $ or $$ or term 1
@@ -137,6 +159,16 @@
 			return $parsed;
 		}
 
+		private static function createCountTerm(string $prefix, string $variable): array {
+			return [
+				'value' => [
+					'value' => trim($variable),
+					'type' => $prefix === '$$' ? 'localVariable' : 'globalVariable'
+				],
+				'type' => 'count'
+			];
+		}
+
 		private static function splitActions($actions): array
 		{
 			$list = explode(';', $actions);
@@ -160,7 +192,7 @@
 				$action['parameters'][] = $actionString;
 			}
 			$quotePattern = "/^(['\"])(.*)\\1$/";
-			$subCommandPattern = "/^(avg|sum)\s*\(.*?\)/";
+			$subCommandPattern = "/^(avg|sum|count)\s*\(.*?\)/";
 			if (count($action['parameters']) > 0) {
 				foreach ($action['parameters'] as $paramNum => $param) {
 					$param = trim($param);

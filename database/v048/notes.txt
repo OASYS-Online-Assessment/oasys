@@ -1,0 +1,5 @@
+This patch is to prepare the users table to track activity actions by recycling an old unused column `lastLogin`.
+
+The updated column `activity` will a JSON (longtext / utf8mb4_bin) which is validated as JSON through a constraint on the column.
+
+VERSION: 048.

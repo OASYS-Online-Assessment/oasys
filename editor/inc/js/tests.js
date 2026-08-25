@@ -44,6 +44,7 @@ let waitDialog;
 let buttons = {};
 let gui = {};
 let animationPlaying = false;
+let isAE = false;
 
 //details of the selection in the library
 let selection = [];
@@ -85,21 +86,27 @@ let itembreadcrumbs;
 let testSelection;
 //linear tests in current folder
 let linTests;
-//variables for tracking doubleclicks
-let waitingForDblClick;
-let libraryTimeout;
+//variables for delayed edit handling
 let editOnData = false;
+let pendingTestLevelId = null;
+let pendingTestLevelToken = null;
+let pendingTestLevelRequest = null;
+let pendingPreviewCheckToken = null;
+let pendingPreviewCheckTestId = null;
+let previewPlausibilityResult = null;
+let previewPlausibilityWarnings = {};
+let ajaxRequestToken = 0;
 let firstRun = false;
 let skinOptionContainer;
 //HTML frame for displaying test pages in the testpage-chooser
 let itemsDisplayHTML = "";
 //HTML frame for displaying test pages in the testpool-chooser
-let itemsDisplayPoolsHTML = ("<div id='optContainer'></div><div id='igListContainer'></div>");
+let itemsDisplayPoolsHTML = ("<div id='optContainer' class='fluidBlockOptions'></div><div id='igListContainer' class='fluidBlockPageList'></div>");
 let chosenPool = {};
 //Test page Selection
 let itStiSelection;
 //HTML frame for displaying labels in the changeLabel dialog
-let changeLabelsDisplayHTML = ("<div id='optContainerLabel'></div><div id='labContainer'></div>");
+let changeLabelsDisplayHTML = ("<div id='optContainerLabel' class='assignLabelOptions'></div><div id='labContainer' class='assignLabelPreview'></div>");
 let changesLabel = {};
 //tmp values
 let minTmpValue;
@@ -107,7 +114,7 @@ let maxTmpValue;
 let minMaxTmpValues = {};
 //HTML frame for test structures in the  in the assign-test-form
 const testCountDisplayHTML = "<div id='presMsg'></div>";
-const testStructureDisplayHTML = "<div id='testID'></div><table id='testStrucDisplayHTML'></table><br />";
+const testStructureDisplayHTML = "<div class='tmMutationPreviewMeta' id='testID'></div><div class='tmMutationPreviewTableShell'><table class='tmMutationPreviewTableHead'><colgroup><col class='tmMutationPreviewColName'><col class='tmMutationPreviewColCode'></colgroup><thead></thead></table><div class='tmMutationPreviewTableWrap'><table id='testStrucDisplayHTML'><colgroup><col class='tmMutationPreviewColName'><col class='tmMutationPreviewColCode'></colgroup><tbody></tbody></table></div></div>";
 // global vars for blocked object handling
 let curFFlist = null;
 let showBlocked = true;
@@ -212,6 +219,46 @@ function onReady() {
         callback: closeVariablesEditor,
         disabled: false
     });
+    buttons.loadExistingLabels = new jsButton2($('header'), 'bLoadExistingLabels', {
+        label: UILANG.m('Load existing'),
+        icon: '../images/toolbarIcons/ic_tb_copy.png',
+        iconWidth: 48,
+        width: 88,
+        height: 100,
+        callback: function() {
+            openExistingEditorEntriesDialog('labels');
+        },
+        disabled: false
+    });
+    buttons.loadExistingVariables = new jsButton2($('header'), 'bLoadExistingVariables', {
+        label: UILANG.m('Load existing'),
+        icon: '../images/toolbarIcons/ic_tb_copy.png',
+        iconWidth: 48,
+        width: 88,
+        height: 100,
+        callback: function() {
+            openExistingEditorEntriesDialog('variables');
+        },
+        disabled: false
+    });
+    buttons.loadExistingTestpools = new jsButton2($('header'), 'bLoadExistingTestpools', {
+        label: UILANG.m('Load existing'),
+        icon: '../images/toolbarIcons/ic_tb_copy.png',
+        iconWidth: 48,
+        width: 88,
+        height: 100,
+        callback: openExistingTestpoolsDialog,
+        disabled: false
+    });
+    buttons.loadExistingMutationStructure = new jsButton2($('header'), 'bLoadExistingMutationStructure', {
+        label: UILANG.m('Load existing'),
+        icon: '../images/toolbarIcons/ic_tb_copy.png',
+        iconWidth: 48,
+        width: 88,
+        height: 100,
+        callback: openExistingMutationStructureDialog,
+        disabled: false
+    });
     buttons.searchFiler = new jsButton2($('header'), 'bSearch', {
         label: UILANG.m('search'),
         icon: '../images/toolbarIcons/ic_tb_search.png',
@@ -256,6 +303,15 @@ function onReady() {
         width: 80,
         height: 100,
         callback: editSelection,
+        disabled: true
+    });
+    buttons.bulkEdit = new jsButton2($('header'), 'bBulkEdit', {
+        label: UILANG.m('Bulk edit'),
+        icon: '../images/toolbarIcons/ic_tb_bulkEdit.png',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: openBulkEditDialog,
         disabled: true
     });
     buttons.duplicate = new jsButton2($('header'), 'bDuplicate', {
@@ -330,6 +386,8 @@ function onReady() {
         callback: preview,
         disabled: true
     });
+    insertVerticalDivider('header', 'metaDivider');
+    $('#metaDivider').hide();
     buttons.legalText = new jsButton2($('header'), 'bLegalText', {
         label: UILANG.m('Edit privacy policy'),
         icon: '../images/toolbarIcons/ic_tb_law.png',
@@ -348,6 +406,24 @@ function onReady() {
         callback: scoreScreen,
         disabled: false
     });
+    buttons.landingPage = new jsButton2($('header'), 'bLandingPage', {
+        label: UILANG.m('Landing page'),
+        icon: '../images/toolbarIcons/ic_tb_landingPage.png',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: landingPage,
+        disabled: false
+    });
+    buttons.finishScreenEditor = new jsButton2($('header'), 'bFinishScreenEditor', {
+        label: UILANG.m('Finish screen'),
+        icon: '../images/toolbarIcons/ic_tb_finishScreen.png',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: finishScreen,
+        disabled: false
+    });
 
     gui.s1 = createFlexSection('UI', 'sect001', 450, 450); //library
     gui.s2 = createFlexSection('UI', 'sect002', 400, 400); //test properties
@@ -358,6 +434,7 @@ function onReady() {
     gui.s7 = createFlexSection('UI', 'sect007', 650, 650); //labels
     gui.s8 = createFlexSection('UI', 'sect008', 600, 600); //variables
     gui.s9 = createFlexSection('UI', 'sect009', 846, 846); //test structure mutation test
+    gui.s10 = createFlexSection('UI', 'sect010', 846, 846); //test preview
 
     // section 1 (browser)
     gui.boxes.tests = createFlexBox(gui.s1, 'testList', {
@@ -426,8 +503,9 @@ function onReady() {
         lockedClick: editSelection,
         lockedText: '<img style="cursor:pointer;" src="../images/ic_fl_veil_edit.png" />',
         useVeil: true,
-        panelHeight: 30
+        panelHeight: 35
     });
+    gui.boxes.properties.getInnerBox().addClass('tmPropertyPanel');
     gui.s2.hide();
 
     //section 2meta tags
@@ -443,6 +521,7 @@ function onReady() {
     });
     gui.s2.hide();
 
+    gui.boxes.metaTags.getInnerBox().addClass('tmCompactFlexPanel');
     gui.boxes.metaTags.getInnerBox().append('<div id="metaTagList"></div>');
 
     //section 3 (test structure linear test)
@@ -456,6 +535,7 @@ function onReady() {
         useVeil: true,
         panelHeight: 30
     });
+    gui.boxes.structure.getInnerBox().addClass('tmCompactFlexPanel');
     gui.s3.hide();
 
     //section 4 (testpools)
@@ -474,6 +554,7 @@ function onReady() {
         flex: 1,
         panelHeight: 30
     });
+    gui.boxes.assignedTestpools.getInnerBox().addClass('tmCompactFlexPanel');
     gui.s5.hide();
 
     //section 6 (test structure fluid test)
@@ -487,6 +568,7 @@ function onReady() {
         useVeil: true,
         panelHeight: 30
     });
+    gui.boxes.fluidStructure.getInnerBox().addClass('tmCompactFlexPanel');
     gui.s6.hide();
 
     //section 7 (labels)
@@ -518,7 +600,19 @@ function onReady() {
         useVeil: true,
         panelHeight: 30
     });
+    gui.boxes.mutationStructure.getInnerBox().addClass('tmCompactFlexPanel');
     gui.s9.hide();
+
+    //section 10 (browse preview)
+    gui.boxes.testPreview = createFlexBox(gui.s10, 'testPreview', {
+        title: UILANG.m('Test preview'),
+        minHeight: 480,
+        flex: 1,
+        noPadding: true,
+        panelHeight: 30
+    });
+    gui.s10.hide();
+    gui.boxes.testPreview.getInnerBox().append('<div id="testPreviewContent" class="tmPreviewBlank"></div>');
 
 
     gui.boxes.assignedTestpools.getInnerBox().append('<div id="inactiveMsg"></div><div id="noAssignmentMsg"><h3 style="text-align:center;color:#AAA">' + UILANG.m('nothing_added_yet') + '</h3></div><div id="testPanelList"></div>');
@@ -531,6 +625,10 @@ function onReady() {
     gui.boxes.properties.subSectionData.append('<div id="tActivityData"></div>');
     $('#subSettingsData').css('border', 'none');
 
+    gui.boxes.properties.subSectionState = insertSubSection(gui.boxes.properties.getInnerBox(), 'subTestState', UILANG.m('Test state'));
+    gui.boxes.properties.stateSwitch = createTestStateSegmentedSwitch(gui.boxes.properties.subSectionState);
+    gui.testLevel.stateSwitch = gui.boxes.properties.stateSwitch;
+
     gui.boxes.properties.subSection0 = insertSubSection(gui.boxes.properties.getInnerBox(), 'subSettings');
     gui.boxes.properties.subSection0.append('<div id="activeSettings"></div>');
     $('#subSettings').css('border', 'none');
@@ -539,6 +637,7 @@ function onReady() {
 
     gui.boxes.properties.mutationMethod = insertDropdown(gui.boxes.properties.subSection7, 'tmutation', UILANG.m('Pick method'), {
         dataId: 'mutationMethod',
+        theme: 'backend',
         elements: [{ label: UILANG.m('Random'), value: 'random' }, { label: UILANG.m('Sequential'), value: 'sequential' }],
         width: 184,
         onChange: optionsChanged
@@ -640,6 +739,7 @@ function onReady() {
     }
     gui.boxes.properties.skin = insertDropdown(gui.boxes.properties.subSection5, 'tskin', UILANG.m('Change skin'), {
         dataId: 'skin',
+        theme: 'backend',
         elements: dlskins,
         width: 184,
         initalValue: settings['skin'],
@@ -680,6 +780,13 @@ function onReady() {
     gui.boxes.testPools.getPanel().append('<div><div id="testpoolsTbText"></div><div id="testpoolsTbButton"></div></div>');
 
     window.testpoolsTbButtons = {};
+    testpoolsTbButtons.loadExisting = new nxButton($('#testpoolsTbButton'), 'tpTbLoadExisting', {
+        icon: '../images/flexSectionToolBar/ic_flex_tb_load_structure.svg',
+        iconWidth: 22,
+        callback: openExistingTestpoolsDialog,
+        tooltip: UILANG.m('Load existing testpools'),
+        disabled: false
+    });
     testpoolsTbButtons.addElements = new nxButton($('#testpoolsTbButton'), 'tpTbAdd', {
         icon: '../images/add48.png',
         iconWidth: 22,
@@ -701,7 +808,7 @@ function onReady() {
         cutItems: true,
         cutMultiple: true
     };
-    gui.library = new fileMgr("#testList", "_idSuffix", [], breadcrumbs, fileOpPermissions, true, libraryEvent, 'all', true);
+    gui.library = new FileManager("#testList", "_idSuffix", [], breadcrumbs, fileOpPermissions, true, libraryEvent, 'all', true);
 
     preSelect = Number(preSelect);
     preType = Number(preType);
@@ -783,7 +890,7 @@ function onReady() {
         actionButton: true,
         actionFieldColText: UILANG.m('Overrides'),
     };
-    gui.structureView = new jsSortableTable('structure', 'structure_table', STOptions);
+    gui.structureView = new JsSortableTable('structure', 'structure_table', STOptions);
     gui.structureView.lock('greyout');
     //Toolbar Test Structure
     gui.boxes.structure.getPanel().append('<div><div id="structureTbText"></div><div id="structureTbButton"></div></div>');
@@ -812,6 +919,22 @@ function onReady() {
         tooltip: UILANG.m('Add test pages'),
         disabled: true
     });
+    structureTbButtons.clearStructure = new nxButton($('#structureTbButton'), 'stTbClear', {
+        icon: '../images/flexSectionToolBar/ic_flex_tb_delete.png',
+        iconWidth: 22,
+        callback: clearTestStructure,
+        tooltip: UILANG.m('Clear test structure'),
+        disabled: true
+    });
+    $('#background_stTbClear').prependTo('#structureTbButton');
+    structureTbButtons.loadExistingStructure = new nxButton($('#structureTbButton'), 'stTbLoadExistingStructure', {
+        icon: '../images/flexSectionToolBar/ic_flex_tb_load_structure.svg',
+        iconWidth: 22,
+        callback: openExistingStructureDialog,
+        tooltip: UILANG.m('Load existing structure'),
+        disabled: true
+    });
+    $('#background_stTbLoadExistingStructure').insertAfter('#background_stTbClear');
     //structureView fluid test
     const STOptionsFluid = {
         onChange: propertiesChangedFluid,
@@ -875,7 +998,7 @@ function onReady() {
         actionButton: true,
         fixedPosButton: true
     };
-    gui.fluidStructureView = new jsSortableTable('fluidStructure', 'fluidStructure_table', STOptionsFluid);
+    gui.fluidStructureView = new JsSortableTable('fluidStructure', 'fluidStructure_table', STOptionsFluid);
     //Toolbar Test Structure fluid
     gui.boxes.fluidStructure.getPanel().append('<div><div id="fluidStructureTbText"></div><div id="fluidStructureTbButton"></div></div>');
 
@@ -909,6 +1032,14 @@ function onReady() {
         tooltip: UILANG.m('Add fluid test blocks'),
         disabled: true
     });
+    fluidStructureTbButtons.clearStructure = new nxButton($('#fluidStructureTbButton'), 'fluidStTbClear', {
+        icon: '../images/flexSectionToolBar/ic_flex_tb_delete.png',
+        iconWidth: 22,
+        callback: clearTestStructure,
+        tooltip: UILANG.m('Clear test structure'),
+        disabled: true
+    });
+    $('#background_fluidStTbClear').prependTo('#fluidStructureTbButton');
 
     //structureView mutation test
     const STOptionsMut = {
@@ -955,7 +1086,7 @@ function onReady() {
         actionButtonsSize: '25px',
         actionButtonsColText: UILANG.m('Structure')
     };
-    gui.mutationStructureView = new jsSortableTable('mutationStructure', 'mutationStructure_table', STOptionsMut);
+    gui.mutationStructureView = new JsSortableTable('mutationStructure', 'mutationStructure_table', STOptionsMut);
     gui.mutationStructureView.lock('greyout');
     //Toolbar Test Structure
     gui.boxes.mutationStructure.getPanel().append('<div><div id="mutationStructureTbText"></div><div id="mutationStructureTbButton"></div></div>');
@@ -968,6 +1099,22 @@ function onReady() {
         tooltip: UILANG.m('Add tests'),
         disabled: true
     });
+    mutationStructureTbButtons.clearStructure = new nxButton($('#mutationStructureTbButton'), 'mutStTbClear', {
+        icon: '../images/flexSectionToolBar/ic_flex_tb_delete.png',
+        iconWidth: 22,
+        callback: clearTestStructure,
+        tooltip: UILANG.m('Clear test structure'),
+        disabled: true
+    });
+    $('#background_mutStTbClear').prependTo('#mutationStructureTbButton');
+    mutationStructureTbButtons.loadExistingStructure = new nxButton($('#mutationStructureTbButton'), 'mutStTbLoadExistingStructure', {
+        icon: '../images/flexSectionToolBar/ic_flex_tb_load_structure.svg',
+        iconWidth: 22,
+        callback: openExistingMutationStructureDialog,
+        tooltip: UILANG.m('Load existing linear tests'),
+        disabled: true
+    });
+    $('#background_mutStTbLoadExistingStructure').insertAfter('#background_mutStTbClear');
 
     //Structure view fluid tests - testpool editor
     const STPoolOptions = {
@@ -1010,7 +1157,7 @@ function onReady() {
         readOnly: false,
         actionButton: true
     };
-    gui.poolStructureView = new jsSortableTable('testPanelList', 'poolStructure_table', STPoolOptions);
+    gui.poolStructureView = new JsSortableTable('testPanelList', 'poolStructure_table', STPoolOptions);
     //Toolbar Test Structure
     gui.boxes.assignedTestpools.getPanel().append('<div><div id="poolStructureTbText"></div><div id="poolStructureTbButton"></div></div>');
     window.poolStructureTbButtons = {};
@@ -1061,14 +1208,24 @@ function onReady() {
         appPath: '../inc/jsSortableTable/',
         readOnly: false,
         fixedOrder: true,
+        deleteConfirmation: confirmLabelDelete,
         linkExclusives: {
             default: UILANG.m('yes')
         }
     };
-    gui.labelView = new jsSortableTable('testLabels', 'label_table', STLabelOptions);
+    gui.labelView = new JsSortableTable('testLabels', 'label_table', STLabelOptions);
     //Toolbar Test Structure
     gui.boxes.testLabels.getPanel().append('<div><div id="labelTbText"></div><div id="labelTbButton"></div></div>');
     window.labelTbButtons = {};
+    labelTbButtons.loadExisting = new nxButton($('#labelTbButton'), 'labelStTbLoadExisting', {
+        icon: '../images/flexSectionToolBar/ic_flex_tb_load_structure.svg',
+        iconWidth: 22,
+        callback: function() {
+            openExistingEditorEntriesDialog('labels');
+        },
+        tooltip: UILANG.m('Load existing labels'),
+        disabled: false
+    });
     labelTbButtons.addElements = new nxButton($('#labelTbButton'), 'labelStTbAdd', {
         icon: '../images/add48.png',
         iconWidth: 22,
@@ -1081,6 +1238,15 @@ function onReady() {
     gui.boxes.testVariables.getPanel().append('<div><div id="variablesTbText"></div><div id="variablesTbButton"></div></div>');
     gui.boxes.testVariables.getInnerBox().append('<div id="varStringsPanelList"></div>');
     window.variablesTbButtons = {};
+    variablesTbButtons.loadExisting = new nxButton($('#variablesTbButton'), 'variablesStTbLoadExisting', {
+        icon: '../images/flexSectionToolBar/ic_flex_tb_load_structure.svg',
+        iconWidth: 22,
+        callback: function() {
+            openExistingEditorEntriesDialog('variables');
+        },
+        tooltip: UILANG.m('Load existing variables'),
+        disabled: false
+    });
     variablesTbButtons.addElements = new nxButton($('#variablesTbButton'), 'variablesStTbAdd', {
         icon: '../images/add48.png',
         iconWidth: 22,
@@ -1125,48 +1291,20 @@ function onReady() {
         tableHeadDisplay: true,
         appPath: '../inc/jsSortableTable/',
         readOnly: false,
+        deleteConfirmation: confirmVariableDelete,
         actionField: false,
         fixedOrder: true
     };
-    gui.varStringsView = new jsSortableTable('varStringsPanelList', 'varStringsPanelList_table', varOptions);
+    gui.varStringsView = new JsSortableTable('varStringsPanelList', 'varStringsPanelList_table', varOptions);
 
 
     //Meta Tags
-    const metaList = {
+    gui.metaView = new JsTagEditor('metaTagList', {
         onChange: metaChanged,
-        elements: [],
-        tdSizes: {
-            metakey: '120px',
-            metavalue: '185px'
-        },
-        tableHead: {
-            metakey: 'Meta-Key',
-            metavalue: 'Meta-Value'
-        },
-        deleteLinkSize: '20px',
-        cssStylesTable: {
-            'border': '0px',
-            'border-spacing': '0px'
-        },
-        cssStylesCells: {
-            'padding': '3px',
-            'background-color': 'transparent',
-            'border-bottom': '1px dotted #CCC',
-            'height': '20px'
-        },
-        cssHeadCells: {
-            'padding': '5px',
-            'background-color': '#e8e8e8',
-            'height': '20px'
-        },
-        dataId: 'metatags',
-        consecutiveNumbers: false,
-        tableHeadDisplay: true,
-        fixedOrder: true,
-        appPath: '../inc/jsSortableTable/',
-        readOnly: false
-    };
-    gui.metaView = new jsSortableTable('metaTagList', 'metaTagList_table', metaList);
+        keyLabel: UILANG.m('Meta-key (e.g. "Subject"):'),
+        valueLabel: UILANG.m('Meta-value (e.g. "Mathematics"):'),
+        inputClass: 'dfs'
+    });
     gui.metaView.lock('greyout');
 
     gui.boxes.metaTags.getPanel().append('<div><div id="metaTbText"></div><div id="metaTbButton"></div></div>');
@@ -1190,6 +1328,428 @@ function mayAcceptKeyStrokes() {
     return !waitDialog.busy() && !animationPlaying;
 }
 
+function updateMetaTagCounter(selector, count) {
+    const label = count === 1 ? UILANG.m('meta tag') : UILANG.m('meta tags');
+    $(selector).html(count + ' ' + label);
+}
+
+// --- OASYS root handling for meta pages ---
+function getOasysRootURLForMeta() {
+    const editorPath = window.location.pathname;
+    const idx = editorPath.indexOf('/editor/');
+    if (idx === -1) {
+        return window.location.origin;
+    }
+    return window.location.origin + editorPath.substring(0, idx);
+}
+
+function expandOasysRoot(html) {
+    if (typeof html !== 'string' || html === '') return html;
+	// Older editor content may contain ../ or even .. directly before the
+	// placeholder. Consume that prefix instead of producing invalid ..http URLs.
+    return html.replace(/(?:(?:\.\.\/)+|\.\.)?\[@\s*OASYSROOT\s*@\]/g, getOasysRootURLForMeta());
+}
+
+function collapseOasysRoot(html) {
+    if (typeof html !== 'string' || html === '') return html;
+    const root = getOasysRootURLForMeta();
+    const escapedRoot = root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	// Also clean malformed legacy prefixes that TinyMCE may return unchanged.
+    const re = new RegExp('(?:(?:\\.\\.\\/)+|\\.\\.)?' + escapedRoot, 'g');
+    return html.replace(re, '[@ OASYSROOT @]');
+}
+
+function openMetaPageCurrentPreview(editor, customCss, metaType) {
+    if (!editor) return;
+
+    const sourceHtml = editor.getContent();
+	const conditionSource = document.createElement('div');
+	conditionSource.innerHTML = sourceHtml;
+	let highestPointBoundary = 0;
+	conditionSource.querySelectorAll('.score-conditional-block[data-condition-metric="points"]').forEach(function (block) {
+		['data-condition-value', 'data-condition-max-value'].forEach(function (attribute) {
+			const boundary = Number(block.getAttribute(attribute));
+			if (Number.isFinite(boundary)) highestPointBoundary = Math.max(highestPointBoundary, boundary);
+		});
+	});
+	const total = Math.max(10, Math.ceil((highestPointBoundary + (highestPointBoundary > 0 ? 0.5 : 0)) * 2) / 2);
+	const initialScored = Math.min(total, Math.max(0, Math.round(total * 0.7 * 2) / 2));
+
+    function buildPreviewHtml(scored, percentage) {
+        const previewRoot = document.createElement('div');
+        previewRoot.innerHTML = sourceHtml;
+        previewRoot.querySelectorAll('[contenteditable]').forEach(function (node) {
+            node.removeAttribute('contenteditable');
+        });
+
+        if (metaType === 'score_screen') {
+            previewRoot.querySelectorAll('.score-conditional-block').forEach(function (block) {
+                const metric = block.getAttribute('data-condition-metric') || 'percentage';
+                const operator = block.getAttribute('data-condition-operator') || '>=';
+                const expected = Number(block.getAttribute('data-condition-value'));
+				const maximum = Number(block.getAttribute('data-condition-max-value'));
+                const actual = metric === 'points' ? scored : percentage;
+				let visible = Number.isFinite(expected) && ({
+                    '>': actual > expected,
+                    '>=': actual >= expected,
+                    '<': actual < expected,
+                    '<=': actual <= expected,
+                    '=': actual === expected
+                }[operator] === true);
+				if (operator === 'between') visible = Number.isFinite(expected) && Number.isFinite(maximum) && actual > expected && actual < maximum;
+				if (operator === 'betweenInclusive') visible = Number.isFinite(expected) && Number.isFinite(maximum) && actual >= expected && actual <= maximum;
+				if (operator === 'betweenUpperInclusive') visible = Number.isFinite(expected) && Number.isFinite(maximum) && actual > expected && actual <= maximum;
+				if (operator === 'betweenLowerInclusive') visible = Number.isFinite(expected) && Number.isFinite(maximum) && actual >= expected && actual < maximum;
+                block.style.display = visible ? '' : 'none';
+            });
+            previewRoot.querySelectorAll('.score-conditional-meta,.score-conditional-remove').forEach(function (node) {
+                node.remove();
+            });
+            previewRoot.innerHTML = previewRoot.innerHTML
+                .replace(/\[@\s*SCORED\s*@\]/gi, String(scored))
+                .replace(/\[@\s*TOTAL\s*@\]/gi, String(total))
+                .replace(/\[@\s*PERCENTAGE\s*@\]/gi, Math.round(Number(percentage)) + '%');
+        } else if (metaType === 'landing_page') {
+            previewRoot.querySelectorAll('.non-editable-variable:not(.button-variable)').forEach(function (node) {
+                const token = (node.textContent || '').toUpperCase();
+                if (token.includes('LANGUAGE-CHOOSER')) {
+                    node.outerHTML = '<select id="languageChooser"><option>English</option><option>Deutsch</option><option>Français</option></select>';
+                } else if (token.includes('PASSWORD')) {
+                    node.outerHTML = '<input id="tfPassword" type="password" value="example">';
+                } else if (token.includes('LOGIN')) {
+                    node.outerHTML = '<input id="tfLogin" type="text" value="sample.user">';
+                }
+            });
+        }
+
+        previewRoot.querySelectorAll('.button-variable').forEach(function (node) {
+            const label = node.getAttribute('data-label') || node.textContent || UILANG.m('Continue');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = label;
+            if (metaType === 'landing_page') {
+                button.className = node.className;
+                button.classList.add('customLandingStartButton');
+                if (node.hasAttribute('style')) button.setAttribute('style', node.getAttribute('style'));
+                ['data-label', 'data-login', 'data-password'].forEach(function (attribute) {
+                    if (node.hasAttribute(attribute)) button.setAttribute(attribute, node.getAttribute(attribute));
+                });
+            }
+            node.replaceWith(button);
+        });
+
+        return expandOasysRoot(previewRoot.innerHTML);
+    }
+
+    const iframeId = 'metaPageCurrentPreviewFrame';
+    let previewNote = UILANG.m('Preview of the current unsaved content.');
+    if (metaType === 'landing_page') {
+        previewNote += ' ' + UILANG.m('Example login: sample.user.');
+    }
+    const scoreControls = metaType === 'score_screen'
+        ? '<div class="metaPagePreviewScoreControls">' +
+			'<label>' + UILANG.m('Reached points') + ' <input id="metaPreviewScored" type="number" min="0" max="' + total + '" step="0.5" value="' + initialScored + '"></label>' +
+            '<span>/ ' + total + '</span>' +
+			'<label>' + UILANG.m('Percentage') + ' <input id="metaPreviewPercentage" type="number" min="0" max="100" step="1" value="' + Math.round((initialScored / total) * 100) + '"> %</label>' +
+          '</div>'
+        : '';
+    new nxDialog('metaPageCurrentPreview', {
+        buttons: [{label: UILANG.m('Close'), cancel: true, default: true, value: 'close'}],
+        contents: '<div class="metaPagePreviewNote">' + previewNote + '</div>' + scoreControls +
+            '<iframe id="' + iframeId + '" class="metaPagePreviewFrame" title="' + UILANG.m('Preview') + '"></iframe>',
+        title: UILANG.m('Preview'),
+        width: 1000
+    });
+
+    setTimeout(function () {
+        const iframe = document.getElementById(iframeId);
+        if (!iframe) return;
+        const previewCss = expandOasysRoot(customCss || '');
+        function renderPreview() {
+            const scored = Number($('#metaPreviewScored').val() || 0);
+            const percentage = Number($('#metaPreviewPercentage').val() || 0);
+            const doc = iframe.contentDocument;
+            doc.open();
+            doc.write('<!doctype html><html><head><meta charset="utf-8"><style>' +
+                'html,body{box-sizing:border-box;min-height:100%;margin:0;padding:16px;font-family:Arial,sans-serif;}img,video{max-width:100%;height:auto;}' +
+                previewCss + '</style></head><body>' + buildPreviewHtml(scored, percentage) + '</body></html>');
+            doc.close();
+        }
+        function formatPreviewNumber(value) {
+            return String(Math.round(value * 10000) / 10000);
+        }
+		function formatPreviewPercentage(value) {
+			return String(Math.round(Number(value)));
+		}
+		function snapPreviewPoints(value) {
+			return Math.min(total, Math.max(0, Math.round(value * 2) / 2));
+		}
+        renderPreview();
+		$('#metaPreviewScored').on('change.metaPagePreview', function () {
+            const rawScored = Number($(this).val() || 0);
+			const scored = snapPreviewPoints(rawScored);
+            if (scored !== rawScored) $(this).val(formatPreviewNumber(scored));
+            $('#metaPreviewPercentage').val(formatPreviewPercentage((scored / total) * 100));
+            renderPreview();
+        });
+		$('#metaPreviewPercentage').on('change.metaPagePreview', function () {
+            const rawPercentage = Number($(this).val() || 0);
+            const percentage = Math.min(100, Math.max(0, rawPercentage));
+            if (percentage !== rawPercentage) $(this).val(formatPreviewNumber(percentage));
+			const scored = snapPreviewPoints((percentage / 100) * total);
+			$('#metaPreviewScored').val(formatPreviewNumber(scored));
+			$('#metaPreviewPercentage').val(formatPreviewPercentage((scored / total) * 100));
+            renderPreview();
+        });
+    }, 0);
+}
+
+function cleanupMetaTinyMceEditors() {
+	if (typeof tinymce === 'undefined') return;
+	Object.keys(languages || {}).forEach(function (languageKey) {
+		const editorId = 'container_' + languageKey;
+		const editor = typeof tinymce.get === 'function' ? tinymce.get(editorId) : null;
+		if (!editor) return;
+		try {
+			editor.remove();
+		} catch (error) {
+			// A dialog may already have removed the editor DOM. Remove the stale
+			// registry entry so reopening can initialize the same editor ID again.
+			try {
+				if (tinymce.EditorManager && typeof tinymce.EditorManager.remove === 'function') {
+					tinymce.EditorManager.remove(editor);
+				}
+			} catch (cleanupError) {
+				console.warn('TinyMCE cleanup warning:', cleanupError);
+			}
+		}
+	});
+}
+
+function getTestState() {
+    return serverData.testLevel?.structure?.state || 'draft';
+}
+
+function isTestPublished() {
+    return getTestState() === 'published';
+}
+
+function isTestStateAdminAllowed() {
+    return !!(window.isSuper || window.isAdmin || window.isAE || isAE);
+}
+
+function canSwitchPublishedToDraft() {
+    if (isTestStateAdminAllowed()) return true;
+    const access = serverData.testLevel?.activityAccess || {};
+    const total = Number(access.total ?? $(serverData.testLevel?.activityData || []).length);
+    const restricted = Number(access.restricted ?? Math.max(0, total - Number(access.accessible ?? 0)));
+    return total === 0 || restricted === 0;
+}
+
+function publishedDraftErrorMessage() {
+    const access = serverData.testLevel?.activityAccess || {};
+    const total = Number(access.total ?? $(serverData.testLevel?.activityData || []).length);
+    const accessible = Number(access.accessible ?? 0);
+    const restricted = Number(access.restricted ?? Math.max(0, total - accessible));
+
+    return '<div class="tmDraftRestriction">' +
+        '<div class="tmDraftRestrictionIntro">' +
+        '<strong>' + UILANG.m('Draft mode is unavailable') + '</strong>' +
+        '<span>' + UILANG.m('This test has recorded results, and your account does not have access to every test taker with results.') + '</span>' +
+        '</div>' +
+        '<div class="tmDraftRestrictionGuidance">' +
+        UILANG.m('Only Superadmins, Elevated Admins and Admins may switch this test back to Draft in this situation. Regular users need access to every test taker with results.') +
+        '</div>' +
+        '<div class="tmDraftRestrictionStats">' +
+        '<div class="tmDraftRestrictionStat tmDraftRestrictionStatTotal"><span>' + UILANG.m('Recorded test takers') + '</span><strong>' + total + '</strong></div>' +
+        '<div class="tmDraftRestrictionStat tmDraftRestrictionStatAccessible"><span>' + UILANG.m('Accessible') + '</span><strong>' + accessible + '</strong></div>' +
+        '<div class="tmDraftRestrictionStat tmDraftRestrictionStatRestricted"><span>' + UILANG.m('Restricted') + '</span><strong>' + restricted + '</strong></div>' +
+        '</div>' +
+        '</div>';
+}
+
+function resetTestStateSwitch() {
+    if (gui.boxes?.properties?.stateSwitch) {
+        gui.boxes.properties.stateSwitch.reset(isTestPublished());
+    }
+}
+
+function createTestStateSegmentedSwitch(parent) {
+    if ($('#testStateSegmentStyles').length === 0) {
+        $('head').append(
+            '<style id="testStateSegmentStyles">' +
+            '.test-state-seg-row{display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 0 4px;}' +
+            '.test-state-seg{display:inline-flex;align-items:center;padding:2px;border:1px solid #b9c8d2;border-radius:16px;background:#edf3f7;box-shadow:inset 0 1px 0 rgba(255,255,255,.85);}' +
+            '.test-state-seg button{border:0;background:transparent;color:#1d2730;font-weight:bold;font-size:12px;line-height:20px;padding:1px 13px;border-radius:13px;cursor:pointer;white-space:nowrap;}' +
+            '.test-state-seg.can-edit button:hover{background:#e2e8f0;}' +
+            '.test-state-seg.can-edit button[data-state="published"]:hover{background:#fecaca;}' +
+            '.test-state-seg button.is-active{background:#227DAA;color:#fff;box-shadow:inset 0 1px 2px rgba(0,0,0,.15);}' +
+            '.test-state-seg button[data-state="published"].is-active{background:#e11d48;box-shadow:inset 0 1px 2px rgba(0,0,0,.18);}' +
+            '.test-state-seg.is-locked button{cursor:default;}' +
+            '.test-state-seg.is-locked:not(.can-edit){opacity:.9;}' +
+            '#testStateHelp{display:inline-flex;align-items:center;min-width:18px;}' +
+            '.published-structure-lock .jsFlexBoxVeil{display:none !important;pointer-events:none !important;}' +
+            '.published-structure-lock,.published-structure-lock *{cursor:not-allowed !important;}' +
+            '</style>'
+        );
+    }
+
+    parent.append(
+        '<div class="test-state-seg-row">' +
+        '<div id="testStateSegmentedSwitch" class="test-state-seg" role="group" aria-label="' + UILANG.m('Test state') + '">' +
+        '<button type="button" data-state="draft">' + UILANG.m('Draft') + '</button>' +
+        '<button type="button" data-state="published">' + UILANG.m('Published (Locked)') + '</button>' +
+        '</div>' +
+        '<span id="testStateHelp"></span>' +
+        '</div>'
+    );
+
+    const testStateHelpHtml = UILANG.m('<p><strong>Draft</strong> is the working mode for a test. You can still change the test structure and content while you are preparing it.</p><p><strong>Published (Locked)</strong> protects a test after it is ready to use. The structure and test content are locked so existing results cannot be damaged by later changes.</p><p>You can publish a draft at any time. Switching a published test back to draft may be destricted when results of test takers exist you do not have access to.</p>');
+    new OasysHelp('testStateHelp', {
+        htmlContent: testStateHelpHtml,
+        title: UILANG.m('Test state')
+    });
+
+    const seg = $('#testStateSegmentedSwitch');
+    let locked = true;
+
+    seg.on('click', 'button', function(e) {
+        e.preventDefault();
+        if (locked || mode === 'browsing') return;
+        testStateChanged('testStateSegmentedSwitch', $(this).data('state') === 'published');
+    });
+
+    return {
+        reset(published) {
+            const state = published ? 'published' : 'draft';
+            seg.find('button').each(function() {
+                const active = $(this).data('state') === state;
+                $(this).toggleClass('is-active', active);
+                $(this).attr('aria-pressed', active ? 'true' : 'false');
+            });
+        },
+        lock() {
+            locked = true;
+            seg.addClass('is-locked').removeClass('can-edit');
+        },
+        unlock() {
+            locked = false;
+            seg.removeClass('is-locked').addClass('can-edit');
+        }
+    };
+}
+
+function setPublishedUiState() {
+    const published = isTestPublished();
+    if (!serverData.testLevel || mode !== 'editTest') return;
+    $('#box_structure,#box_fluidStructure,#box_mutationStructure').removeClass('published-structure-lock');
+
+    if (published) {
+        if (serverData.testLevel.structure.type === 'linear') {
+            $('#box_structure').addClass('published-structure-lock');
+            gui.boxes.structure.lock();
+            gui.structureView.lock('greyout');
+            structureTbButtons.addElements.disable();
+            structureTbButtons.loadExistingStructure.disable();
+            structureTbButtons.labelEditor.disable();
+            structureTbButtons.resetOverridesLinear.disable();
+            buttons.testVariables.disable();
+            buttons.testLabels.disable();
+        } else if (serverData.testLevel.structure.type === 'fluid') {
+            $('#box_fluidStructure').addClass('published-structure-lock');
+            gui.boxes.fluidStructure.lock();
+            gui.fluidStructureView.lock('greyout');
+            fluidStructureTbButtons.addElements.disable();
+            fluidStructureTbButtons.poolEditor.disable();
+            fluidStructureTbButtons.labelEditor.disable();
+            fluidStructureTbButtons.resetOverridesFluid.disable();
+            buttons.testVariables.disable();
+            buttons.testLabels.disable();
+            buttons.testPools.disable();
+        }
+    } else {
+        if (serverData.testLevel.structure.type === 'linear') {
+            gui.boxes.structure.unlock();
+            gui.structureView.unlock();
+            structureTbButtons.addElements.enable();
+            structureTbButtons.loadExistingStructure.enable();
+            structureTbButtons.labelEditor.enable();
+            buttons.testVariables.enable();
+            buttons.testLabels.enable();
+        } else if (serverData.testLevel.structure.type === 'fluid') {
+            gui.boxes.fluidStructure.unlock();
+            gui.fluidStructureView.unlock();
+            fluidStructureTbButtons.addElements.enable();
+            fluidStructureTbButtons.poolEditor.enable();
+            fluidStructureTbButtons.labelEditor.enable();
+            buttons.testVariables.enable();
+            buttons.testLabels.enable();
+            buttons.testPools.enable();
+        }
+    }
+    updateClearStructureButtons();
+}
+
+function updateClearStructureButtons() {
+    if (typeof structureTbButtons === 'undefined' || typeof fluidStructureTbButtons === 'undefined' || typeof mutationStructureTbButtons === 'undefined') {
+        return;
+    }
+
+    structureTbButtons.clearStructure.disable();
+    structureTbButtons.loadExistingStructure.disable();
+    fluidStructureTbButtons.clearStructure.disable();
+    mutationStructureTbButtons.clearStructure.disable();
+    mutationStructureTbButtons.loadExistingStructure.disable();
+
+    if (!serverData.testLevel || mode !== 'editTest') return;
+    const testType = serverData.testLevel.structure.type;
+    const items = serverData.testLevel.structure.items || [];
+    if (testType === 'linear' && !(isTestPublished() && testType !== 'mutation')) {
+        structureTbButtons.loadExistingStructure.enable();
+    } else if (testType === 'mutation') {
+        mutationStructureTbButtons.loadExistingStructure.enable();
+    }
+    if (!items.length || (isTestPublished() && testType !== 'mutation')) return;
+
+    if (testType === 'linear') {
+        structureTbButtons.clearStructure.enable();
+    } else if (testType === 'fluid') {
+        fluidStructureTbButtons.clearStructure.enable();
+    } else if (testType === 'mutation') {
+        mutationStructureTbButtons.clearStructure.enable();
+    }
+}
+
+function testStateChanged(sender, value) {
+    if (!serverData.testLevel || mode === 'browsing') return;
+
+    const targetState = value ? 'published' : 'draft';
+    const currentState = getTestState();
+    if (targetState === currentState) return;
+
+    if (currentState === 'published' && targetState === 'draft' && !canSwitchPublishedToDraft()) {
+        resetTestStateSwitch();
+        showMessage(publishedDraftErrorMessage(), 'warning', 720);
+        return;
+    }
+
+    serverData.testLevel.structure.state = targetState;
+    resetTestStateSwitch();
+    setPublishedUiState();
+
+    const sendData = {
+        id: serverData.testLevel.id,
+        structureState: targetState,
+        publishMutationChildren: serverData.testLevel.structure.type === 'mutation' && targetState === 'published'
+    };
+    if (serverData.testLevel.structure.type === 'mutation') {
+        sendData.mSave = true;
+    } else {
+        sendData.currentSkin = serverData.testLevel.skin.skin;
+    }
+    startAjax('saveTest', sendData);
+}
+
 function switchMode(sender) {
     for (let b in buttons) {
         buttons[b].hide();
@@ -1197,14 +1757,20 @@ function switchMode(sender) {
     let visibleButtons = [];
     switch (mode) {
         case 'browsing':
-            visibleButtons = ['newFolder', 'newTest', 'rename', 'editSelection', 'duplicate', 'deleteSelection', 'resetTestResults', 'plausibilityCheck', 'preview', 'searchFiler'];
+            visibleButtons = ['newFolder', 'newTest', 'rename', 'editSelection', 'bulkEdit', 'duplicate', 'deleteSelection', 'resetTestResults', 'plausibilityCheck', 'preview', 'searchFiler'];
             structureTbButtons.addElements.disable();
+            structureTbButtons.clearStructure.disable();
+            structureTbButtons.loadExistingStructure.disable();
             fluidStructureTbButtons.addElements.disable();
+            fluidStructureTbButtons.clearStructure.disable();
             mutationStructureTbButtons.addElements.disable();
+            mutationStructureTbButtons.clearStructure.disable();
+            mutationStructureTbButtons.loadExistingStructure.disable();
             fluidStructureTbButtons.poolEditor.disable();
             fluidStructureTbButtons.labelEditor.disable();
             structureTbButtons.resetOverridesLinear.disable();
             structureTbButtons.labelEditor.disable();
+            structureTbButtons.loadExistingStructure.disable();
             fluidStructureTbButtons.resetOverridesFluid.disable();
             gui.testLevel.useTimer.lock();
             gui.testLevel.timeLimit.lock();
@@ -1212,23 +1778,27 @@ function switchMode(sender) {
             gui.testLevel.hideTimeoutMsg.lock();
             gui.testLevel.limitNavigation.lock();
             gui.testLevel.showScore.lock();
-
+            gui.testLevel.stateSwitch.lock();
+            $('#metaDivider').hide();
             $.each(languages, function(k, v) {
                 gui.testLevel[k].lock();
             });
             if (selection.length === 1 && selection[0].type === 'folder') {
                 buttons.rename.enable();
                 buttons.editSelection.disable();
+                buttons.bulkEdit.disable();
                 buttons.duplicate.disable();
             } else if (selection.length === 1 && selection[0].type === 'test') {
                 buttons.plausibilityCheck.enable();
                 buttons.rename.enable();
                 buttons.editSelection.enable();
+                buttons.bulkEdit.disable();
                 buttons.duplicate.enable();
             } else {
                 buttons.plausibilityCheck.disable();
                 buttons.rename.disable();
                 buttons.editSelection.disable();
+                buttons.bulkEdit.disable();
                 buttons.duplicate.disable();
             }
             librarySelection(gui.library.getSelect(), true);
@@ -1244,26 +1814,32 @@ function switchMode(sender) {
             if (sender !== 'abortReq') {
                 let actCount = $(serverData.testLevel.activityData).length;
                 if (actCount > 0) {
+                    const recordedResultsWarning = (message) => '<div class="csvImportConfirm"><strong>' + UILANG.m('Recorded results exist') + '</strong><span>' + message + '</span></div>';
                     if(serverData.testLevel.structure.type === 'mutation') {
-                        showMessage(UILANG.m("Results have already been recorded for this test. You can add or remove assigned linear tests in a mutation test without affecting existing results. However, ensure that the linear tests themselves are not modified, as this might impact result accessibility."), "warning")
+                        showMessage(recordedResultsWarning(UILANG.m("Results have already been recorded for this test. You can add or remove assigned linear tests in a mutation test without affecting existing results. However, ensure that the linear tests themselves are not modified, as this might impact result accessibility.")), "warning")
                     } else {
-                        showMessage(UILANG.m("Results have already been recorded for this test. If you modify the test, existing results might not be accessible anymore."), "warning")
+                        showMessage(recordedResultsWarning(UILANG.m("Results have already been recorded for this test. If you modify the test, existing results might not be accessible anymore.")), "warning")
                     }
                 }
             }
             structureTbButtons.addElements.enable();
+            structureTbButtons.loadExistingStructure.enable();
             structureTbButtons.labelEditor.enable();
             fluidStructureTbButtons.addElements.enable();
             mutationStructureTbButtons.addElements.enable();
+            mutationStructureTbButtons.loadExistingStructure.enable();
             fluidStructureTbButtons.poolEditor.enable();
             fluidStructureTbButtons.labelEditor.enable();
             buttons.abortEditing.enable();
             if (serverData.testLevel.structure.type === 'fluid') {
-                visibleButtons = ['abortEditing', 'testLabels', 'testVariables', 'testPools', 'plausibilityCheck', 'preview', 'legalText', 'scoreScreenEditor'];
+                visibleButtons = ['abortEditing', 'testLabels', 'testVariables', 'testPools', 'plausibilityCheck', 'preview', 'legalText', 'scoreScreenEditor', 'landingPage', 'finishScreenEditor'];
+                $('#metaDivider').show();
                 gui.fluidStructureView.clearWarnings();
                 gui.boxes.fluidStructure.unlock();
             } else if (serverData.testLevel.structure.type === 'mutation') {
-                visibleButtons = ['abortEditing'];
+                $('#metaDivider').hide();
+                $('#vdivider').hide();
+                visibleButtons = ['abortEditing', 'loadExistingMutationStructure'];
                 gui.mutationStructureView.clearWarnings();
                 gui.boxes.mutationStructure.unlock();
                 gui.boxes.properties.subSection7.show();
@@ -1274,7 +1850,8 @@ function switchMode(sender) {
                 //Select mutation method dropdown
                 gui.boxes.properties.mutationMethod.reset(serverData.testLevel.options.mutationMethod);
             } else {
-                visibleButtons = ['abortEditing', 'testLabels', 'testVariables', 'plausibilityCheck', 'preview', 'legalText', 'scoreScreenEditor'];
+                $('#metaDivider').show();
+                visibleButtons = ['abortEditing', 'testLabels', 'testVariables', 'plausibilityCheck', 'preview', 'legalText', 'scoreScreenEditor', 'landingPage', 'finishScreenEditor'];
                 gui.structureView.clearWarnings();
                 gui.boxes.structure.unlock();
             }
@@ -1322,14 +1899,16 @@ function switchMode(sender) {
             gui.boxes.properties.subSection0.hide();
             gui.boxes.properties.subSection6.show();
             gui.boxes.properties.unlock();
+            gui.testLevel.stateSwitch.unlock();
             gui.boxes.metaTags.unlock();
             metaTbButtons.addElements.enable();
             gui.statusBar.setStatus(UILANG.m('Editing') + ' "' + serverData.testLevel.name + '"');
             quickCheck();
             killAct();
+            setPublishedUiState();
             break;
         case 'poolEdit':
-            visibleButtons = ['closePoolEditor', 'plausibilityCheck'];
+            visibleButtons = ['closePoolEditor', 'loadExistingTestpools', 'plausibilityCheck'];
             buttons.plausibilityCheck.disable();
             gui.statusBar.setStatus(UILANG.m('Pool-Editor for fluid test:') + ' "' + serverData.testLevel.name + '"');
             $('#noAssignmentMsg').hide();
@@ -1338,11 +1917,11 @@ function switchMode(sender) {
             selectionChanged();
             break;
         case 'labelEdit':
-            visibleButtons = ['closeLabelEditor'];
+            visibleButtons = ['closeLabelEditor', 'loadExistingLabels'];
             gui.statusBar.setStatus(UILANG.m('Label-Editor for test:') + ' "' + serverData.testLevel.name + '"');
             break;
         case 'variablesEdit':
-            visibleButtons = ['closeVariablesEditor'];
+            visibleButtons = ['closeVariablesEditor', 'loadExistingVariables'];
             gui.statusBar.setStatus(UILANG.m('Variables for test:') + ' "' + serverData.testLevel.name + '"');
             break;
     }
@@ -1364,14 +1943,15 @@ function libraryEvent(type, data) {
             if (curFFlist !== null) paintBlocked(curFFlist);
             break;
         case 'getSelect':
-            if (mode === 'browsing') librarySelection(data);
+            if (mode === 'browsing') librarySelection(data, true);
             break;
         case 'getSelectKeys':
             if (mode === 'browsing') librarySelection(data, true);
             break;
+        case 'getSelectDblclick':
+            if (mode === 'browsing') librarySelection(data, false);
+            break;
         case 'onNavigate':
-            clearTimeout(libraryTimeout);
-            waitingForDblClick = null;
             oldLoc = cloneObj(loc);
             loc.folder = data.dbId;
             startAjax('fetchLibrary', {
@@ -1459,6 +2039,9 @@ function libraryEvent(type, data) {
             startAjax('search', {
                 searchString: data
             });
+            break;
+        case 'onMetaSearchRequest':
+            startAjax('metaSearch', data);
             break;
         case 'onSearchItemClick':
             loc.folder = data.pid.replace(/^\D*/i, '');
@@ -1589,38 +2172,26 @@ function librarySelection(data, delayed) {
     selection = data;
     buttons.preview.disable();
     buttons.plausibilityCheck.disable();
-    clearTimeout(libraryTimeout);
     if (selection.length === 0) {
         buttons.deleteSelection.disable();
         buttons.resetTestResults.disable();
         buttons.editSelection.disable();
+        buttons.bulkEdit.disable();
         buttons.duplicate.disable();
         buttons.rename.disable();
         gui.s2.fadeOut(250);
         gui.s3.fadeOut(250);
         gui.s6.fadeOut(250);
         gui.s9.fadeOut(250);
+        gui.s10.fadeOut(250);
 
     } else if (selection.length === 1) {
-        if (!waitingForDblClick) {
-            waitingForDblClick = data;
-            libraryTimeout = setTimeout(function() {
-                librarySelection(data, true);
-            }, 250);
-            return;
-        } else if (selection[0] !== waitingForDblClick[0]) {
-            waitingForDblClick = data;
-            libraryTimeout = setTimeout(function() {
-                librarySelection(data, true);
-            }, 250);
-            return;
-        }
-        waitingForDblClick = null;
         buttons.deleteSelection.enable();
         buttons.resetTestResults.enable();
         buttons.rename.enable();
         if (selection[0].type === 'folder') {
             buttons.editSelection.disable();
+            buttons.bulkEdit.disable();
             buttons.duplicate.disable();
         }
         if (selection[0].type === 'test') {
@@ -1629,7 +2200,7 @@ function librarySelection(data, delayed) {
             } else {
                 editOnData = false;
             }
-
+            buttons.bulkEdit.disable();
             // if the user can edit, allow pencil icon veil, otherwise, don't
             let showPencil = permList[selection[0].dbId].editSelection;
             if (!showPencil) {
@@ -1646,13 +2217,23 @@ function librarySelection(data, delayed) {
                 gui.boxes.metaTags.lock();
             }
 
-            gui.s2.fadeIn(0);
+            gui.s2.fadeOut(0);
+            gui.s3.fadeOut(0);
+            gui.s6.fadeOut(0);
+            gui.s9.fadeOut(0);
+            gui.s10.fadeOut(0);
+            gui.s10.fadeIn(0);
+            renderTestPreviewLoading();
             editType = 'test';
             if (selection[0].testStructure.type !== 'mutation') {
                 buttons.plausibilityCheck.enable();
                 buttons.preview.enable();
             }
-            buttons.editSelection.enable();
+            if (permList[selection[0].dbId] && permList[selection[0].dbId].editSelection) {
+                buttons.editSelection.enable();
+            } else {
+                buttons.editSelection.disable();
+            }
             buttons.duplicate.enable();
             gui.boxes.properties.subSection0.show();
             gui.boxes.properties.subSection1.hide();
@@ -1661,21 +2242,39 @@ function librarySelection(data, delayed) {
             gui.boxes.properties.subSection5.hide();
             gui.boxes.properties.subSection6.hide();
             gui.boxes.properties.subSection7.hide();
-            gui.structureView.clearElements(true);
-            gui.fluidStructureView.clearElements(true);
-            if (data.length >= 2) selIcheck(loc, data);
-            startAjax('fetchTest', {
-                dbId: selection[0].dbId,
-                location: loc.folder,
-                defaultSkin: settings['skin']
-            });
+	            gui.structureView.clearElements(true);
+	            gui.fluidStructureView.clearElements(true);
+	            if (data.length >= 2) selIcheck(loc, data);
+	            pendingTestLevelId = selection[0].dbId;
+	            pendingTestLevelToken = ++ajaxRequestToken;
+	            if (pendingTestLevelRequest && pendingTestLevelRequest.readyState !== 4 && typeof pendingTestLevelRequest.abort === 'function') {
+                pendingTestLevelRequest.abort();
+            }
+	            pendingTestLevelRequest = startAjax('fetchTest', {
+	                dbId: selection[0].dbId,
+	                location: loc.folder,
+	                defaultSkin: settings['skin'],
+	                _requestToken: pendingTestLevelToken
+	            });
         } else if (delayed) {
             gui.s2.fadeOut(0);
             gui.s3.fadeOut(0);
             gui.s6.fadeOut(0);
             gui.s9.fadeOut(0);
+            gui.s10.fadeOut(0);
         }
     } else {
+        // Bulk edit eligibility: all selected must be tests AND linear/fluid (no folders, no mutation)
+        (function(){
+            let ok = selection.length > 1 && selection.every(it => {
+                return it && it.type === 'test' && it.testStructure && (it.testStructure.type === 'linear' || it.testStructure.type === 'fluid');
+            });
+            if (ok) {
+                buttons.bulkEdit.enable();
+            } else {
+                buttons.bulkEdit.disable();
+            }
+        })();
         buttons.deleteSelection.enable();
         buttons.resetTestResults.enable();
         buttons.editSelection.disable();
@@ -1685,6 +2284,7 @@ function librarySelection(data, delayed) {
         gui.s3.fadeOut(250);
         gui.s6.fadeOut(250);
         gui.s9.fadeOut(250);
+        gui.s10.fadeOut(250);
     }
 
     /* existence validation checks on file interaction */
@@ -1759,7 +2359,7 @@ function setLibPerms() {
         if (buttonName === 'fetchLibrary' || buttonName === 'type' || buttonName === 'fetchIgPerm') return;
 
         if (permValue[buttonName] === true) {
-            if (selection[0] !== undefined && selection[0].type === 'folder' && !['preview', 'editSelection', 'duplicate'].includes(buttonName)) {
+            if (selection[0] !== undefined && selection[0].type === 'folder' && !['preview', 'editSelection', 'bulkEdit', 'duplicate'].includes(buttonName)) {
                 buttons[buttonName].enable();
             } else if (selection[0] === undefined && ['newFolder', 'newTest'].includes(buttonName)) {
                 buttons[buttonName].enable();
@@ -1794,7 +2394,13 @@ function editSelectionAfterCheck() {
     }
     if(mode==="browsing"){
             if (editType === 'test') {
+                if (!serverData.testLevel || String(serverData.testLevel.id) !== String(selection[0].dbId)) {
+                    editOnData = true;
+                    return;
+                }
                 mode = 'editTest';
+                gui.s2.fadeIn(0);
+                fillDataFields('editTest');
                 if (serverData.testLevel.structure.type === 'fluid') {
                     gui.fluidStructureView.unlock();
                 } else if (serverData.testLevel.structure.type === 'mutation') {
@@ -1806,8 +2412,1107 @@ function editSelectionAfterCheck() {
             }
             switchMode();
             hideMenu();
+            gui.s10.fadeOut(0);
             hideSection(gui.s1, [gui.s2, gui.s3, gui.s6, gui.s9]);
     }
+}
+
+/* ========================================================================
+ *  BULK EDIT – Helpers
+ * ======================================================================== */
+
+const BULK_KEEP = '__keep__'; // sentinel for "Keep existing" in bulk UI
+
+// Tri-state dropdown for booleans (Keep / Yes / No), preselect Keep
+function triBoolDropdown($parent, id, label, defVal /* true|false|undefined for hint only */) {
+    const els = [
+        { label: UILANG.m('Keep existing'), value: BULK_KEEP },
+        { label: UILANG.m('Yes'),           value: 'true' },
+        { label: UILANG.m('No'),            value: 'false' }
+    ];
+    const hint = (defVal === true || defVal === false)
+        ? `<span class="bulkHint">(${UILANG.m('default')}: ${defVal ? UILANG.m('Yes') : UILANG.m('No')})</span>`
+        : '';
+    $parent.append(
+        `<div class="aorow">
+       <div class="aoleftcol2">${label}</div>
+       <div class="aorightcol2"><div id="${id}"></div>${hint}</div>
+     </div>`
+    );
+    const dd = new jsDropList(id, id + "_dd", {
+        elements: els,
+        theme: 'backend',
+        width: 220,
+        readOnly: false,
+        initialValue: BULK_KEEP,
+        listTitle: UILANG.m('Keep existing')
+    });
+    dd.reset(BULK_KEEP);
+    return dd;          // dd.getValue() returns 'true' | 'false' | BULK_KEEP
+}
+
+function testStateBulkDropdown($parent, id, label) {
+    const els = [
+        { label: UILANG.m('Keep existing'), value: BULK_KEEP },
+        { label: UILANG.m('Draft'), value: 'draft' },
+        { label: UILANG.m('Published (Locked)'), value: 'published' }
+    ];
+    $parent.append(
+        `<div class="aorow">
+       <div class="aoleftcol2">${UILANG.m(label)}</div>
+       <div class="aorightcol2"><div id="${id}"></div></div>
+     </div>`
+    );
+    const dd = new jsDropList(id, id + "_dd", {
+        elements: els,
+        theme: 'backend',
+        width: 220,
+        readOnly: false,
+        initialValue: BULK_KEEP,
+        listTitle: UILANG.m('Keep existing')
+    });
+    dd.reset(BULK_KEEP);
+    return dd;
+}
+
+
+// Number input with a "Keep existing" checkbox (disabled until unchecked)
+function keepableNumberInput($parent, id, label, min, max) {
+    const hardMin = (typeof min === 'number') ? min : 0;
+    const hardMax = (typeof max === 'number') ? max : 999;
+
+    const rowHtml =
+        `<div class="aorow" id="${id}_row">
+       <div class="aoleftcol2">${UILANG.m(label)}</div>
+       <div class="aorightcol2">
+         <label style="display:inline-flex;gap:8px;align-items:center">
+           <input type="checkbox" id="${id}_keep" checked> ${UILANG.m('Keep existing')}
+         </label>
+         <input type="number" id="${id}_num" class="bulkNum" value="0"
+                min="${hardMin}" max="${hardMax}" inputmode="numeric" disabled>
+       </div>
+     </div>`;
+    $parent.append(rowHtml);
+
+    const $keep = $(`#${id}_keep`);
+    const $num  = $(`#${id}_num`);
+    const $row  = $(`#${id}_row`);
+
+    function sanitize() {
+        let v = $num.val();
+        if (v === '' || isNaN(+v)) { $num.val('0'); v = '0'; }
+        let n = parseInt(v, 10);
+        if (n < hardMin) n = hardMin;
+        if (n > hardMax) n = hardMax;
+        $num.val(String(n));
+        $num.toggleClass('is-invalid', (parseInt(v,10) > hardMax));
+    }
+
+    function syncDisabledState() {
+        const dis = $keep.is(':checked');
+        $num.prop('disabled', dis);
+        $row.toggleClass('bulkKept', dis);   // <-- add/remove greyed-out style
+        if (!dis && ($num.val() === '' || isNaN(+$num.val()))) $num.val('0');
+        sanitize();
+    }
+
+    $keep.on('change', syncDisabledState);
+    $num.on('input change blur', sanitize);
+
+    // initial state (Keep existing is checked)
+    syncDisabledState();
+
+    return {
+        get: () => $keep.is(':checked') ? BULK_KEEP : (function(v){
+            if (v === '' || isNaN(+v)) return BULK_KEEP;
+            let n = Math.max(hardMin, Math.min(hardMax, parseInt(v,10)));
+            $num.val(n);
+            $num.removeClass('is-invalid');
+            return n;
+        })($num.val()),
+        hide: (flag) => $row.toggle(!flag)
+    };
+}
+
+
+
+function skinDropdown($parent) {
+    const els = [{ label: UILANG.m('Keep existing'), value: BULK_KEEP }];
+    for (let name in skins) els.push({ label: name, value: name });
+
+    $parent.append(
+        `<div class="aorow">
+       <div class="aoleftcol2">${UILANG.m('Skin Name')}</div>
+       <div class="aorightcol2"><div id="bulk_skin_dd"></div></div>
+     </div>`
+    );
+
+    const dd = new jsDropList('bulk_skin_dd', 'bulk_skin_dd_inner', {
+        elements: els,
+        theme: 'backend',
+        width: 220,
+        readOnly: false,
+        initialValue: BULK_KEEP,
+        listTitle: UILANG.m('Keep existing'),
+        onChange: (_id, value) => {
+            ctl.skinNameValue = value;
+            // always render into #bulk_skin_opts and use defaults (no “Keep existing”)
+            renderSkinOptionsForBulk_NoKeep(value, $('#bulk_skin_opts'), ctl.skinOpts);
+        }
+    });
+
+    dd.reset(BULK_KEEP);
+    return dd;
+}
+
+
+
+
+// Render skin options with defaults (display only) – still KEEP until changed
+function renderSkinOptionsForBulk_NoKeep(skinName, $container, sink) {
+    $container.empty();
+    sink.getters = {};
+
+    if (skinName === BULK_KEEP) return;
+
+    const opts = (skins[skinName] && skins[skinName].options) ? skins[skinName].options : {};
+    if ($.isEmptyObject(opts)) {
+        $container.append(`<div class="dialogStandardMessage" style="opacity:.8">${UILANG.m('This skin has no options.')}</div>`);
+        return;
+    }
+
+    Object.keys(opts).forEach((k) => {
+        const def = opts[k];                  // { name, type, defaultValue, ... }
+        const label = UILANG.e(def.name || k);
+
+        // Helper: resolve default with graceful fallback
+        const dflt = (typeof def.defaultValue !== 'undefined')
+            ? def.defaultValue
+            : (typeof def.value !== 'undefined' ? def.value : '');
+
+        if (def.type === 'boolean') {
+            const id = `skinopt_${k}`;
+            const els = [
+                { label: UILANG.m('Yes'), value: 'true' },
+                { label: UILANG.m('No'),  value: 'false' }
+            ];
+            $container.append(
+                `<div class="aorow" id="${id}_row">
+           <div class="aoleftcol2">${label}</div>
+           <div class="aorightcol2"><div id="${id}"></div></div>
+         </div>`
+            );
+            const init = (dflt === true) ? 'true' : 'false';
+            const dd = new jsDropList(id, id + "_dd", {
+                elements: els,
+                theme: 'backend',
+                width: 200,
+                initialValue: init,
+                listTitle: (init === 'true') ? UILANG.m('Yes') : UILANG.m('No')
+            });
+            dd.reset(init);
+            sink.getters[k] = () => (dd.getValue() === 'true');
+
+        } else if (def.type === 'intrange') {
+            const id = `skinopt_${k}`;
+            let minDef = '', maxDef = '';
+            if (typeof dflt === 'string' && dflt.includes('...')) {
+                [minDef, maxDef] = String(dflt).split('...');
+            }
+            $container.append(
+                `<div class="aorow" id="${id}_row">
+           <div class="aoleftcol2">${label}</div>
+           <div class="aorightcol2">
+             <input type="number" id="${id}_min" value="${UILANG.e(minDef)}" style="width:70px;margin-left:0"> ..
+             <input type="number" id="${id}_max" value="${UILANG.e(maxDef)}" style="width:70px">
+           </div>
+         </div>`
+            );
+            sink.getters[k] = () => {
+                const a = parseInt($(`#${id}_min`).val(), 10);
+                const b = parseInt($(`#${id}_max`).val(), 10);
+                return (isNaN(a) || isNaN(b)) ? '' : (a + '...' + b);
+            };
+
+        } else if (def.type === 'color' || def.type === 'textstring' || def.type === 'text') {
+            const id = `skinopt_${k}`;
+            const defVal = (dflt != null ? String(dflt) : '');
+            $container.append(
+                `<div class="aorow" id="${id}_row">
+           <div class="aoleftcol2">${label}</div>
+           <div class="aorightcol2">
+             <input type="text" id="${id}" value="${UILANG.e(defVal)}" style="width:260px;margin-left:0">
+           </div>
+         </div>`
+            );
+            sink.getters[k] = () => $(`#${id}`).val();
+
+        } else {
+            // Fallback → prefill with default string
+            const id = `skinopt_${k}`;
+            const defVal = (dflt != null ? String(dflt) : '');
+            $container.append(
+                `<div class="aorow" id="${id}_row">
+           <div class="aoleftcol2">${label}</div>
+           <div class="aorightcol2">
+             <input type="text" id="${id}" value="${UILANG.e(defVal)}" style="width:260px;margin-left:0">
+           </div>
+         </div>`
+            );
+            sink.getters[k] = () => $(`#${id}`).val();
+        }
+    });
+}
+
+
+
+
+/* ========================================================================
+ *  BULK EDIT – Main dialog
+ * ======================================================================== */
+
+function openBulkEditDialog() {
+    // Two-column, wide dialog
+    const html = `
+    <div id="bulkEditRoot" class="bulkEditRoot">
+      <div class="bulkGrid">
+        <div class="bulkCol" id="bulkColL">
+          <div id="bulk_validity" class="bulkBlock"></div>
+          <div id="bulk_timer" class="bulkBlock"></div>
+          <div id="bulk_misc" class="bulkBlock"></div>
+        </div>
+        <div class="bulkCol" id="bulkColR">
+          <div id="bulk_langs" class="bulkBlock"></div>
+          <div id="bulk_skin" class="bulkBlock"></div>
+          ${isTestStateAdminAllowed() ? '<div id="bulk_state" class="bulkBlock"></div>' : ''}
+        </div>
+      </div>
+    </div>
+  `;
+
+    showDialog('bulkEditDialog', {
+        buttons: [
+            { label: UILANG.m('Cancel'), cancel: true, value: 'cancel' },
+            { label: UILANG.m('Apply to selected…'), 'default': true, value: 'ok' }
+        ],
+        contents: html,
+        title: UILANG.m('Bulk edit test options'),
+        width: 1120,
+        returnPromise: true
+    }).then((res) => {
+        if (res.button !== 'ok') return;
+
+        // Build payload (only changed values)
+        const payload = {
+            targets: selection.map(it => it.dbId),
+            changes: {}
+        };
+
+        // validity
+        const validity = {};
+        const vActive = ctl.onOffSwitch.getValue();         // 'true'|'false'|BULK_KEEP
+        if (vActive !== BULK_KEEP) validity.onOffSwitch = (vActive === 'true');
+
+        if (ctl.drVal !== BULK_KEEP) validity.dateRange       = ctl.drVal;       // obj | false
+        if (ctl.trVal !== BULK_KEEP) validity.timeRestriction = ctl.trVal;       // obj | false
+        if (ctl.tdVal !== BULK_KEEP) validity.testDays        = ctl.tdVal;       // obj | false
+
+        const fl = ctl.forceLogoff.getValue();
+        if (fl !== BULK_KEEP) validity.forceLogoff = (fl === 'true');
+
+        if (Object.keys(validity).length) payload.changes.validity = validity;
+
+        // timer
+        const timer = {};
+        const ut = ctl.useTimer.getValue();
+        if (ut !== BULK_KEEP) timer.useTimer = (ut === 'true');
+        const tl = ctl.timeLimit.get();
+        if (tl !== BULK_KEEP) timer.timeLimit = tl;
+        if (Object.keys(timer).length) payload.changes.timer = timer;
+
+        // misc
+        const misc = {};
+        ['saveResults','limitNavigation','showScore','hideTimeoutMsg','waitForMediaCache'].forEach(k => {
+            const v = ctl.misc[k].getValue();
+            if (v !== BULK_KEEP) misc[k] = (v === 'true');
+        });
+        if (Object.keys(misc).length) payload.changes.misc = misc;
+
+        // languages
+        const langs = {};
+        $.each(languages, function(k, vLabel){
+            const v = ctl.lang[k].getValue();
+            if (v !== BULK_KEEP) langs[k] = (v === 'true');
+        });
+        if (Object.keys(langs).length) payload.changes.languages = langs;
+
+        // skin
+        const skinName = ctl.skinName.getValue();
+        if (skinName !== BULK_KEEP) {
+            const skinObj = { name: skinName, options: {} };
+
+            const getters = (ctl.skinOpts && ctl.skinOpts.getters) ? ctl.skinOpts.getters : {};
+            Object.keys(getters).forEach(k => {
+                // always include: defaults are pre-filled, user edits override
+                skinObj.options[k] = getters[k]();
+            });
+
+            payload.changes.skin = skinObj;
+        }
+
+        // test state (admin/elevated/superadmin only)
+        if (ctl.testState) {
+            const testState = ctl.testState.getValue();
+            if (testState !== BULK_KEEP) payload.changes.testState = testState;
+        }
+
+        // prune empty sections
+        Object.keys(payload.changes).forEach(k => {
+            if (payload.changes[k] && typeof payload.changes[k] === 'object' && !Object.keys(payload.changes[k]).length) {
+                delete payload.changes[k];
+            }
+        });
+        if (!Object.keys(payload.changes).length) {
+            showMessage(UILANG.m("No changes selected. Nothing to apply."), "warning")
+            return;
+        }
+
+        // Confirm
+        const names = selection.map(it => UILANG.e(it.name || it.label || ('#'+it.dbId)));
+        showDialog('bulkConfirm', {
+            buttons: [
+                { label: UILANG.m('Cancel'), cancel: true, value: 'cancel' },
+                { label: UILANG.m('Apply'), 'default': true, value: 'ok' }
+            ],
+            title: UILANG.m('Confirm bulk changes'),
+            width: 560,
+            icon: "../images/warning.png",
+            iconWidth: 64,
+            contents:
+                '<p>' + UILANG.m('Are you sure you want to apply these settings to the selected tests?') + '</p>',
+            returnPromise: true
+        }).then((res2) => {
+            if (res2.button !== 'ok') return;
+            startAjax('saveTestBulk', payload);
+        });
+    });
+
+    // ===== Build controls inside the dialog =====
+    const $valid  = $('#bulk_validity').append("<h3>" + UILANG.m('Validity') + "</h3>");
+    const $timer  = $('#bulk_timer').append("<h3>" + UILANG.m('Timer') + "</h3>");
+    const $misc   = $('#bulk_misc').append("<h3>" + UILANG.m('Miscellaneous') + "</h3>");
+    const $langs  = $('#bulk_langs').append("<h3>" + UILANG.m('Languages') + "</h3>");
+    const $skin = $('#bulk_skin').append(`<h3>${UILANG.m('Skin')}</h3><div id="bulk_skin_row"></div><div id="bulk_skin_opts"></div>`);
+    const $state = isTestStateAdminAllowed() ? $('#bulk_state').append("<h3>" + UILANG.m('Test state') + "</h3>") : null;
+    var ctl = window.ctl = { misc:{}, lang:{}, skinOpts:{} };
+    const $skinRow  = $('#bulk_skin_row');
+    const $skinOpts = $('#bulk_skin_opts');
+
+    ctl.skinName = skinDropdown($skinRow);   // uses onChange internally
+    ctl.skinOpts = {};                       // container for getters set by renderer
+
+    // VALIDITY
+    ctl.onOffSwitch = triBoolDropdown($valid, 'bulk_active', 'Test active');
+
+    // Date restriction (open cloned BULK editor)
+    $valid.append(
+        `<div class="aorow">
+     <div class="aoleftcol2">${UILANG.m('Date restriction')}</div>
+     <div class="aorightcol2">
+       <button id="bulk_edit_date" class="btn-edit">${UILANG.m('Edit')}</button>
+       <span id="bulk_dr_summary" class="bulkMinor">(${UILANG.m('Keep existing')})</span>
+     </div>
+   </div>`
+    );
+    ctl.drVal = BULK_KEEP;
+    $('#bulk_edit_date').on('click', async () => {
+        const result = await editDateRange(true, ctl.drVal);
+        ctl.drVal = result;
+        if (result === BULK_KEEP) {
+            $('#bulk_dr_summary').text('(' + UILANG.m('Keep existing') + ')');
+        } else if (result === false) {
+            $('#bulk_dr_summary').text(UILANG.m('No restriction'));
+        } else {
+            $('#bulk_dr_summary').text(
+                `${fmtEUDateTime(result.start)} → ${result.end === false ? UILANG.m('infinite') : fmtEUDateTime(result.end)}`
+            );
+        }
+    });
+
+    // Daily time restriction
+    $valid.append(
+        `<div class="aorow">
+     <div class="aoleftcol2">${UILANG.m('Daily time restriction')}</div>
+     <div class="aorightcol2">
+       <button id="bulk_edit_time" class="btn-edit">${UILANG.m('Edit')}</button>
+       <span id="bulk_tr_summary" class="bulkMinor">(${UILANG.m('Keep existing')})</span>
+     </div>
+   </div>`
+    );
+    ctl.trVal = BULK_KEEP;
+    $('#bulk_edit_time').on('click', async () => {
+        const result = await editTimeRestriction(true, ctl.trVal);
+        ctl.trVal = result;
+        if (result === BULK_KEEP) {
+            $('#bulk_tr_summary').text('(' + UILANG.m('Keep existing') + ')');
+        } else if (result === false) {
+            $('#bulk_tr_summary').text(UILANG.m('No restriction'));
+        } else {
+            $('#bulk_tr_summary').text(`${result.start} – ${result.end}`);
+        }
+    });
+
+
+    // Testing days
+    $valid.append(
+        `<div class="aorow">
+     <div class="aoleftcol2">${UILANG.m('Testing days')}</div>
+     <div class="aorightcol2">
+       <button id="bulk_edit_days" class="btn-edit">${UILANG.m('Edit')}</button>
+       <span id="bulk_td_summary" class="bulkMinor">(${UILANG.m('Keep existing')})</span>
+     </div>
+   </div>`
+    );
+    ctl.tdVal = BULK_KEEP;
+    $('#bulk_edit_days').on('click', async () => {
+        const result = await editTestDays(true, ctl.tdVal);
+        ctl.tdVal = result;
+        if (result === BULK_KEEP) {
+            $('#bulk_td_summary').text('(' + UILANG.m('Keep existing') + ')');
+        } else if (result === false) {
+            $('#bulk_td_summary').text(UILANG.m('No restriction'));
+        } else {
+            const idxToName = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(n => UILANG.m(n));
+            const names = (result.days || '').split(',').map(s=>s.trim()).filter(Boolean).map(i => idxToName[parseInt(i,10)]||i);
+            $('#bulk_td_summary').text(names.join(', '));
+        }
+    });
+
+
+    // Force logoff
+    ctl.forceLogoff = triBoolDropdown($valid, 'bulk_forcelogoff', 'Force logoff on inactive test');
+
+    // TIMER
+    ctl.useTimer  = triBoolDropdown($timer, 'bulk_usetimer', 'Use timer');
+    ctl.timeLimit = keepableNumberInput($timer, 'bulk_timelimit', 'Time limit (minutes)', 0, 999, '0');
+    // Hide time limit when Use timer == No
+    $('#bulk_usetimer_dd').on('change', function(){
+        const v = ctl.useTimer.getValue();
+        ctl.timeLimit.hide(v === 'false'); // hide if timer disabled
+        if (v === 'false') {
+            $('#bulk_timelimit_keep').prop('checked', true).trigger('change');
+        }
+    }).trigger('change');
+
+    // MISC
+    ctl.misc.saveResults       = triBoolDropdown($misc, 'bulk_save',     'Save results');
+    ctl.misc.limitNavigation   = triBoolDropdown($misc, 'bulk_limitnav', 'Limit navigation');
+    ctl.misc.showScore         = triBoolDropdown($misc, 'bulk_showscore','Show score');
+    ctl.misc.hideTimeoutMsg    = triBoolDropdown($misc, 'bulk_hideto',   'Hide time out message');
+    ctl.misc.waitForMediaCache = triBoolDropdown($misc, 'bulk_waitmedia','Wait for media to load');
+
+    // LANGUAGES (all default to KEEP)
+    $.each(languages, function(k, vLabel){
+        ctl.lang[k] = triBoolDropdown($langs, 'bulk_lang_' + k, vLabel);
+    });
+
+    if ($state) {
+        ctl.testState = testStateBulkDropdown($state, 'bulk_test_state', 'State');
+    }
+}
+
+function fmtEUDateTime(iso /* 'YYYY-MM-DDTHH:MM' | false */) {
+    if (iso === false) return UILANG.m('infinite');
+    if (!iso || typeof iso !== 'string' || !iso.includes('T')) return '';
+    const [d, t] = iso.split('T');          // 'YYYY-MM-DD', 'HH:MM'
+    const [y, m, day] = d.split('-');       // keep exact values (no timezone shift)
+    return `${day}.${m}.${y} ${t}`;
+}
+
+
+function tmPreviewEscape(value) {
+    if (value === null || typeof value === 'undefined') return '';
+    return $('<div>').text(String(value)).html();
+}
+
+function tmPreviewOption(key, fallback) {
+    if (serverData.testLevel && serverData.testLevel.options && typeof serverData.testLevel.options[key] !== 'undefined') {
+        return serverData.testLevel.options[key];
+    }
+    if (typeof settings[key] !== 'undefined') return settings[key];
+    return fallback;
+}
+
+function tmPreviewBoolIcon(value, label) {
+    const state = value === true || value === 'true' || value === 1 || value === '1';
+    return '<span class="tmPreviewBool ' + (state ? 'is-yes' : 'is-no') + '">' +
+        '<img src="../images/' + state + '.png" alt="" />' +
+        '<span>' + tmPreviewEscape(label || (state ? UILANG.m('Yes') : UILANG.m('No'))) + '</span>' +
+        '</span>';
+}
+
+function tmPreviewDataValue(value) {
+    if (value && typeof value === 'object') {
+        if (typeof value.data !== 'undefined') return value.data;
+        if (typeof value.hiddenData !== 'undefined') return value.hiddenData;
+    }
+    return value;
+}
+
+function tmPreviewFormatDateRange(range) {
+    if (!range) return UILANG.m('Not set');
+    let out = UILANG.m('from') + ' ' + fmtEUDateTime(range.start);
+    if (range.end) out += '<br>' + UILANG.m('to') + ' ' + fmtEUDateTime(range.end);
+    return out;
+}
+
+function tmPreviewFormatTestDays(testDays) {
+    if (!testDays || !testDays.days) return UILANG.m('All days');
+    if (testDays.days === '0,1,2,3,4,5,6') return UILANG.m('All days');
+    const names = {
+        '0': UILANG.m('Mon'),
+        '1': UILANG.m('Tue'),
+        '2': UILANG.m('Wed'),
+        '3': UILANG.m('Thu'),
+        '4': UILANG.m('Fri'),
+        '5': UILANG.m('Sat'),
+        '6': UILANG.m('Sun')
+    };
+    return testDays.days.split(',').map(day => names[day] || day).join(', ');
+}
+
+function tmPreviewActiveLanguages() {
+    const active = [];
+    $.each(languages, function(code, label) {
+        if (tmPreviewOption(code, false) === true) {
+            active.push({code: code, label: label});
+        }
+    });
+    return active;
+}
+
+function tmPreviewResultStats() {
+    const previewStats = serverData.testLevel.previewResultStats || {};
+    const access = serverData.testLevel.activityAccess || {};
+    const activity = serverData.testLevel.activityData || [];
+    const fallbackTotal = $(activity).length;
+    const total = Number(previewStats.total_results ?? access.total ?? fallbackTotal);
+    const accessible = Number(previewStats.accessible_results ?? access.accessible ?? fallbackTotal);
+    const restricted = Number(previewStats.restricted_results ?? access.restricted ?? Math.max(0, total - accessible));
+    return {total, accessible, restricted, hasDetails: Array.isArray(previewStats.testActivity) && previewStats.testActivity.length > 0};
+}
+
+function tmPreviewFormatSqlDateTime(value) {
+    if (!value) return UILANG.m('Not available');
+    if (typeof value !== 'string') return tmPreviewEscape(value);
+    const normalized = value.replace('T', ' ');
+    const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}:\d{2})(?::(\d{2}))?/);
+    if (match) {
+        return match[3] + '.' + match[2] + '.' + match[1] + ' ' + match[4];
+    }
+    return fmtEUDateTime(value.replace(' ', 'T')) || tmPreviewEscape(value);
+}
+
+function tmPreviewLastBackendEditLine(editInfo) {
+    if (!editInfo || !editInfo.ts) return '';
+    const user = editInfo.userName ? editInfo.userName : UILANG.m('Not available');
+    const ts = tmPreviewFormatSqlDateTime(editInfo.ts);
+    return '<div class="tmPreviewLastChange">' + UILANG.m('Last change') + ': ' + tmPreviewEscape(user) + ', ' + tmPreviewEscape(ts) + '</div>';
+}
+
+function tmPreviewStatsIcon() {
+    return '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 21h18v-2H3v2zm3-4h3V9H6v8zm6 0h3V5h-3v12zm6 0h3V12h-3v5z"></path></svg>';
+}
+
+function tmPreviewResultsCard(stats) {
+    const canShowStats = stats.accessible > 0;
+    return /* html */ `
+        <section class="tmPreviewCard tmPreviewStats">
+            <h3>${UILANG.m('Results')}</h3>
+            <div class="tmPreviewResultsCompact">
+                <div class="tmPreviewResultNumbers">
+                    <div><span>${UILANG.m('Test takers with results')}</span><strong>${stats.total}</strong></div>
+                    <div><span>${UILANG.m('Accessible to you')}</span><strong>${stats.accessible}</strong></div>
+                </div>
+                <button type="button" id="tmPreviewStatsButton" class="tmPreviewStatsButton" ${canShowStats ? '' : 'disabled'} title="${UILANG.m('View statistics')}" aria-label="${UILANG.m('View statistics')}">
+                    ${tmPreviewStatsIcon()}
+                </button>
+            </div>
+        </section>
+    `;
+}
+
+function tmPreviewProgressBar(value) {
+    const val = Math.max(0, Math.min(100, Number(value) || 0));
+    return /* html */ `
+        <div class="tmResultMiniProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${val}" aria-label="${UILANG.m('Progress')}">
+            <div class="tmResultMiniProgressFill" style="width:${val}%"></div>
+            <div class="tmResultMiniProgressLabel">${val}%</div>
+        </div>
+    `;
+}
+
+function tmPreviewAdjustStructureHeight() {
+    $('.tmPreviewStructureCard').removeClass('is-scrollable').css('height', '');
+}
+
+function showPreviewResultStatsDialog() {
+    const d = serverData.testLevel.previewResultStats || {};
+    const rows = Array.isArray(d.testActivity) ? d.testActivity : [];
+    const totalAll = Number(d.total_results ?? tmPreviewResultStats().total ?? rows.length);
+    const totalAccessible = Number(d.accessible_results ?? rows.length);
+    const restricted = Number(d.restricted_results ?? Math.max(0, totalAll - totalAccessible));
+    const totalForStats = totalAccessible || rows.length;
+    const buckets = rows.reduce(function(acc, row) {
+        const p = Number(row.progressField || 0);
+        if (p >= 100) acc.eq100++;
+        else if (p >= 81) acc.b81_99++;
+        else if (p >= 61) acc.b61_80++;
+        else if (p >= 41) acc.b41_60++;
+        else if (p >= 21) acc.b21_40++;
+        else acc.lt20++;
+        return acc;
+    }, {lt20: 0, b21_40: 0, b41_60: 0, b61_80: 0, b81_99: 0, eq100: 0});
+    const defs = [
+        {key: 'lt20', label: UILANG.m('less than 20 %')},
+        {key: 'b21_40', label: '21-40 %'},
+        {key: 'b41_60', label: '41-60 %'},
+        {key: 'b61_80', label: '61-80 %'},
+        {key: 'b81_99', label: '81-99 %'},
+        {key: 'eq100', label: UILANG.m('100 % (complete)')}
+    ];
+    const pct = function(n) { return totalForStats ? (n * 100 / totalForStats) : 0; };
+    const chartRows = defs.map(function(def) {
+        const count = Number(buckets[def.key] || 0);
+        const percent = pct(count);
+        return /* html */ `
+            <div class="tmResultBarRow">
+                <div class="tmResultBarLabel">${tmPreviewEscape(def.label)}</div>
+                <div class="tmResultBarTrack" aria-hidden="true"><div class="tmResultBarFill" style="width:${percent}%;"></div></div>
+                <div class="tmResultBarPct">${percent.toFixed(2)} % - (${count})</div>
+            </div>
+        `;
+    }).join('');
+    const rowsSorted = rows.slice().sort(function(a, b) {
+        return String(b.tsActiveServer || '').localeCompare(String(a.tsActiveServer || ''));
+    });
+    const listTable = rowsSorted.length ? /* html */ `
+        <div class="tmResultStatsListWrap">
+            <div class="tmResultStatsHeader">${UILANG.m('Recent activity')}</div>
+            <div class="tmResultStatsList">
+                <table class="tmResultStatsTable">
+                    <thead><tr><th>${UILANG.m('Test taker')}</th><th>${UILANG.m('Password')}</th><th>${UILANG.m('Last activity')}</th><th>${UILANG.m('Progress')}</th></tr></thead>
+                    <tbody>
+                        ${rowsSorted.map(row => /* html */ `
+                            <tr>
+                                <td>${tmPreviewEscape(row.testeename || '')}</td>
+                                <td>${tmPreviewEscape(row.testeepass || '')}<span class="tmResultPassTag">${tmPreviewEscape(row.passtag || '')}</span></td>
+                                <td>${tmPreviewEscape(tmPreviewFormatSqlDateTime(row.tsActiveServer))}</td>
+                                <td class="tmResultProgressCell">${tmPreviewProgressBar(row.progressField)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    ` : /* html */ `
+        <div class="tmResultStatsListWrap">
+            <div class="tmResultStatsHeader">${UILANG.m('Recent activity')}</div>
+            <div class="tmResultStatsList"><div class="tmResultStatsEmpty">${UILANG.m('No detailed activity available.')}</div></div>
+        </div>
+    `;
+    const meta = /* html */ `
+        <div class="tmResultStatsMeta">
+            <div>${UILANG.m('Test takers with results')}: <strong>${totalAll}</strong></div>
+            <div>${UILANG.m('Accessible to you')}: <strong>${totalAccessible}</strong></div>
+            <div>${UILANG.m('Restricted')}: <strong>${restricted}</strong></div>
+        </div>
+    `;
+    const content = /* html */ `
+        <div class="tmResultStatsWrap">
+            <div class="tmResultStatsChart"><div class="tmResultStatsHeader">${UILANG.m('Progress statistics')}</div>${chartRows}</div>
+            ${listTable}
+        </div>
+    `;
+    new nxDialog('tmPreviewStatsDialog', {
+        title: UILANG.m('Test stats') + ': ' + tmPreviewEscape(serverData.testLevel.name || ''),
+        contents: meta + content,
+        width: 1100,
+        height: 600,
+        buttons: [{label: UILANG.m('Close'), default: true, cancel: true, value: 'ok'}]
+    });
+}
+function tmPreviewTypeLabel(type) {
+    const map = {
+        linear: UILANG.m('Linear test'),
+        fluid: UILANG.m('Fluid test'),
+        mutation: UILANG.m('Mutation test'),
+        routed: UILANG.m('Routed test')
+    };
+    return map[type] || UILANG.m(type + ' test');
+}
+
+function tmPreviewStructureElementType(type) {
+    const map = {
+        linear: UILANG.m('Test page'),
+        fluid: UILANG.m('Fluid block'),
+        mutation: UILANG.m('Linear test'),
+        routed: UILANG.m('Routed element')
+    };
+    return map[type] || UILANG.m('Structure element');
+}
+
+function tmPreviewTestTypeIcon(type) {
+    const icons = {
+        linear: 'testLinear.png',
+        fluid: 'testFluid.png',
+        mutation: 'testMutation.png'
+    };
+    const icon = icons[type] || icons.linear;
+    return '<img src="../inc/filer/images/' + icon + '" alt="" />';
+}
+
+function tmPreviewStateBadgeHtml(state) {
+    return '<div class="tmPreviewStateCallout ' + (state === 'published' ? 'is-published' : 'is-draft') + '">' +
+        '<strong>' + (state === 'published' ? UILANG.m('Published (Locked)') : UILANG.m('Draft')) + '</strong>' +
+        '<span id="tmPreviewStateHelp"></span>' +
+        '</div>';
+}
+
+function tmPreviewLinearMaxScore(items) {
+    items = Array.isArray(items) ? items : [];
+    return items.reduce(function(total, item) {
+        if (item.removed) return total;
+        const score = item.maxScore || (serverData.testLevel.scoring && serverData.testLevel.scoring[item.hiddenID]) || 0;
+        return total + (Number(score) || 0);
+    }, 0);
+}
+
+function tmPreviewLinearScoreSummary(items) {
+    const score = tmPreviewLinearMaxScore(items);
+    const label = score === 1 ? UILANG.m('point') : UILANG.m('points');
+    return '<div class="tmPreviewStructureSummary"><strong>' + UILANG.m('Maximum achievable score') + '</strong><span>' + tmPreviewEscape(score) + ' ' + tmPreviewEscape(label) + '</span></div>';
+}
+
+function renderTestPreviewLoading() {
+    previewPlausibilityResult = null;
+    previewPlausibilityWarnings = {};
+    $('#testPreviewContent').removeClass('tmPreviewBlank').html(
+        '<div class="tmPreviewLoading">' + UILANG.m('Loading test preview...') + '</div>'
+    );
+}
+
+function renderTestPreview() {
+    if (!serverData.testLevel) return;
+    const test = serverData.testLevel;
+    const type = test.structure && test.structure.type ? test.structure.type : 'linear';
+    const state = getTestState();
+    const canEdit = !!(permList[test.id] && permList[test.id].editSelection);
+    const stats = tmPreviewResultStats();
+    const activeLanguages = tmPreviewActiveLanguages();
+    const restrictions = tmPreviewOption('restrictions', {}) || {};
+    const timerActive = tmPreviewOption('useTimer', false) === true;
+    const timeLimit = tmPreviewOption('timeLimit', 0) || 0;
+    const metaTags = test.metatags && typeof test.metatags === 'object' ? test.metatags : {};
+    const skin = test.skin || {skin: UILANG.m('Not set'), skinOptions: {}};
+    const mutationMethod = tmPreviewOption('mutationMethod', 'random') === 'sequential' ? UILANG.m('Sequential') : UILANG.m('Random');
+    const plausibilityHtml = buildPreviewPlausibilityHtml(previewPlausibilityResult);
+    const structureHtml = buildTestStructurePreviewHtml(type, test.structure ? test.structure.items : []);
+
+    $('#testPreviewContent').removeClass('tmPreviewBlank').html(/* html */ `
+        <div class="tmPreview">
+            <div class="tmPreviewHeroSticky">
+            <div class="tmPreviewHero tmType-${tmPreviewEscape(type)}">
+                <div class="tmPreviewTypeIcon">${tmPreviewTestTypeIcon(type)}</div>
+                <div class="tmPreviewHeroMain">
+                    <div class="tmPreviewName">${tmPreviewEscape(test.name)}</div>
+                    <div class="tmPreviewMeta">
+                        <span>ID ${tmPreviewEscape(test.id)}</span>
+                        <span>${tmPreviewEscape(tmPreviewTypeLabel(type))}</span>
+                        ${tmPreviewStateBadgeHtml(state)}
+                    </div>
+                </div>
+                <div class="tmPreviewActions">
+                    <div class="tmPreviewActionRow">
+                        ${canEdit ? '<button type="button" id="tmPreviewEditButton">' + UILANG.m('Edit test') + '</button>' : '<div class="tmPreviewReadOnly">' + UILANG.m('Read only') + '</div>'}
+                    </div>
+                    ${tmPreviewLastBackendEditLine(test.lastBackendEdit)}
+                </div>
+            </div>
+            </div>
+
+            <div class="tmPreviewBody">
+            <div class="tmPreviewGrid">
+                <div class="tmPreviewColumn">
+                    <section class="tmPreviewCard">
+                        <h3>${UILANG.m('Validity')}</h3>
+                        <div class="tmPreviewSettingGrid">
+                            ${tmPreviewSetting(UILANG.m('Test active'), tmPreviewBoolIcon(tmPreviewOption('onOffSwitch', false)))}
+                            ${tmPreviewSetting(UILANG.m('Date restriction'), tmPreviewFormatDateRange(restrictions.dateRange))}
+                            ${tmPreviewSetting(UILANG.m('Daily time restriction'), restrictions.timeRestriction ? tmPreviewEscape(restrictions.timeRestriction.start + ' - ' + restrictions.timeRestriction.end) : UILANG.m('Not set'))}
+                            ${tmPreviewSetting(UILANG.m('Testing days'), tmPreviewFormatTestDays(restrictions.testDays))}
+                            ${tmPreviewSetting(UILANG.m('Force logoff on inactive test'), tmPreviewBoolIcon(tmPreviewOption('forceLogoff', false)))}
+                        </div>
+                    </section>
+
+                    <section class="tmPreviewCard">
+                        <h3>${UILANG.m('Timer')}</h3>
+                        <div class="tmPreviewSettingGrid">
+                            ${tmPreviewSetting(UILANG.m('Use timer'), tmPreviewBoolIcon(timerActive))}
+                            ${timerActive ? tmPreviewSetting(UILANG.m('Time limit (minutes)'), tmPreviewEscape(timeLimit)) : ''}
+                        </div>
+                    </section>
+
+                    ${type === 'mutation' ? '<section class="tmPreviewCard"><h3>' + UILANG.m('Mutation') + '</h3><div class="tmPreviewSettingGrid">' + tmPreviewSetting(UILANG.m('Pick method'), mutationMethod) + '</div></section>' : buildPreviewStandardSettings(activeLanguages, skin)}
+
+                    <section class="tmPreviewCard">
+                        <h3>${UILANG.m('Meta Tags')}</h3>
+                        ${buildPreviewMetaTags(metaTags)}
+                    </section>
+                </div>
+
+                <div class="tmPreviewColumn">
+                    ${tmPreviewResultsCard(stats)}
+
+                    <section class="tmPreviewCard">
+                        <h3>${UILANG.m('Plausibility')}</h3>
+                        <div id="tmPreviewPlausibilityBody">${plausibilityHtml}</div>
+                    </section>
+
+                    <section class="tmPreviewCard tmPreviewStructureCard">
+                        <h3>${UILANG.m('Test structure')}</h3>
+                        ${structureHtml}
+                    </section>
+                </div>
+            </div>
+            </div>
+        </div>
+    `);
+
+    if (canEdit) {
+        $('#tmPreviewEditButton').on('click', function(e) {
+            e.preventDefault();
+            editSelection('previewBox');
+        });
+    }
+    $('#tmPreviewStatsButton:not(:disabled)').on('click', function(e) {
+        e.preventDefault();
+        showPreviewResultStatsDialog();
+    });
+    tmPreviewAdjustStructureHeight();
+    $(window).off('resize.tmPreviewStructure').on('resize.tmPreviewStructure', tmPreviewAdjustStructureHeight);
+    if ($('#tmPreviewStateHelp').length) {
+        const testStateHelpHtml = UILANG.m('<p><strong>Draft</strong> is the working mode for a test. You can still change the test structure and content while you are preparing it.</p><p><strong>Published (Locked)</strong> protects a test after it is ready to use. The structure and test content are locked so existing results cannot be damaged by later changes.</p><p>You can publish a draft at any time. Switching a published test back to draft may be destricted when results of test takers exist you do not have access to.</p>');
+        new OasysHelp('tmPreviewStateHelp', {
+            htmlContent: testStateHelpHtml,
+            title: UILANG.m('Test state')
+        });
+    }
+}
+
+function tmPreviewSetting(label, value) {
+    return '<div class="tmPreviewSetting"><span>' + tmPreviewEscape(label) + '</span><strong>' + value + '</strong></div>';
+}
+
+function buildPreviewStandardSettings(activeLanguages, skin) {
+    return /* html */ `
+        <section class="tmPreviewCard">
+            <h3>${UILANG.m('Miscellaneous')}</h3>
+            <div class="tmPreviewSettingGrid">
+                ${tmPreviewSetting(UILANG.m('Save results'), tmPreviewBoolIcon(tmPreviewOption('saveResults', false)))}
+                ${tmPreviewSetting(UILANG.m('Limit navigation'), tmPreviewBoolIcon(tmPreviewOption('limitNavigation', false)))}
+                ${tmPreviewSetting(UILANG.m('Show score'), tmPreviewBoolIcon(tmPreviewOption('showScore', false)))}
+                ${tmPreviewSetting(UILANG.m('Hide time out message'), tmPreviewBoolIcon(tmPreviewOption('hideTimeoutMsg', false)))}
+                ${tmPreviewSetting(UILANG.m('Wait for media to load'), tmPreviewBoolIcon(tmPreviewOption('waitForMediaCache', false)))}
+            </div>
+        </section>
+        <section class="tmPreviewCard">
+            <h3>${UILANG.m('Languages')}</h3>
+            ${activeLanguages.length ? '<div class="tmPreviewChips">' + activeLanguages.map(lang => '<span>' + tmPreviewEscape(lang.label) + '</span>').join('') + '</div>' : '<p class="tmPreviewEmpty">' + UILANG.m('No language active.') + '</p>'}
+        </section>
+        <section class="tmPreviewCard">
+            <h3>${UILANG.m('Skin')}</h3>
+            <div class="tmPreviewSettingGrid">
+                ${tmPreviewSetting(UILANG.m('Skin Name'), tmPreviewEscape(skin.skin || UILANG.m('Not set')))}
+                ${buildPreviewSkinOptions(skin.skinOptions || {})}
+            </div>
+        </section>
+    `;
+}
+
+function buildPreviewSkinOptions(skinOptions) {
+    const rows = [];
+    $.each(skinOptions, function(key, opt) {
+        let value = opt.value;
+        if (opt.type === 'boolean') {
+            value = tmPreviewBoolIcon(value);
+        } else if (opt.type === 'intrange' && typeof value === 'string') {
+            value = tmPreviewEscape(value.replace('...', ' - '));
+        } else if (opt.type === 'color') {
+            value = '<span class="tmPreviewSwatch" style="background:' + tmPreviewEscape(value) + ';"></span>' + tmPreviewEscape(value);
+        } else {
+            value = tmPreviewEscape(value);
+        }
+        rows.push(tmPreviewSetting(opt.name || key, value));
+    });
+    return rows.length ? rows.join('') : tmPreviewSetting(UILANG.m('Settings'), UILANG.m('No skin settings'));
+}
+
+function buildPreviewMetaTags(metaTags) {
+    const keys = Object.keys(metaTags).sort((a, b) => String(a).localeCompare(String(b), undefined, {sensitivity: 'base'}));
+    if (!keys.length) return '<p class="tmPreviewEmpty">' + UILANG.m('No meta tags defined.') + '</p>';
+    return '<div class="tmPreviewMetaTags">' + keys.map(key => {
+        const single = metaTags[key] === '';
+        const value = single ? UILANG.m('single tag') : metaTags[key];
+        return '<div><span>' + tmPreviewEscape(key) + '</span><strong' + (single ? ' class="tmPreviewSingleTag"' : '') + '>' + tmPreviewEscape(value) + '</strong></div>';
+    }).join('') + '</div>';
+}
+
+function buildTestStructurePreviewHtml(type, items) {
+    items = Array.isArray(items) ? items : [];
+    const summary = type === 'linear' ? tmPreviewLinearScoreSummary(items) : '';
+    if (!items.length) return summary + '<p class="tmPreviewEmpty">' + UILANG.m('No structure elements have been added yet.') + '</p>';
+    const rows = items.map(function(item, index) {
+        const warning = previewPlausibilityWarnings[item.hiddenID];
+        let meta = '';
+        let score = '';
+        if (type === 'fluid') {
+            const used = tmPreviewDataValue(item.itemsUsed);
+            const order = tmPreviewDataValue(item.itemOrder);
+            meta = tmPreviewEscape(tmPreviewStructureElementType(type)) + ' | ' + UILANG.m('Pages') + ': ' + tmPreviewEscape(used) + ' / ' + tmPreviewEscape(item.itemsTotal) + ' | ' + UILANG.m('Order') + ': ' + tmPreviewEscape(UILANG.m(order));
+        } else if (type === 'mutation') {
+            let maxScore = 0;
+            if (item.scoring && typeof item.scoring === 'object') {
+                $.each(item.scoring, function(k, v) { maxScore += Number(v) || 0; });
+            } else {
+                maxScore = item.scoring || 0;
+            }
+            meta = tmPreviewEscape(tmPreviewStructureElementType(type)) + ' | ' + UILANG.m('Pages') + ': ' + tmPreviewEscape(item.structCount || 0) + ' | ' + UILANG.m('Test id') + ': ' + tmPreviewEscape(item.hiddenID);
+            score = '<span>' + UILANG.m('Max score') + ': ' + tmPreviewEscape(item.removed ? '-' : maxScore) + '</span>';
+        } else {
+            const itemGroup = tmPreviewEscape(item.itemGroup || '-');
+            const itemGroupId = item.itemGroupId === undefined || item.itemGroupId === null || String(item.itemGroupId).trim() === ''
+                ? ''
+                : ' (ID ' + tmPreviewEscape(item.itemGroupId) + ')';
+            meta = tmPreviewEscape(tmPreviewStructureElementType(type)) + ' | ' + tmPreviewEscape(item.code || '-') + ' | ' + itemGroup + itemGroupId;
+            score = '<span>' + UILANG.m('Max score') + ': ' + tmPreviewEscape(item.maxScore || serverData.testLevel.scoring?.[item.hiddenID] || 0) + '</span>';
+        }
+        return /* html */ `
+            <div class="tmPreviewStructureRow ${item.removed ? 'is-removed' : ''} ${warning ? 'has-warning' : ''}">
+                <div class="tmPreviewStructureNo">${index + 1}</div>
+                <div class="tmPreviewStructureMain">
+                    <strong>${tmPreviewEscape(item.name)}</strong>
+                    <span>${meta}</span>
+                    ${warning ? '<em>' + tmPreviewEscape(warning) + '</em>' : ''}
+                </div>
+                <div class="tmPreviewStructureScore">${item.removed ? UILANG.m('Missing') : score}</div>
+            </div>
+        `;
+    }).join('');
+    return summary + '<div class="tmPreviewStructureList tmPreviewStructure-' + tmPreviewEscape(type) + '">' + rows + '</div>';
+}
+
+function launchPreviewPlausibilityCheck() {
+    if (!serverData.testLevel || mode !== 'browsing') return;
+    if (serverData.testLevel.structure.type === 'mutation') {
+        previewPlausibilityResult = {action: 'mutationPreviewOnly'};
+        renderTestPreview();
+        return;
+    }
+    const activeLanguages = tmPreviewActiveLanguages().map(lang => lang.code);
+    const token = ++ajaxRequestToken;
+    pendingPreviewCheckToken = token;
+    pendingPreviewCheckTestId = serverData.testLevel.id;
+    startAjax(serverData.testLevel.structure.type === 'fluid' ? 'plausibilityFluidCheck' : 'plausibilityCheck', {
+        id: serverData.testLevel.id,
+        languages: activeLanguages,
+        structure: serverData.testLevel.structure.items,
+        _previewCheckToken: token,
+        _previewCheckTestId: serverData.testLevel.id
+    });
+}
+
+function handlePreviewPlausibilityResult(res) {
+    if (res._previewCheckToken !== pendingPreviewCheckToken ||
+        String(res._previewCheckTestId) !== String(pendingPreviewCheckTestId) ||
+        !serverData.testLevel ||
+        String(serverData.testLevel.id) !== String(res._previewCheckTestId) ||
+        selection.length !== 1 ||
+        selection[0].type !== 'test' ||
+        String(selection[0].dbId) !== String(res._previewCheckTestId) ||
+        mode !== 'browsing') {
+        return;
+    }
+    previewPlausibilityResult = normalizePreviewPlausibilityResult(res);
+    previewPlausibilityWarnings = previewPlausibilityResult.warningMap || {};
+    renderTestPreview();
+}
+
+function normalizePreviewPlausibilityResult(res) {
+    const result = Object.assign({}, res);
+    const timerActive = tmPreviewOption('useTimer', false) === true;
+    const timerLimit = Number(tmPreviewOption('timeLimit', 0) || 0);
+    result.timerIssue = timerActive && timerLimit === 0;
+    result.noActiveLanguage = tmPreviewActiveLanguages().length === 0;
+    result.labelErrors = [];
+    if (serverData.testLevel && serverData.testLevel.labels) {
+        $.each(serverData.testLevel.labels, function(labelName, labelData) {
+            $.each(languages, function(langCode) {
+                if (tmPreviewOption(langCode, false) === true) {
+                    if (labelData.button && labelData.button[langCode] === '') {
+                        result.labelErrors.push({name: labelName, issue: UILANG.m('Button'), langCode: langCode});
+                    }
+                    if (labelData.headline && labelData.headline[langCode] === '') {
+                        result.labelErrors.push({name: labelName, issue: UILANG.m('Headline'), langCode: langCode});
+                    }
+                }
+            });
+        });
+    }
+    result.warningMap = buildPreviewWarningMap(result);
+    return result;
+}
+
+function buildPreviewWarningMap(res) {
+    const map = {};
+    const add = function(id, msg) {
+        if (!id) return;
+        map[id] = map[id] ? map[id] + ' ' + msg : msg;
+    };
+    $.each(res.missing_items || [], function(k, v) { add(v.hiddenID, UILANG.m('Element is missing.')); });
+    $.each(res.noContentError || [], function(k, v) { add(v.hiddenID, UILANG.m('Content is missing.')); });
+    $.each(res.langError || [], function(k, v) { add(v.hiddenID, UILANG.m('Language content is incomplete.')); });
+    $.each(res.deletedPool || [], function(k, v) { add(v.hiddenID, UILANG.m('Testpool is missing.')); });
+    $.each(res.itemsAmountError || [], function(k, v) { add(v.hiddenID, UILANG.m('Pool has fewer pages than requested.')); });
+    return map;
+}
+
+function buildPreviewPlausibilityHtml(res) {
+    if (!res) return '<div class="tmPreviewCheckPending">' + UILANG.m('Checking plausibility...') + '</div>';
+    if (res.action === 'mutationPreviewOnly') {
+        return '<div class="tmPreviewCheckNeutral">' + UILANG.m('Mutation tests use assigned linear tests. Run detailed checks on the assigned tests when needed.') + '</div>';
+    }
+    const issues = [];
+    const add = function(level, title, detail) {
+        issues.push({level: level, title: title, detail: detail});
+    };
+    if (res.timerIssue) add('error', UILANG.m('Timer'), UILANG.m('Your test time is set to 0 minutes.'));
+    if (res.noActiveLanguage) add('error', UILANG.m('Languages'), UILANG.m('No language active. Please select at least one language!'));
+    if (res.pnNoContent) add('error', UILANG.m('Privacy note'), UILANG.m('The privacy note is enabled, but content is missing for active language(s).'));
+    if (res.noItems) add('warning', UILANG.m('Structure'), serverData.testLevel.structure.type === 'fluid' ? UILANG.m('No fluid testblocks have been added yet.') : UILANG.m('No pages have been added yet.'));
+    if (res.missing_items) add('error', UILANG.m('Missing elements'), Object.keys(res.missing_items).length + ' ' + UILANG.m('element(s) are no longer available.'));
+    if (res.deletedPool) add('error', UILANG.m('Deleted testpools'), Object.keys(res.deletedPool).length + ' ' + UILANG.m('fluid block(s) reference deleted testpools.'));
+    if (res.noContentError) add('warning', UILANG.m('Empty content'), Object.keys(res.noContentError).length + ' ' + UILANG.m('element(s) have no content.'));
+    if (res.langError) add('warning', UILANG.m('Language coverage'), Object.keys(res.langError).length + ' ' + UILANG.m('element(s) are missing active languages.'));
+    if (res.itemsAmountError) add('warning', UILANG.m('Pool size'), Object.keys(res.itemsAmountError).length + ' ' + UILANG.m('testpool(s) have fewer pages than selected.'));
+    if (res.duplicates) add('warning', UILANG.m('Duplicates'), UILANG.m('The same test page appears multiple times.'));
+    if (res.labelErrors && res.labelErrors.length) add('warning', UILANG.m('Labels'), res.labelErrors.length + ' ' + UILANG.m('label translation(s) are incomplete.'));
+    if (!issues.length) {
+        return '<div class="tmPreviewCheckOk"><strong>' + UILANG.m('Plausibility check completed successfully!') + '</strong><span>' + UILANG.m('No issues found in your test content.') + '</span></div>';
+    }
+    return '<div class="tmPreviewIssueList">' + issues.map(issue =>
+        '<div class="tmPreviewIssue is-' + issue.level + '"><strong>' + tmPreviewEscape(issue.title) + '</strong><span>' + tmPreviewEscape(issue.detail) + '</span></div>'
+    ).join('') + '</div>';
 }
 
 function abortEditing(caller) {
@@ -1824,6 +3529,7 @@ function abortEditing(caller) {
             showSection(gui.s1, [gui.s2, gui.s3, gui.s6, gui.s9], function() {
                 mode = 'browsing';
                 switchMode();
+                if (caller === 'error') refreshTestLibraryForBrowsing();
             });
             if (caller !== 'error') {
                 if (serverData.testLevel.structure.type === 'mutation') {
@@ -1844,10 +3550,48 @@ function abortEditing(caller) {
     }
 }
 
+function refreshTestLibraryForBrowsing(selectId) {
+    if (!loc || !loc.folder) return;
+    const payload = {
+        location: loc.folder,
+        rebuild: true,
+        showBlocked: showBlocked
+    };
+    const selectedId = selectId || (serverData.testLevel && serverData.testLevel.id ? 't' + serverData.testLevel.id : (selection[0] && selection[0].id));
+    if (selectedId) payload.select = selectedId;
+    startAjax('fetchLibrary', payload);
+}
+
 function pCheckProceed(button, btn) {
     if (button === 'edit') {
         editSelection('pCheck');
     }
+}
+
+function pCheckSuccessHtml(intro, checks) {
+    return '<div class="pCheckSuccessDiv"><h3>' + UILANG.m('Plausibility check completed successfully!') + '</h3><p>' + intro + '</p><ul class="pCheckUl">' + checks.map(function(check) {
+        return '<li><img src="../images/ok.png" height="15px;" />&nbsp;' + check + '</li>';
+    }).join('') + '</ul></div>';
+}
+
+function pCheckUniqueRows(rows, keyFn) {
+    const seen = Object.create(null);
+    const uniqueRows = [];
+    $.each(rows || [], function(k, row) {
+        const key = keyFn(row);
+        if (seen[key]) return;
+        seen[key] = true;
+        uniqueRows.push(row);
+    });
+    return uniqueRows;
+}
+
+function pCheckLanguageKey(languages) {
+    if (Array.isArray(languages)) return languages.join('/');
+    if (languages && typeof languages === 'object') return Object.keys(languages).map(function(key) {
+        return languages[key];
+    }).join('/');
+    return languages || '';
 }
 
 /* data fields */
@@ -1859,7 +3603,7 @@ function fillDataFields(fillMode) {
                 optionNames = ['onOffSwitch', 'forceLogoff'];
             } else {
                 //testpools
-                gui.testpools.setItems(serverData.testLevel.testpools);
+	                gui.testpools.setItems(Array.isArray(serverData.testLevel.testpools) ? serverData.testLevel.testpools : []);
                 listLabels();
                 listVariables();
                 optionNames = ['onOffSwitch', 'forceLogoff', 'useTimer', 'saveResults', 'limitNavigation', 'showScore', 'hideTimeoutMsg', 'waitForMediaCache', 'timeLimit'];
@@ -1883,6 +3627,7 @@ function fillDataFields(fillMode) {
                 }
                 gui.boxes.properties[option].reset(value);
             }
+            resetTestStateSwitch();
             let structureItems;
             if (serverData.testLevel.structure) {
                 structureItems = serverData.testLevel.structure;
@@ -1891,7 +3636,11 @@ function fillDataFields(fillMode) {
                 gui.fluidStructureView.clearElements(true);
                 if (structureItems.items && structureItems.items.length > 0) {
                     $.each(structureItems.items, function(key, value) {
-                        if (value['itemOrder'] && typeof value['itemOrder'].data === 'object') {
+                        if (
+                            value['itemOrder'] &&
+                            typeof value['itemOrder'] === 'object' &&
+                            typeof value['itemOrder'].data === 'string'
+                        ) {
                             value['itemOrder'].data = UILANG.m(value['itemOrder'].data);
                         }
                         gui.fluidStructureView.addElement(value, true);
@@ -1966,11 +3715,12 @@ function fillDataFields(fillMode) {
             let tActivityData = $('#tActivityData');
             tActivityData.empty();
             let actCount = $(serverData.testLevel.activityData).length;
+            let accessCount = serverData.testLevel.activityAccess?.accessible ?? actCount;
             if (actCount > 0) {
                 if (actCount === 1) {
-                    tActivityData.append('<div class="aoheader_activityData">' + UILANG.m('Data from') + ' ' + actCount + ' ' + UILANG.m('test taker recorded.') + '</div>');
+                    tActivityData.append('<div class="aoheader_activityData">' + UILANG.m('Data from') + ' ' + actCount + ' ' + UILANG.m('test taker.') + ' ' + UILANG.m('You have access to') + ' ' + accessCount + '.</div>');
                 } else {
-                    tActivityData.append('<div class="aoheader_activityData">' + UILANG.m('Data from') + ' ' + actCount + ' ' + UILANG.m('test takers recorded.') + '</div>');
+                    tActivityData.append('<div class="aoheader_activityData">' + UILANG.m('Data from') + ' ' + actCount + ' ' + UILANG.m('test takers.') + ' ' + UILANG.m('You have access to') + ' ' + accessCount + '.</div>');
                 }
             } else {
                 tActivityData.append('<div class="aoheader_noActivityData">' + UILANG.m('No data recorded yet.') + '</div>');
@@ -2154,24 +3904,10 @@ function fillDataFields(fillMode) {
                 skinTrigger();
             }
             //metatags
-            gui.metaView.clearElements(true);
             let mtags = serverData.testLevel.metatags;
-            let sortedKeys = Object.keys(mtags).sort();
-            $.each(sortedKeys, function(key, value) {
-                let objInsert = {
-                    metakey: value,
-                    metavalue: mtags[value],
-                    hiddenID: key
-                };
-                //add to structure list
-                gui.metaView.addElement(objInsert, true);
-            });
-
-            if (sortedKeys.length === 1) {
-                $(metaTbText).html(sortedKeys.length + ' ' + UILANG.m('meta tag'));
-            } else {
-                $(metaTbText).html(sortedKeys.length + ' ' + UILANG.m('meta tags'));
-            }
+            let sortedKeys = Object.keys(mtags).sort((a, b) => String(a).localeCompare(String(b), undefined, {sensitivity: 'base'}));
+            gui.metaView.setItems(mtags, true);
+            updateMetaTagCounter(metaTbText, sortedKeys.length);
     }
     adjustOptionsVisibility();
 
@@ -2463,7 +4199,10 @@ function skinOptionClicked(sender, value, dirty, dataId, type, button, newValue)
                     values: {
                         dialogField1: value
                     },
-                    contents: '<p>' + UILANG.m('Please modify string for skin option') + ' "' + dataId + '":<br><input type="text" id="dialogField1" maxlength="200" style="width: 100%; margin-top: 10px;"></p>',
+                    contents: '<div class="tmDialogForm">' +
+                        '<div class="tmActionConfirmMeta"><span>' + UILANG.m('Skin option') + '</span><strong>' + dataId + '</strong></div>' +
+                        '<div class="tmDialogFormField"><label for="dialogField1">' + UILANG.m('Value') + '</label><input type="text" id="dialogField1" maxlength="200"></div>' +
+                    '</div>',
                     title: UILANG.m('Modify string'),
                     width: 400,
                     callback: skinOptionClicked
@@ -2474,7 +4213,10 @@ function skinOptionClicked(sender, value, dirty, dataId, type, button, newValue)
                 let vals = value.split(' &rarr; ');
                 minTmpValue = vals[0];
                 maxTmpValue = vals[1];
-                let html = UILANG.m('Please modify range for skin option') + ' "' + dataId + '":<table style="width:100%;"><tr><td style="width:50%;"><p id="minRangeContainer">min:&nbsp;&nbsp;</p></td><td><p id=maxRangeContainer>max:&nbsp;</p></td></tr></table>';
+                let html = '<div class="tmDialogForm">' +
+                    '<div class="tmActionConfirmMeta"><span>' + UILANG.m('Skin option') + '</span><strong>' + dataId + '</strong></div>' +
+                    '<div class="tmDialogFormField"><label>' + UILANG.m('Range') + '</label><table style="width:100%;"><tr><td style="width:50%;"><p id="minRangeContainer">min:&nbsp;&nbsp;</p></td><td><p id=maxRangeContainer>max:&nbsp;</p></td></tr></table></div>' +
+                '</div>';
 
                 dialogData = {
                     buttons: [{
@@ -2630,6 +4372,67 @@ function listVariables() {
     })
 }
 
+function confirmLabelDelete(rowId) {
+    return confirmTestEditorDelete(
+        UILANG.m('Delete label?'),
+        UILANG.m('Are you sure you want to delete the selected label?'),
+        getTestLabelNameByTmpId(rowId)
+    );
+}
+
+function confirmVariableDelete(rowId) {
+    return confirmTestEditorDelete(
+        UILANG.m('Delete variable?'),
+        UILANG.m('Are you sure you want to delete the selected variable?'),
+        getTestVariableNameByTmpId(rowId)
+    );
+}
+
+function confirmTestEditorDelete(title, prompt, entryName) {
+    const message = '<div class="deleteConfirm"><div class="deleteConfirmText"><p>' + prompt + '</p></div>' +
+        '<div class="deleteConfirmText"><strong>' + escapeHtml(entryName) + '</strong></div></div>';
+    const dialogData = {
+        buttons: [{
+            label: UILANG.m('Cancel'),
+            'cancel': true,
+            'default': true,
+            value: 'cancel'
+        }, {
+            label: UILANG.m('Delete'),
+            value: 'delete'
+        }],
+        contents: message,
+        title: title,
+        returnPromise: true,
+        width: 500,
+        icon: "../images/warning.png",
+        iconWidth: 64
+    };
+    return showDialog('testEditorDeleteDialog', dialogData).then((res) => res.button === 'delete');
+}
+
+function getTestLabelNameByTmpId(rowId) {
+    let labelName = UILANG.m('selected label');
+    $.each(serverData.testLevel.labels, function(k, v) {
+        if (v.tmpId === rowId) {
+            labelName = k;
+            return false;
+        }
+    });
+    return labelName;
+}
+
+function getTestVariableNameByTmpId(rowId) {
+    let variableName = UILANG.m('selected variable');
+    $.each(serverData.testLevel.variables, function(k, v) {
+        if (v.tmpId === rowId) {
+            variableName = k;
+            return false;
+        }
+    });
+    return variableName;
+}
+
 function variablesChanged(deleted, id, currValue, dirty, dataId, deletedHiddenData) {
     if (deleted) {
         $.each(serverData.testLevel.variables, function(k, v) {
@@ -2648,18 +4451,52 @@ function variablesClick(clickedId, parentId, fieldDesc, hiddenData, dataId, rowN
 }
 
 
+function buildVariableDialogLanguageFields(dataFields, extraClass = '') {
+    let html = '<div class="variablesEditContainer tmVariableFields' + (extraClass ? ' ' + extraClass : '') + '"><div class="tmVariableFieldList">';
+    $.each(languages, function(k, v) {
+        const fieldId = k + '_textLoc';
+        html += '<label class="tmVariableField" for="' + escapeHtml(fieldId) + '">' +
+            '<span>' + escapeHtml(v) + '</span>' +
+            '<input type="text" class="lblClick" id="' + escapeHtml(fieldId) + '">' +
+            '</label>';
+        dataFields.push(fieldId);
+    });
+    html += '</div></div>';
+    return html;
+}
+
+function buildLabelDialogLanguageFields(dataFields) {
+    let html = '<div class="variablesEditContainer tmLabelFields"><div class="tmLabelFieldList">';
+    $.each(languages, function(k, v) {
+        const buttonId = k + '_button';
+        const headlineId = k + '_headline';
+        html += '<section class="tmLabelLanguageGroup">' +
+            '<h3>' + escapeHtml(v) + '</h3>' +
+            '<label class="tmLabelField" for="' + escapeHtml(buttonId) + '">' +
+            '<span>' + UILANG.m('Button') + '</span>' +
+            '<input type="text" class="lblClick" id="' + escapeHtml(buttonId) + '">' +
+            '</label>' +
+            '<label class="tmLabelField" for="' + escapeHtml(headlineId) + '">' +
+            '<span>' + UILANG.m('Headline') + '</span>' +
+            '<input type="text" class="lblClick" id="' + escapeHtml(headlineId) + '">' +
+            '</label>' +
+            '</section>';
+        dataFields.push(buttonId);
+        dataFields.push(headlineId);
+    });
+    html += '</div></div>';
+    return html;
+}
+
 /* editing loc strings variables */
 function editLocStrings(varName, data) {
     let srcVariable = varName;
 
-    let editlocHTML = '<p>' + UILANG.m('Localized content for variable:') + ' <Strong>' + srcVariable + '</Strong><br></p><div class="variablesEditContainer"><table style="width:97%;border:0px;border-spacing:0px;">';
     let dataFields = [];
-    $.each(languages, function(k, v) {
-        editlocHTML += '<tr><td class="variableTfTitle"><strong>' + v + '</strong></td></tr>';
-        editlocHTML += '<tr><td><input type="text" class="lblClick" id="' + k + '_textLoc" style="width: 100%;"></td></tr>';
-        dataFields.push(k + '_textLoc');
-    });
-    editlocHTML += '</table><br /></div>';
+    let editlocHTML = '<div class="localizationDialogContainer tmVariableDialog tmVariableDialog-edit l10nEditStringsDialog">' +
+        '<div class="tmVariableIntro"><span>' + UILANG.m('Localized content for variable:') + '</span><strong>' + escapeHtml(srcVariable) + '</strong></div>' +
+        buildVariableDialogLanguageFields(dataFields, 'l10nEditStringsFields') +
+        '</div>';
 
     let editLocDialogData = {
         buttons: [{
@@ -2752,6 +4589,7 @@ function propertiesChanged(deleted, id, currValue, dirty, dataId) {
             id: serverData.testLevel.id,
             structure: currValue,
             testtype: 'linear',
+            structureState: getTestState(),
             options: serverData.testLevel.options,
             currentSkin: serverData.testLevel.skin.skin
         });
@@ -2763,6 +4601,8 @@ function mutationPropertiesChanged(deleted, id, currValue, dirty, dataId) {
     startAjax('saveTest', {
         id: serverData.testLevel.id,
         structure: currValue,
+        structureState: getTestState(),
+        publishMutationChildren: isTestPublished(),
         mSave: true
     });
 }
@@ -2820,8 +4660,6 @@ function viewSubTestDialog(structure) {
 
     //Subtest Info
     mInfo.append('<h2>' + structure.name + ' (ID: ' + structure.id + ')</h2>');
-    mInfo.append('<p class="mutInf">' + Object.keys(structure.structure.items).length + ' ' + UILANG.m('test pages') + '</p>');
-    mInfo.append('<p class="mutInf">' + UILANG.m('Skin:') + ' ' + structure.skin.skin + '</p>');
 
 
     //Subtest Options
@@ -2866,7 +4704,9 @@ function viewSubTestDialog(structure) {
         } else {
             sglScore = 0;
         }
-        mStruct.append('<tr class="smFo"><td>' + structCount + '</td><td>' + v.name + '</td><td>' + sglScore + '</td></tr>');
+        const invalidPage = v.name === 'Invalid test page!';
+        const pageName = invalidPage ? UILANG.m('Invalid test page!') : UILANG.e(v.name);
+        mStruct.append('<tr class="smFo' + (invalidPage ? ' is-invalid' : '') + '"><td>' + structCount + '</td><td>' + pageName + '</td><td>' + sglScore + '</td></tr>');
         structCount++;
     })
 }
@@ -2951,7 +4791,8 @@ function propertiesClickFluid(clickedId, parentId, fieldDesc, hiddenData, dataId
 
 function saveItemOrder(testType, clickedId, parentId, posFlag, rowName) {
     startAjax('saveFluidPoolOrder', {
-        id: clickedId
+        id: clickedId,
+        testId: serverData.testLevel.id
     });
 }
 
@@ -2963,7 +4804,14 @@ function chgItemsUsed(testType, clickedId, parentId, hiddenData, rowName) {
     } else {
         pagesUsed = hiddenData.used;
     }
-    let fiuHtml = '<div class="divMain"><div class="dmText">' + UILANG.m('Number of test pages of this testpool to be used?') + '</div><div  class="divSub" id="itemUsageDroplistDiv"</div></div><br />';
+    let fiuHtml = '<div class="tmFluidUsageDialog">' +
+        '<div class="tmFluidUsageIntro">' + UILANG.m('Number of test pages of this testpool to be used?') + '</div>' +
+        '<div class="tmFluidUsageRow">' +
+            '<div class="tmFluidUsageLabel">' + UILANG.m('Pages used') + '</div>' +
+            '<div class="tmFluidUsageControl" id="itemUsageDroplistDiv"></div>' +
+        '</div>' +
+        '<div class="tmFluidUsageMeta"><span>' + UILANG.m('Pages total') + '</span><strong>' + hiddenData.total + '</strong></div>' +
+    '</div>';
 
     let dialogData = {
         buttons: [
@@ -2973,7 +4821,7 @@ function chgItemsUsed(testType, clickedId, parentId, hiddenData, rowName) {
         contents: fiuHtml,
         title: UILANG.m('Save number of pages used'),
         returnPromise: true,
-        width: 600
+        width: 500
     };
     showDialog('iuDialog', dialogData).then(
         (res) => {
@@ -2981,7 +4829,8 @@ function chgItemsUsed(testType, clickedId, parentId, hiddenData, rowName) {
                 let fluidStructureId = parentId.slice(21);
                 startAjax('saveFluidPageUsage', {
                     id: clickedId,
-                    pageUsage: pagesUsed
+                    pageUsage: pagesUsed,
+                    testId: serverData.testLevel.id
                 });
             }
         }
@@ -2995,6 +4844,7 @@ function chgItemsUsed(testType, clickedId, parentId, hiddenData, rowName) {
             label: UILANG.m('Use all') + ' (' + hiddenData.total + ')'
         }],
         dataId: 'piu2',
+        theme: 'backend',
         readOnly: false,
         width: 185
     };
@@ -3166,44 +5016,56 @@ function timeOptionsChanged(sender, value, dataId){
 }
 
 
-function editDateRange() {
+function editDateRange(bulkMode /* optional: boolean */, seed /* optional: {start:'YYYY-MM-DDTHH:MM', end:false|'YYYY-MM-DDTHH:MM'} | false | '__keep__' */) {
+    const KEEP = '__keep__';
+    const isBulk = (bulkMode === true);
+
     let helperObj = {};
-    let dr = serverData.testLevel.options.restrictions.dateRange;
+    // ORIGINAL: let dr = serverData.testLevel.options.restrictions.dateRange;
+    // BULK: seed if provided (and not KEEP), else fall back to original source
+    let dr;
+    if (isBulk && typeof seed !== 'undefined' && seed !== KEEP) {
+        dr = seed; // {start, end:false|'…'} or false
+    } else {
+        dr = serverData.testLevel.options.restrictions.dateRange;
+    }
+
     let head1 = UILANG.m('Define the date range where the test will be accessible. You can set a "start" and an optional "end" date and time.');
-    let html = '<p id="drMessage" class="dialogStandardMessage">' + head1 + '</p>' +
-        '</div>' +
-        '<div id="drTimeContainer">' +
-        '<div class="drToFromContainer">' +
-        '<div class="drToFromText">' + UILANG.m("Valid from:") + '</div>' +
-        '<div id="drTimeFromContainer">' +
-        '<div id="drFrom"></div>' +
-        '<div id="drFromTime" ></div>' +
-        '</div></div>' +
-        '<div class="drToFromContainer">' +
-        '<div class="drToFromText">' + UILANG.m("To:") + '</div>' +
-        '<div id="drTimeToContainer">' +
-        '<div id="drTo"></div>' +
-        '<div id="drToTime"></div>' +
-        '</div></div>' +
-        '</div>' +
-        '<div id="drCb"></div>' +
-        '<table id="drTable">' +
-        '<tr>' +
-        '<td colspan=2 class="drDpCell">' +
-        '<div id="drDp1"></div>' +
-        '</td>' +
-        '<td colspan=2 class="drDpCell">' +
-        '<div id="drDp2"></div>' +
-        '</td>' +
-        '</tr>' +
-        '<tr>' +
-        '<td colspan=2>' + UILANG.m("Time:") + '</td>' +
-        '<td id="toTimeHead" colspan=2>' + UILANG.m("Time:") + '</td>' +
-        '</tr>' +
-        '<tr>' +
-        '<td class="drPadd" colspan=2><div  id="drSlider1"></div></td>' +
-        '<td class="drPadd" colspan=2><div id="drSlider2"></div></td>' +
-        '</tr></table>';
+    let html =
+        '<div id="dateRestrictionEditor" class="dateRestrictionEditor">' +
+            '<div id="drMessage" class="dateRestrictionIntro">' + head1 + '</div>' +
+            '<div id="drTimeContainer" class="dateRestrictionSummary">' +
+                '<div class="drToFromContainer">' +
+                    '<div class="drToFromText">' + UILANG.m("Valid from:") + '</div>' +
+                    '<div id="drTimeFromContainer" class="dateRestrictionValue">' +
+                        '<div id="drFrom"></div>' +
+                        '<div id="drFromTime"></div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="drToFromContainer">' +
+                    '<div class="drToFromText">' + UILANG.m("To:") + '</div>' +
+                    '<div id="drTimeToContainer" class="dateRestrictionValue">' +
+                        '<div id="drTo"></div>' +
+                        '<div id="drToTime"></div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="dateRestrictionActions"><button type="button" id="drCb"></button></div>' +
+            '<div id="drTable" class="dateRestrictionGrid">' +
+                '<div class="dateRestrictionCard">' +
+                    '<div class="dateRestrictionCardHeader">' + UILANG.m("Start") + '</div>' +
+                    '<div class="drDpCell"><div id="drDp1"></div></div>' +
+                    '<div class="dateRestrictionTimeLabel">' + UILANG.m("Time:") + '</div>' +
+                    '<div class="drPadd"><div id="drSlider1"></div></div>' +
+                '</div>' +
+                '<div class="dateRestrictionCard">' +
+                    '<div class="dateRestrictionCardHeader">' + UILANG.m("End") + '</div>' +
+                    '<div class="drDpCell"><div id="drDp2"></div></div>' +
+                    '<div id="toTimeHead" class="dateRestrictionTimeLabel">' + UILANG.m("Time:") + '</div>' +
+                    '<div class="drPadd"><div id="drSlider2"></div></div>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
     let dialogData = {
         buttons: [
             { label: UILANG.m('Cancel'), 'cancel': true, value: 'cancel' },
@@ -3215,23 +5077,54 @@ function editDateRange() {
         returnPromise: true,
         width: 650
     };
-    showDialog('drDialog', dialogData).then(
+
+    // IMPORTANT: return the promise so bulk callers can await the result
+    const p = showDialog('drDialog', dialogData).then(
         (res) => {
-            if (res.button === 'ok') {
-                serverData.testLevel.options.restrictions.dateRange = {};
-                serverData.testLevel.options.restrictions.dateRange.start = helperObj.fromDate + 'T' + helperObj.fromTime;
-                if (helperObj.toDate) {
-                    serverData.testLevel.options.restrictions.dateRange.end = helperObj.toDate + 'T' + helperObj.toTime;
-                } else {
-                    serverData.testLevel.options.restrictions.dateRange.end = false;
+            if (!isBulk) {
+                // ===== ORIGINAL SIDE-EFFECT BEHAVIOR (unchanged) =====
+                if (res.button === 'ok') {
+                    serverData.testLevel.options.restrictions.dateRange = {};
+                    serverData.testLevel.options.restrictions.dateRange.start = helperObj.fromDate + 'T' + helperObj.fromTime;
+                    if (helperObj.toDate) {
+                        serverData.testLevel.options.restrictions.dateRange.end = helperObj.toDate + 'T' + helperObj.toTime;
+                    } else {
+                        serverData.testLevel.options.restrictions.dateRange.end = false;
+                    }
+                    optionsChanged('restrictionChange', false, false, 'dateRange');
+                } else if (res.button === 'delete') {
+                    serverData.testLevel.options.restrictions.dateRange = false;
+                    optionsChanged('restrictionChange', false, false, 'dateRange');
                 }
-                optionsChanged('restrictionChange', false, false, 'dateRange');
-            } else if (res.button === 'delete') {
-                serverData.testLevel.options.restrictions.dateRange = false;
-                optionsChanged('restrictionChange', false, false, 'dateRange');
+                // non-bulk: callers can ignore return value
+                return res;
+            } else {
+                // ===== BULK MODE: no writes, return a value =====
+                if (res.button === 'ok') {
+                    // Build from the same helper fields your UI maintains
+                    const fromD = helperObj.fromDate;
+                    const fromT = helperObj.fromTime;
+                    // If user didn’t actually set a valid start, don’t change anything
+                    if (!fromD || !fromT) return KEEP;
+
+                    const out = { start: fromD + 'T' + fromT, end: false };
+                    if (helperObj.toDate && helperObj.toTime) {
+                        out.end = helperObj.toDate + 'T' + helperObj.toTime;
+                    } else {
+                        out.end = false;
+                    }
+                    return out;
+                } else if (res.button === 'delete') {
+                    return false;     // explicit clear
+                } else {
+                    return KEEP;      // cancel → keep existing
+                }
             }
         }
     );
+
+    // ====== ORIGINAL UI INITIALIZATION (unchanged) ======
+
     //Fill fields
     let initDateFrom;
     let initDateTo;
@@ -3412,23 +5305,59 @@ function editDateRange() {
             helperObj.toDate = false;
             helperObj.toTime = false;
         }
-    })
+    });
+
+    // bulk callers await the promise; normal callers can ignore it
+    return p;
 }
 
-function editTimeRestriction() {
-    //get current values
-    let tr = serverData.testLevel.options.restrictions.timeRestriction;
+
+function editTimeRestriction(bulkMode /* optional: boolean */, seed /* optional: {start:'HH:MM', end:'HH:MM'} | false | '__keep__' */) {
+    const KEEP = '__keep__';
+
+    // detect bulk
+    const isBulk = (bulkMode === true);
+
+    // get current values (seed if bulk provided; otherwise original source)
+    let tr;
+    if (isBulk && typeof seed !== 'undefined' && seed !== KEEP) {
+        tr = seed; // {start,end} or false
+    } else {
+        tr = serverData.testLevel.options.restrictions.timeRestriction;
+    }
+
     let val1, val2, value1, value2;
     if (tr === false) {
-        val1 = 28800;
-        val2 = 57600;
+        val1 = 28800;   // 08:00
+        val2 = 57600;   // 16:00
     } else {
-        val1 = time2Secs(tr.start);
-        val2 = time2Secs(tr.end);
+        // Handle both normal call (tr is object) and odd seeds
+        const startStr = (tr && tr.start) ? tr.start : '08:00';
+        const endStr   = (tr && tr.end)   ? tr.end   : '16:00';
+        val1 = time2Secs(startStr);
+        val2 = time2Secs(endStr);
     }
 
     let head1 = UILANG.m('Move the sliders to set the start and end time of the daily test time restriction. Outside of this daily range, test takers will not be able to run the test.');
-    let html = '<p class="dialogStandardMessage">' + head1 + '</p><div class="rtHeadCont"><span id="trStart"></span>&nbsp;&nbsp;:&nbsp;&nbsp;<span id="trEnd"></span><div><br /><div id="trSlider"></div>';
+    let html =
+        '<div id="timeRestrictionEditor" class="timeRestrictionEditor">' +
+            '<div class="timeRestrictionIntro">' + head1 + '</div>' +
+            '<div class="timeRestrictionSummary">' +
+                '<div class="timeRestrictionTimeCard">' +
+                    '<span>' + UILANG.m('Start') + '</span>' +
+                    '<strong id="trStart"></strong>' +
+                '</div>' +
+                '<div class="timeRestrictionTimeCard">' +
+                    '<span>' + UILANG.m('End') + '</span>' +
+                    '<strong id="trEnd"></strong>' +
+                '</div>' +
+            '</div>' +
+            '<div class="timeRestrictionSliderCard">' +
+                '<div class="timeRestrictionSliderHeader">' + UILANG.m('Allowed daily time window') + '</div>' +
+                '<div id="trSlider"></div>' +
+            '</div>' +
+        '</div>';
+
     let dialogData = {
         buttons: [
             { label: UILANG.m('Cancel'), 'cancel': true, value: 'cancel' },
@@ -3440,19 +5369,38 @@ function editTimeRestriction() {
         returnPromise: true,
         width: 700
     };
-    showDialog('timeRestrictionDialog', dialogData).then(
+
+    // IMPORTANT: we return the promise so bulk callers can await it
+    const p = showDialog('timeRestrictionDialog', dialogData).then(
         (res) => {
-            if (res.button === 'ok') {
-                serverData.testLevel.options.restrictions.timeRestriction = {};
-                serverData.testLevel.options.restrictions.timeRestriction.start = value1;
-                serverData.testLevel.options.restrictions.timeRestriction.end = value2;
-                optionsChanged('restrictionChange', false, false, 'timeRestriction');
-            } else if (res.button === 'delete') {
-                serverData.testLevel.options.restrictions.timeRestriction = false;
-                optionsChanged('restrictionChange', false, false, 'timeRestriction');
+            if (!isBulk) {
+                // === ORIGINAL SIDE-EFFECT BEHAVIOR (unchanged) ===
+                if (res.button === 'ok') {
+                    serverData.testLevel.options.restrictions.timeRestriction = {};
+                    serverData.testLevel.options.restrictions.timeRestriction.start = value1;
+                    serverData.testLevel.options.restrictions.timeRestriction.end = value2;
+                    optionsChanged('restrictionChange', false, false, 'timeRestriction');
+                } else if (res.button === 'delete') {
+                    serverData.testLevel.options.restrictions.timeRestriction = false;
+                    optionsChanged('restrictionChange', false, false, 'timeRestriction');
+                }
+                // for non-bulk, nothing to return/consume
+                return res;
+            } else {
+                // === BULK MODE: no writes, return a value ===
+                if (res.button === 'ok') {
+                    // return the chosen values (strings 'HH:MM')
+                    return { start: value1, end: value2 };
+                } else if (res.button === 'delete') {
+                    return false; // explicit remove
+                } else {
+                    return KEEP;  // cancel → keep existing
+                }
             }
         }
     );
+
+    // Keep original UI behavior & timing (initialize immediately after opening)
     $("#trStart").html(secs2Time(val1));
     $("#trEnd").html(secs2Time(val2));
     value1 = secs2Time(val1);
@@ -3472,13 +5420,38 @@ function editTimeRestriction() {
             $("#trEnd").html(secs2Time(max));
         }
     });
+
+    // In non-bulk mode callers can ignore the return value; in bulk mode they can await it
+    return p;
 }
 
-function editTestDays() {
+
+function editTestDays(bulkMode /* optional: boolean */, seed /* optional: {days:'0,1,...'} | false | '__keep__' */) {
+    const KEEP = '__keep__';
+    const isBulk = (bulkMode === true);
+
     let days;
     let helperObj;
+
     let head1 = UILANG.m('On all selected days, test takers will be able to run the test. Unselect the week days the test should not be active and accessible.');
-    let html = '<p class="dialogStandardMessage">' + head1 + '</p><div class="weekDaysTable"><div class="weekDaysRow"><div data-0 class="weekDaysCells"></div><div data-1 class="weekDaysCells"></div><div data-2 class="weekDaysCells"></div><div data-3 class="weekDaysCells"></div><div data-4 class="weekDaysCells"></div><div data-5 class="weekDaysCells"></div><div data-6 class="weekDaysCells"></div></div></div>';
+    let html =
+        '<div id="testingDaysEditor" class="testingDaysEditor">' +
+            '<div class="testingDaysIntro">' + head1 + '</div>' +
+            '<div class="testingDaysPanel">' +
+                '<div class="testingDaysPanelHeader">' + UILANG.m('Allowed testing days') + '</div>' +
+                '<div class="weekDaysTable testingDaysGrid">' +
+                    '<div class="weekDaysRow">' +
+                        '<div data-0 class="weekDaysCells"></div>' +
+                        '<div data-1 class="weekDaysCells"></div>' +
+                        '<div data-2 class="weekDaysCells"></div>' +
+                        '<div data-3 class="weekDaysCells"></div>' +
+                        '<div data-4 class="weekDaysCells"></div>' +
+                        '<div data-5 class="weekDaysCells"></div>' +
+                        '<div data-6 class="weekDaysCells"></div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
     let dialogData = {
         buttons: [
             { label: UILANG.m('Cancel'), 'cancel': true, value: 'cancel' },
@@ -3490,29 +5463,54 @@ function editTestDays() {
         returnPromise: true,
         width: 700
     };
-    showDialog('testDaysDialog', dialogData).then(
-        (res) => {
-            if (res.button === 'ok') {
-                let hlp = '';
-                $.each(helperObj, function(k, v) {
-                    $.each($(v).data(), function(k, v) {
-                        hlp += k + ',';
-                    });
-                });
-                hlp = hlp.slice(0, -1);
 
-                if (hlp === '0,1,2,3,4,5,6' || hlp === '') {
+    const p = showDialog('testDaysDialog', dialogData).then(
+        (res) => {
+            if (!isBulk) {
+                // ===== ORIGINAL SIDE-EFFECT BEHAVIOR (unchanged) =====
+                if (res.button === 'ok') {
+                    let hlp = '';
+                    $.each(helperObj, function(k, v) {
+                        $.each($(v).data(), function(k, v) {
+                            hlp += k + ',';
+                        });
+                    });
+                    hlp = hlp.slice(0, -1);
+
+                    if (hlp === '0,1,2,3,4,5,6' || hlp === '') {
+                        serverData.testLevel.options.restrictions.testDays = false;
+                        optionsChanged('restrictionChange', false, false, 'testDays');
+                    } else {
+                        serverData.testLevel.options.restrictions.testDays = {};
+                        serverData.testLevel.options.restrictions.testDays.days = hlp;
+                        optionsChanged('restrictionChange', false, false, 'testDays');
+                    }
+                } else if (res.button === 'delete') {
                     serverData.testLevel.options.restrictions.testDays = false;
                     optionsChanged('restrictionChange', false, false, 'testDays');
-                } else {
-                    serverData.testLevel.options.restrictions.testDays = {};
-                    serverData.testLevel.options.restrictions.testDays.days = hlp;
-                    optionsChanged('restrictionChange', false, false, 'testDays');
                 }
+                // non-bulk callers ignore return value
+                return res;
+            } else {
+                // ===== BULK MODE: no writes, return a value =====
+                if (res.button === 'ok') {
+                    let hlp = '';
+                    $.each(helperObj, function(k, v) {
+                        $.each($(v).data(), function(k, v) {
+                            hlp += k + ',';
+                        });
+                    });
+                    hlp = hlp.slice(0, -1);
 
-            } else if (res.button === 'delete') {
-                serverData.testLevel.options.restrictions.testDays = false;
-                optionsChanged('restrictionChange', false, false, 'testDays');
+                    if (hlp === '0,1,2,3,4,5,6' || hlp === '') {
+                        return false;                 // no restriction if all or none selected
+                    }
+                    return { days: hlp };
+                } else if (res.button === 'delete') {
+                    return false;                     // explicit delete
+                } else {
+                    return KEEP;                      // cancel → keep existing
+                }
             }
         }
     );
@@ -3524,26 +5522,49 @@ function editTestDays() {
     $('div[data-4]').html(UILANG.m('Fri'));
     $('div[data-5]').html(UILANG.m('Sat'));
     $('div[data-6]').html(UILANG.m('Sun'));
-    //get current values
-    let td = serverData.testLevel.options.restrictions.testDays;
-    if (td === false) {
-        $('.weekDaysCells').toggleClass('daySelected');
+
+    // ===== get current values (seed for bulk, serverData for normal) =====
+    let td;
+    if (isBulk && typeof seed !== 'undefined' && seed !== KEEP) {
+        td = seed;                                   // {days:'...'} or false
     } else {
+        td = serverData.testLevel.options.restrictions.testDays;
+    }
+
+    if (td === false) {
+        // original behavior: toggle all to selected to indicate "no restriction"
+        $('.weekDaysCells').toggleClass('daySelected');
+    } else if (td && td.days) {
         days = td.days.split(',');
         $.each(days, function(k, v) {
             $('div[data-' + v + ']').toggleClass('daySelected');
-        })
+        });
     }
     helperObj = ($('.daySelected'));
     $('.weekDaysCells').on('click', function() {
         $(this).toggleClass('daySelected');
         helperObj = ($('.daySelected'));
-    })
+    });
+
+    // In bulk mode, callers await the return; in normal mode, return value is ignored.
+    return p;
 }
 
 
+
 function editScripts(testType, clickedId, parentId, scriptObj, rowName) {
-    let editScriptsHTML = '<div id ="editScriptsDIV"><h3>' + UILANG.m('Edit scripts for:') + ' <span class="soValue">"' + rowName + '"</span></h3></p><ul class="showTabs"><li><a href="#editScriptsTabs-pre">Pre</a></li><li><a href="#editScriptsTabs-post">Post</a></li><li><a href="#editScriptsTabs-onActivity">on Activity</a></li></ul><div id="editScriptsTabs-pre"><textarea id="scriptsTextAreaPre"></textarea></div><div id="editScriptsTabs-post"><textarea id="scriptsTextAreaPost"></textarea></div><div id="editScriptsTabs-onActivity"><textarea id="scriptsTextAreaOnActivity"></textarea></div><br /></div>';
+    let editScriptsHTML =
+        '<div id="editScriptsDIV">' +
+        '<h3>' + UILANG.m('Edit scripts for:') + ' <span class="soValue">"' + rowName + '"</span></h3>' +
+        '<ul class="showTabs">' +
+        '<li><a href="#editScriptsTabs-pre">Pre</a></li>' +
+        '<li><a href="#editScriptsTabs-post">Post</a></li>' +
+        '<li><a href="#editScriptsTabs-onActivity">on Activity</a></li>' +
+        '</ul>' +
+        '<div id="editScriptsTabs-pre"><textarea id="scriptsTextAreaPre" spellcheck="false"></textarea></div>' +
+        '<div id="editScriptsTabs-post"><textarea id="scriptsTextAreaPost" spellcheck="false"></textarea></div>' +
+        '<div id="editScriptsTabs-onActivity"><textarea id="scriptsTextAreaOnActivity" spellcheck="false"></textarea></div>' +
+        '</div>';
     let dataFields = ['scriptsTextAreaPre', 'scriptsTextAreaPost', 'scriptsTextAreaOnActivity'];
     const dialogData = {
         buttons: [{
@@ -3649,7 +5670,9 @@ function selectListBtnNewTp(sender, button, name) {
             datafields: ['dialogField1'],
             mandatory: ['dialogField1'],
             focus: 'dialogField1',
-            contents: '<p>' + UILANG.m('Please enter a name for the new testpool:') + '<br><input type="text" id="dialogField1" maxlength="200" style="width: 100%; margin-top: 10px;"></p>',
+            contents: '<div class="tmDialogForm">' +
+                '<div class="tmDialogFormField"><label for="dialogField1">' + UILANG.m('Testpool name') + '</label><input type="text" id="dialogField1" maxlength="200"></div>' +
+            '</div>',
             title: UILANG.m('New testpool'),
             width: 400,
             callback: selectListBtnNewTp
@@ -3691,7 +5714,9 @@ function editTestpool(sel, button, name) {
             values: {
                 dialogField1: sel.name
             },
-            contents: '<p>' + UILANG.m('Please enter a new name:') + '<br><input type="text" id="dialogField1" maxlength="200" style="width: 100%; margin-top: 10px;"></p>',
+            contents: '<div class="tmDialogForm">' +
+                '<div class="tmDialogFormField"><label for="dialogField1">' + UILANG.m('Test pool name') + '</label><input type="text" id="dialogField1" maxlength="200"></div>' +
+            '</div>',
             title: UILANG.m('Rename'),
             width: 400,
             callback: editTestpool
@@ -3720,7 +5745,7 @@ function editTestpool(sel, button, name) {
 function deleteTestpool(sel, button) {
     if (!sel) return;
     if (!button) {
-        let message = sf('<p>' + UILANG.m('Are you sure you want to delete the following testpool?') + '<br><strong>%@</strong></p>', sel.name);
+        let message = sf('<div class="deleteConfirm"><div class="deleteConfirmText"><p>' + UILANG.m('Are you sure you want to delete the following testpool?') + '</p></div><div class="deleteConfirmText"><strong>%@</strong></div></div>', sel.name);
         const dialogData = {
             buttons: [{
                 label: UILANG.m('cancel'),
@@ -3797,7 +5822,9 @@ function newFolder(sender, button, name) {
             datafields: ['dialogField1'],
             mandatory: ['dialogField1'],
             focus: 'dialogField1',
-            contents: '<p>' + UILANG.m('Please enter a name for the folder:') + '<br><input type="text" maxlength="200" id="dialogField1" style="width: 100%; margin-top: 10px;"></p>',
+            contents: '<div class="tmDialogForm">' +
+                '<div class="tmDialogFormField"><label for="dialogField1">' + UILANG.m('Folder name') + '</label><input type="text" maxlength="200" id="dialogField1"></div>' +
+            '</div>',
             title: UILANG.m('New folder'),
             width: 400,
             callback: newFolder
@@ -3836,7 +5863,10 @@ function newTest(sender, button, name, type) {
         datafields: ['dialogField1', 'dialogField2'],
         mandatory: ['dialogField1'],
         focus: 'dialogField1',
-        contents: '<p>' + UILANG.m('Please enter a name for the test:') + '<br /><input type="text" id="dialogField1" maxlength="200" style="width: 100%; margin-top: 10px;"></p><p>' + UILANG.m('Type of test:') + '<span id="testHelp"></span><br><div id="dialogField2"></div></p>',
+        contents: '<div class="tmDialogForm">' +
+            '<div class="tmDialogFormField"><label for="dialogField1">' + UILANG.m('Test name') + '</label><input type="text" id="dialogField1" maxlength="200"></div>' +
+            '<div class="tmDialogFormField"><label>' + UILANG.m('Type of test') + '<span id="testHelp"></span></label><div id="dialogField2"></div></div>' +
+        '</div>',
         title: UILANG.m('New test'),
         returnPromise: true,
         width: 400
@@ -3866,6 +5896,11 @@ function newTest(sender, button, name, type) {
                     }
                     optionsData[optionName] = value;
                 }
+
+                // Start new editable tests with the user's preferred page language enabled.
+                if (ttChg !== 'mutation' && Object.hasOwn(languages, settings.defaultLanguage)) {
+                    optionsData[settings.defaultLanguage] = true;
+                }
                 startAjax('newTest', {
                     location: loc.folder,
                     name: res.data[0],
@@ -3882,7 +5917,20 @@ function newTest(sender, button, name, type) {
     );
 
     //show online help
-    const testHelpHtml=UILANG.m('<p>When creating a new test in OASYS, you need to select a test type. Below are the available test types and their descriptions:<br><br><strong>Linear Tests</strong>: Linear tests are composed of test pages that are presented in a specified order. The entire set of pages will be used in the sequence defined during test creation.<br><br><strong>Fluid Tests</strong>: Fluid tests are composed of test blocks. Each test block refers to a test pool, which contains chosen test pages. The test block can use all or just some of the items or stimuli from the test pool, and these can be presented in a specified or random order.<br><br><strong>Mutation Tests</strong>: Mutation tests are composed of linear tests. Each time a mutation test is launched by a test taker or a test taker template, one of the assigned linear tests is launched. The selection of the linear test can be either random or sequential, depending on the configuration.<br><br>Select the test type that best fits your testing needs to proceed with test creation.</p>');
+    const testHelpHtml = OasysHelp.layout({
+        lead: UILANG.m('When creating a new test in OASYS, select the test type that best fits your testing needs.'),
+        items: [{
+            title: UILANG.m('Linear Tests:'),
+            text: UILANG.m('Linear tests are composed of test pages that are presented in a specified order. The entire set of pages is used in the sequence defined during test creation.')
+        }, {
+            title: UILANG.m('Fluid Tests:'),
+            text: UILANG.m('Fluid tests are composed of test blocks. Each block refers to a test pool, and can use all or selected items or stimuli in a specified or random order.')
+        }, {
+            title: UILANG.m('Mutation Tests:'),
+            text: UILANG.m('Mutation tests are composed of linear tests. Each launch starts one assigned linear test, selected randomly or sequentially depending on the configuration.')
+        }],
+        note: UILANG.m('Choose the structure that matches how the test should be delivered to test takers.')
+    });
     new OasysHelp('testHelp', {
         htmlContent: testHelpHtml,
         title: UILANG.m('Test types')
@@ -3902,6 +5950,7 @@ function newTest(sender, button, name, type) {
             label: 'mutation'
         }],
         dataId: 'ddF1',
+        theme: 'backend',
         readOnly: false,
         width: '100%'
     };
@@ -3911,7 +5960,6 @@ function newTest(sender, button, name, type) {
     }
 }
 
-/* deletion */
 function deleteSelection() {
     if (mode !== 'browsing') {
         return;
@@ -3924,14 +5972,18 @@ function deleteSelection() {
         if (obj.type === 'folder') {
             foldersInSelection = true;
             type = 'folder';
+        } else {
+            const testType = (obj.testStructure && obj.testStructure.type) || (obj.structure && obj.structure.type) || obj.testType || 'linear';
+            type += ' typetest-' + testType;
         }
         message += sf('<li class="%@">%@</li>', type, obj.label);
     }
     message += '</ul>';
-    message = '<p>' + UILANG.m('really_delete') + '</p>' + message + '<p class="red">' + UILANG.m('WARNING: Recorded data for the chosen tests will also be deleted.') + '</p>';
+    message = '<div class="deleteConfirm"><div class="deleteConfirmText"><p>' + UILANG.m('really_delete') + '</p></div>' + message + '<p class="deleteConfirmWarning">' + UILANG.m('WARNING: Recorded data for the chosen tests will also be deleted.') + '</p>';
     if (foldersInSelection) {
-        message += '<p class="red">' + UILANG.m('warning_recursive') + '</p>';
+        message += '<p class="deleteConfirmWarning">' + UILANG.m('warning_recursive') + '</p>';
     }
+    message += '</div>';
     const dialogData = {
         buttons: [{
             label: UILANG.m('cancel'),
@@ -3962,38 +6014,107 @@ function deleteSelection() {
     );
 }
 
-function resetResults(sender, button) {
-    if (!button) {
-        let message;
-        if (selection.length === 1 && selection[0].type !== 'folder') {
-            message = sf('<p>' + UILANG.m('Are you sure you want to reset <strong>all</strong> results of the test "%@"? This action is irreversible!') + '</p>', serverData.testLevel.name);
-        } else {
-            message = '<p>' + UILANG.m('Are you sure you want to reset <strong>all</strong> results of the selected tests? This action is irreversible!') + '</p>';
+function resetResults() {
+    const description = selection.length === 1 && selection[0].type !== 'folder'
+        ? sf(UILANG.m('Accessible results of the test "%@" will be deleted.'), escapeHtml(serverData.testLevel.name))
+        : UILANG.m('Accessible results of the selected tests will be deleted.');
+    const now = new Date();
+    const dateNow = ('0' + now.getDate()).slice(-2) + '.' + ('0' + (now.getMonth() + 1)).slice(-2) + '.' + now.getFullYear();
+    const hourOptions = Array.from({length: 24}, (_, hour) => {
+        const value = ('0' + hour).slice(-2);
+        return '<option value="' + value + '"' + (hour === now.getHours() ? ' selected' : '') + '>' + value + '</option>';
+    }).join('');
+    const minuteOptions = Array.from({length: 60}, (_, minute) => {
+        const value = ('0' + minute).slice(-2);
+        return '<option value="' + value + '"' + (minute === now.getMinutes() ? ' selected' : '') + '>' + value + '</option>';
+    }).join('');
+    const message = '<div class="tmActionConfirm tmActionConfirm-warning">' +
+        '<div class="tmActionConfirmHeading"><strong>' + UILANG.m('Ready to reset') + '</strong><span id="testResetDateHelp"></span></div>' +
+        '<span>' + description + '</span>' +
+        '<div class="tmResetFilter">' +
+            '<label for="testResetScope">' + UILANG.m('Delete') + '</label>' +
+            '<select id="testResetScope">' +
+                '<option value="all">' + UILANG.m('Everything') + '</option>' +
+                '<option value="before">' + UILANG.m('Before date and time') + '</option>' +
+                '<option value="after">' + UILANG.m('On or after date and time') + '</option>' +
+            '</select>' +
+            '<div id="testResetCutoffField" class="tmResetCutoff" hidden>' +
+                '<label for="testResetCutoffDate">' + UILANG.m('Date and time') + '</label>' +
+                '<div class="tmResetDateTime">' +
+                    '<input id="testResetCutoffDate" type="text" inputmode="numeric" autocomplete="off" value="' + dateNow + '">' +
+                    '<select id="testResetCutoffHour" aria-label="' + UILANG.m('Hour') + '">' + hourOptions + '</select>' +
+                    '<span aria-hidden="true">:</span>' +
+                    '<select id="testResetCutoffMinute" aria-label="' + UILANG.m('Minute') + '">' + minuteOptions + '</select>' +
+                '</div>' +
+            '</div>' +
+        '</div>' +
+        '<p class="tmActionConfirmNote">' + UILANG.m('This action is irreversible.') + '</p>' +
+    '</div>';
+    let resetSubmitted = false;
+    const submitReset = function (values) {
+        if (resetSubmitted) return true;
+        const resetMode = values.testResetScope || 'all';
+        let resetCutoff = null;
+        if (resetMode !== 'all') {
+            let cutoff = null;
+            try {
+                cutoff = $.datepicker.parseDate('dd.mm.yy', values.testResetCutoffDate);
+                cutoff.setHours(Number(values.testResetCutoffHour), Number(values.testResetCutoffMinute), 0, 0);
+            } catch (error) {
+                cutoff = null;
+            }
+            if (!cutoff || Number.isNaN(cutoff.getTime())) return false;
+            resetCutoff = Math.floor(cutoff.getTime() / 1000);
         }
-        const resetData = {
-            buttons: [{
-                label: UILANG.m('cancel'),
-                'cancel': true,
-                'default': true,
-                value: 'cancel'
-            }, {
-                label: UILANG.m('Delete'),
-                value: 'ok'
-            }],
-            contents: message,
-            width: 600,
-            callback: resetResults,
-            title: UILANG.m('Reset test results?'),
-            icon: "../images/warning.png",
-            iconWidth: 64
-        };
-        new nxDialog('resetDialog', resetData, arguments);
-    }
-    if (button === 'ok') {
-        startAjax('resetResults', {
-            selection: selection
+        resetSubmitted = true;
+        startAjax('resetResults', {selection: selection, resetMode: resetMode, resetCutoff: resetCutoff});
+        return true;
+    };
+    const resetData = {
+        buttons: [{label: UILANG.m('cancel'), cancel: true, default: true, value: 'cancel'}, {
+            label: UILANG.m('Reset'), value: 'ok'
+        }],
+        contents: message,
+        datafields: ['testResetScope', 'testResetCutoffDate', 'testResetCutoffHour', 'testResetCutoffMinute'],
+        dataFormat: 'object',
+        callback: function (button, values) {
+            if (button === 'ok' && !submitReset(values)) {
+                window.setTimeout(() => showMessage(UILANG.m('Please enter a valid date and time.')), 0);
+            }
+        },
+        width: 600,
+        title: UILANG.m('Reset test results?'),
+        type: 'warning'
+    };
+    const resetDialog = new nxDialog('resetDialog', resetData);
+    $('#resetDialog_button_1').on('click.resetFallback', function (event) {
+        if (!document.documentElement.contains(this)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const submitted = submitReset({
+            testResetScope: $('#testResetScope').val(),
+            testResetCutoffDate: $('#testResetCutoffDate').val(),
+            testResetCutoffHour: $('#testResetCutoffHour').val(),
+            testResetCutoffMinute: $('#testResetCutoffMinute').val()
         });
-    }
+        if (submitted && window.nxDialogManager.instances.resetDialog) resetDialog.dismiss();
+    });
+    $('#testResetScope').on('change', function () {
+        $('#testResetCutoffField').prop('hidden', this.value === 'all');
+    });
+    $('#testResetCutoffDate').datepicker({
+        dateFormat: 'dd.mm.yy', firstDay: 1, showOtherMonths: true, selectOtherMonths: true,
+        beforeShow: () => $('#ui-datepicker-div').addClass('tmResetDatePicker'),
+        onClose: () => $('#ui-datepicker-div').removeClass('tmResetDatePicker'),
+        onSelect: function () { $(this).datepicker('hide').trigger('blur'); }
+    });
+    new OasysHelp('testResetDateHelp', {
+        size: '16px', maxWidth: '460px', linkDecoration: 'none', title: UILANG.m('Date filtering'),
+        htmlContent: OasysHelp.layout({
+            lead: UILANG.m('Each complete test result and its scoring data are filtered by the last recorded activity.'),
+            note: UILANG.m('Only results belonging to test takers you can access are deleted. Inaccessible results remain recorded.')
+        })
+    });
 }
 
 function duplicate() {
@@ -4007,28 +6128,39 @@ function duplicate() {
 
 //search functionality
 function clickSearch() {
-    gui.library.filerSearch();
+    gui.library.filerSearch('', {metaSearch: true});
 }
 
 function correctData() {
     if (serverData && serverData.testLevel) {
         if (serverData.testLevel.options instanceof Array) serverData.testLevel.options = {};
+        if (!serverData.testLevel.structure) serverData.testLevel.structure = {};
+        if (!serverData.testLevel.structure.state) serverData.testLevel.structure.state = 'draft';
     }
 }
 
 //Testpools editor
 function testpools() {
+    if (isTestPublished() && serverData.testLevel.structure.type === 'fluid') {
+        showMessage(UILANG.m('This test is Published (Locked). Test pools cannot be created or edited while the test is locked.'), 'warning');
+        return;
+    }
     gui.s2.fadeOut(0);
     gui.s6.fadeOut(0);
     gui.s4.fadeIn(0);
     gui.s5.fadeIn(0);
     $('#vdivider').hide();
+    $('#metaDivider').hide();
     mode = 'poolEdit';
     switchMode();
 }
 
 //Labels editor
 function labels() {
+    if (isTestPublished() && serverData.testLevel.structure.type !== 'mutation') {
+        showMessage(UILANG.m('This test is Published (Locked). Labels cannot be edited while the test is locked.'), 'warning');
+        return;
+    }
     if (serverData.testLevel.structure.type === 'fluid') {
         gui.s6.fadeOut(0);
     } else {
@@ -4037,12 +6169,17 @@ function labels() {
     gui.s2.fadeOut(0);
     gui.s7.fadeIn(0);
     $('#vdivider').hide();
+    $('#metaDivider').hide();
     mode = 'labelEdit';
     switchMode();
 }
 
 //Variables editor
 function variables() {
+    if (isTestPublished() && serverData.testLevel.structure.type !== 'mutation') {
+        showMessage(UILANG.m('This test is Published (Locked). Test variables cannot be edited while the test is locked.'), 'warning');
+        return;
+    }
     if (serverData.testLevel.structure.type === 'fluid') {
         gui.s6.fadeOut(0);
     } else {
@@ -4051,12 +6188,1179 @@ function variables() {
     gui.s2.fadeOut(0);
     gui.s8.fadeIn(0);
     $('#vdivider').hide();
+    $('#metaDivider').hide();
     mode = 'variablesEdit';
     switchMode();
 }
 
+function clearTestStructure() {
+    if (!serverData.testLevel || !serverData.testLevel.structure) return;
+
+    const testType = serverData.testLevel.structure.type;
+    const items = serverData.testLevel.structure.items || [];
+    if (!items.length) return;
+
+    const descriptions = {
+        linear: UILANG.m('This removes all test pages from this test. The test pages themselves are not deleted.'),
+        fluid: UILANG.m('This clears the fluid test structure. The configured test pools are kept.'),
+        mutation: UILANG.m('This removes all assigned linear tests from this mutation test. The assigned tests themselves are not deleted.')
+    };
+    let contents = '<div class="deleteConfirm"><div class="deleteConfirmText"><p>' +
+        UILANG.m('Are you sure you want to clear the complete test structure?') +
+        '</p><p>' + descriptions[testType] + '</p>';
+    if ($(serverData.testLevel.activityData).length > 0) {
+        contents += '<p><strong>' + UILANG.m('Recorded results may no longer be accessible after this change.') + '</strong></p>';
+    }
+    contents += '</div></div>';
+
+    const dialogData = {
+        buttons: [{
+            label: UILANG.m('Cancel'),
+            cancel: true,
+            default: true,
+            value: 'cancel'
+        }, {
+            label: UILANG.m('Clear structure'),
+            value: 'clear'
+        }],
+        contents: contents,
+        title: UILANG.m('Clear test structure'),
+        returnPromise: true,
+        width: 620,
+        icon: '../images/warning.png',
+        iconWidth: 64
+    };
+
+    showDialog('clearTestStructureDialog', dialogData).then(function(res) {
+        if (res.button !== 'clear') return;
+        const payload = {
+            testId: serverData.testLevel.id
+        };
+        if (testType !== 'mutation') {
+            payload.currentSkin = serverData.testLevel.skin.skin;
+        }
+        startAjax('clearTestStructure', payload);
+    });
+}
+
+function openExistingEditorEntriesDialog(entryType) {
+    if (!serverData.testLevel || !serverData.testLevel.id) return;
+
+    const isLabelEditor = entryType === 'labels';
+    const entryLabel = UILANG.m(isLabelEditor ? 'labels' : 'variables');
+    const dialogId = isLabelEditor ? 'loadExistingLabelsDialog' : 'loadExistingVariablesDialog';
+    const prefix = isLabelEditor ? 'tmExistingLabels' : 'tmExistingVariables';
+    const currentEntries = isLabelEditor
+        ? (serverData.testLevel.labels || {})
+        : (serverData.testLevel.variables || {});
+    let templates = [];
+    let selectedTemplate = null;
+    let selectedNames = new Set();
+    let replaceExisting = false;
+
+    const dialogData = {
+        buttons: [{
+            label: UILANG.m('Cancel'),
+            cancel: true,
+            value: 'cancel'
+        }, {
+            label: UILANG.m('Load selected'),
+            default: true,
+            disabled: true,
+            value: 'load'
+        }],
+        contents:
+            '<div class="tmExistingEntriesDialog">' +
+            '<aside class="tmExistingEntriesSources">' +
+            '<label class="tmExistingEntriesFilter" for="' + prefix + 'Filter">' +
+            '<span>' + UILANG.m('Filter tests') + '</span>' +
+            '<input id="' + prefix + 'Filter" type="text" autocomplete="off">' +
+            '</label>' +
+            '<div id="' + prefix + 'Tests" class="tmExistingEntriesTestList">' +
+            '<div class="tmExistingEntriesEmpty">' + UILANG.m('Loading available tests...') + '</div>' +
+            '</div>' +
+            '</aside>' +
+            '<section class="tmExistingEntriesSelection">' +
+            '<div class="tmExistingEntriesSelectionHeader">' +
+            '<div><span class="tmExistingEntriesEyebrow">' + UILANG.m('Source test') + '</span>' +
+            '<strong id="' + prefix + 'SourceTitle">' + UILANG.m('Select a test') + '</strong></div>' +
+            '<div class="tmExistingEntriesSelectionActions">' +
+            '<button id="' + prefix + 'SelectAll" type="button" disabled>' + UILANG.m('Select all') + '</button>' +
+            '<button id="' + prefix + 'SelectNone" type="button" disabled>' + UILANG.m('Deselect all') + '</button>' +
+            '</div>' +
+            '</div>' +
+            '<div id="' + prefix + 'Entries" class="tmExistingEntriesEntryList">' +
+            '<div class="tmExistingEntriesEmpty">' + UILANG.m('Choose a test to see its') + ' ' + entryLabel + '.</div>' +
+            '</div>' +
+            '<label class="tmExistingEntriesReplace" for="' + prefix + 'Replace">' +
+            '<input id="' + prefix + 'Replace" type="checkbox">' +
+            '<span>' + UILANG.m('Replace entries with the same name') + '</span>' +
+            '</label>' +
+            '<div id="' + prefix + 'Summary" class="tmExistingEntriesSummary">' + UILANG.m('No entries selected.') + '</div>' +
+            '</section>' +
+            '</div>',
+        title: UILANG.m('Load existing') + ' ' + entryLabel,
+        width: 1020,
+        returnPromise: true,
+        replaceExisting: dialogId
+    };
+    const loadDialogResult = new nxDialog(dialogId, dialogData);
+    const loadDialog = window.nxDialogManager.instances[dialogId];
+
+    loadDialogResult.then(function(res) {
+        if (res.button !== 'load' || !selectedTemplate || selectedNames.size === 0) return;
+        startAjax('importEditorEntries', {
+            testId: serverData.testLevel.id,
+            sourceTestId: selectedTemplate.id,
+            entryType: entryType,
+            names: Array.from(selectedNames),
+            replaceExisting: replaceExisting
+        });
+    });
+
+    function updateSummary() {
+        const selectedCount = selectedNames.size;
+        const existingCount = Array.from(selectedNames).filter(function(name) {
+            return Object.prototype.hasOwnProperty.call(currentEntries, name);
+        }).length;
+        let summary = UILANG.m('No entries selected.');
+        if (selectedCount > 0) {
+            summary = selectedCount + ' ' + UILANG.m(selectedCount === 1 ? 'entry selected.' : 'entries selected.');
+            if (existingCount > 0) {
+                summary += ' ' + existingCount + ' ' + UILANG.m(existingCount === 1 ? 'entry already exists.' : 'entries already exist.');
+            }
+            loadDialog.enableButton('load');
+        } else {
+            loadDialog.disableButton('load');
+        }
+        $('#' + prefix + 'Summary').text(summary);
+    }
+
+    function renderEntries() {
+        const $entryList = $('#' + prefix + 'Entries').empty();
+        const $sourceTitle = $('#' + prefix + 'SourceTitle');
+        const $selectAll = $('#' + prefix + 'SelectAll');
+        const $selectNone = $('#' + prefix + 'SelectNone');
+        selectedNames = new Set();
+
+        if (!selectedTemplate) {
+            $sourceTitle.text(UILANG.m('Select a test'));
+            $selectAll.prop('disabled', true);
+            $selectNone.prop('disabled', true);
+            $entryList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('Choose a test to see its') + ' ' + entryLabel + '.</div>');
+            updateSummary();
+            return;
+        }
+
+        const entries = selectedTemplate.entries || [];
+        $sourceTitle.text(selectedTemplate.name);
+        $selectAll.prop('disabled', entries.length === 0);
+        $selectNone.prop('disabled', entries.length === 0);
+        if (!entries.length) {
+            $entryList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('This test has no') + ' ' + entryLabel + '.</div>');
+            updateSummary();
+            return;
+        }
+
+        $.each(entries, function(_, entry) {
+            const exists = Object.prototype.hasOwnProperty.call(currentEntries, entry.name);
+            const $checkbox = $('<input type="checkbox">').val(entry.name);
+            const $row = $('<label class="tmExistingEntriesEntry"></label>').append($checkbox);
+            const $content = $('<span class="tmExistingEntriesEntryContent"></span>')
+                .append($('<strong></strong>').text(entry.name));
+            if (entry.preview) $content.append($('<small></small>').text(entry.preview));
+            $row.append($content);
+            if (exists) {
+                $row.addClass('tmExistingEntriesEntryConflict')
+                    .append($('<span class="tmExistingEntriesConflictBadge"></span>').text(UILANG.m('Already exists')));
+            }
+            $checkbox.on('change', function() {
+                if (this.checked) selectedNames.add(entry.name);
+                else selectedNames.delete(entry.name);
+                updateSummary();
+            });
+            $entryList.append($row);
+        });
+        updateSummary();
+    }
+
+    function renderTestList(filter) {
+        const $list = $('#' + prefix + 'Tests').empty();
+        const query = String(filter || '').trim().toLocaleLowerCase();
+        selectedTemplate = null;
+        renderEntries();
+        const visibleTemplates = templates.filter(function(template) {
+            return !query || String(template.name || '').toLocaleLowerCase().indexOf(query) !== -1;
+        });
+        if (!visibleTemplates.length) {
+            $list.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('No accessible tests with') + ' ' + entryLabel + ' ' + UILANG.m('were found.') + '</div>');
+            return;
+        }
+        $.each(visibleTemplates, function(_, template) {
+            const $row = $('<button type="button" class="tmExistingEntriesTest"></button>')
+                .text(template.name)
+                .attr('title', template.name)
+                .on('click', function() {
+                    $('#' + prefix + 'Tests .tmExistingEntriesTest').removeClass('tmExistingEntriesTestSelected');
+                    $row.addClass('tmExistingEntriesTestSelected');
+                    selectedTemplate = template;
+                    renderEntries();
+                });
+            $list.append($row);
+        });
+    }
+
+    $('#' + prefix + 'Filter').on('input', function() {
+        renderTestList($(this).val());
+    });
+    $('#' + prefix + 'Replace').on('change', function() {
+        replaceExisting = this.checked;
+    });
+    $('#' + prefix + 'SelectAll').on('click', function() {
+        if (!selectedTemplate) return;
+        selectedNames = new Set((selectedTemplate.entries || []).map(function(entry) {
+            return entry.name;
+        }));
+        $('#' + prefix + 'Entries input[type="checkbox"]').prop('checked', true);
+        updateSummary();
+    });
+    $('#' + prefix + 'SelectNone').on('click', function() {
+        selectedNames = new Set();
+        $('#' + prefix + 'Entries input[type="checkbox"]').prop('checked', false);
+        updateSummary();
+    });
+
+    startAjax('fetchEditorEntryTemplates', {
+        entryType: entryType,
+        targetTestId: serverData.testLevel.id
+    }).then(function(res) {
+        templates = res && res.data && Array.isArray(res.data.editorEntryTemplates)
+            ? res.data.editorEntryTemplates
+            : [];
+        renderTestList('');
+    }).catch(function() {
+        templates = [];
+        renderTestList('');
+    });
+}
+
+function openExistingStructureDialog() {
+    if (!serverData.testLevel || !serverData.testLevel.id || !serverData.testLevel.structure || serverData.testLevel.structure.type !== 'linear') return;
+    if (isTestPublished()) {
+        showMessage(UILANG.m('This test is Published (Locked). The test structure cannot be changed while the test is locked.'), 'warning');
+        return;
+    }
+
+    const prefix = 'tmExistingStructure';
+    const currentItems = serverData.testLevel.structure.items || [];
+    const currentIds = new Set(currentItems.map(function(item) {
+        return String(item.hiddenID);
+    }));
+    let templates = [];
+    let selectedTemplate = null;
+    let selectedPageIds = new Set();
+
+    const dialogData = {
+        buttons: [{
+            label: UILANG.m('Cancel'),
+            cancel: true,
+            value: 'cancel'
+        }, {
+            label: UILANG.m('Import structure'),
+            default: true,
+            disabled: true,
+            value: 'load'
+        }],
+        contents:
+            '<div class="tmExistingEntriesDialog tmExistingStructureDialog">' +
+            '<aside class="tmExistingEntriesSources">' +
+            '<label class="tmExistingEntriesFilter" for="' + prefix + 'Filter">' +
+            '<span>' + UILANG.m('Filter tests') + '</span>' +
+            '<input id="' + prefix + 'Filter" type="text" autocomplete="off">' +
+            '</label>' +
+            '<div id="' + prefix + 'Tests" class="tmExistingEntriesTestList">' +
+            '<div class="tmExistingEntriesEmpty">' + UILANG.m('Loading available tests...') + '</div>' +
+            '</div>' +
+            '</aside>' +
+            '<section class="tmExistingEntriesSelection">' +
+            '<div class="tmExistingEntriesSelectionHeader">' +
+            '<div><span class="tmExistingEntriesEyebrow">' + UILANG.m('Source test') + '</span>' +
+            '<strong id="' + prefix + 'SourceTitle">' + UILANG.m('Select a test') + '</strong></div>' +
+            '<div class="tmExistingEntriesSelectionActions">' +
+            '<button id="' + prefix + 'SelectAll" type="button" disabled>' + UILANG.m('Select all') + '</button>' +
+            '<button id="' + prefix + 'SelectNone" type="button" disabled>' + UILANG.m('Deselect all') + '</button>' +
+            '</div>' +
+            '</div>' +
+            '<div id="' + prefix + 'Pages" class="tmExistingEntriesEntryList tmExistingStructurePageList">' +
+            '<div class="tmExistingEntriesEmpty">' + UILANG.m('Choose a test to see its structure.') + '</div>' +
+            '</div>' +
+            '<div id="' + prefix + 'Summary" class="tmExistingEntriesSummary">' + UILANG.m('No test pages selected.') + '</div>' +
+            '</section>' +
+            '</div>',
+        title: UILANG.m('Load existing structure'),
+        width: 1020,
+        returnPromise: true,
+        replaceExisting: 'loadExistingStructureDialog'
+    };
+    const dialogResult = new nxDialog('loadExistingStructureDialog', dialogData);
+    const loadDialog = window.nxDialogManager.instances.loadExistingStructureDialog;
+
+    dialogResult.then(function(res) {
+        if (res.button !== 'load' || !selectedTemplate || selectedPageIds.size === 0) return;
+        startAjax('importLinearStructureFromTemplate', {
+            targetTestId: serverData.testLevel.id,
+            sourceTestId: selectedTemplate.id,
+            pageIds: Array.from(selectedPageIds)
+        });
+    });
+
+    function selectablePages() {
+        if (!selectedTemplate) return [];
+        return (selectedTemplate.pages || []).filter(function(page) {
+            return page.exists && page.canRead !== false && !currentIds.has(String(page.hiddenID));
+        });
+    }
+
+    function updateSummary() {
+        const selectedCount = selectedPageIds.size;
+        const missingCount = selectedTemplate ? (selectedTemplate.pages || []).filter(function(page) {
+            return !page.exists;
+        }).length : 0;
+        const blockedCount = selectedTemplate ? (selectedTemplate.pages || []).filter(function(page) {
+            return page.exists && page.canRead === false;
+        }).length : 0;
+        const duplicateCount = selectedTemplate ? (selectedTemplate.pages || []).filter(function(page) {
+            return page.exists && page.canRead !== false && currentIds.has(String(page.hiddenID));
+        }).length : 0;
+
+        let summary = UILANG.m('No test pages selected.');
+        if (selectedCount > 0) {
+            summary = selectedCount + ' ' + UILANG.m(selectedCount === 1 ? 'test page selected.' : 'test pages selected.');
+        }
+        if (missingCount > 0) {
+            summary += ' ' + missingCount + ' ' + UILANG.m(missingCount === 1 ? 'missing reference will be skipped.' : 'missing references will be skipped.');
+        }
+        if (blockedCount > 0) {
+            summary += ' ' + blockedCount + ' ' + UILANG.m(blockedCount === 1 ? 'page is not accessible.' : 'pages are not accessible.');
+        }
+        if (duplicateCount > 0) {
+            summary += ' ' + duplicateCount + ' ' + UILANG.m(duplicateCount === 1 ? 'page is already in this test.' : 'pages are already in this test.');
+        }
+
+        $('#' + prefix + 'Summary').text(summary);
+        if (selectedCount > 0) loadDialog.enableButton('load');
+        else loadDialog.disableButton('load');
+    }
+
+    function renderPages() {
+        const $pageList = $('#' + prefix + 'Pages').empty();
+        const $sourceTitle = $('#' + prefix + 'SourceTitle');
+        const $selectAll = $('#' + prefix + 'SelectAll');
+        const $selectNone = $('#' + prefix + 'SelectNone');
+        selectedPageIds = new Set();
+
+        if (!selectedTemplate) {
+            $sourceTitle.text(UILANG.m('Select a test'));
+            $selectAll.prop('disabled', true);
+            $selectNone.prop('disabled', true);
+            $pageList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('Choose a test to see its structure.') + '</div>');
+            updateSummary();
+            return;
+        }
+
+        const pages = selectedTemplate.pages || [];
+        const importablePages = selectablePages();
+        $sourceTitle.text(selectedTemplate.name);
+        $selectAll.prop('disabled', importablePages.length === 0);
+        $selectNone.prop('disabled', importablePages.length === 0);
+        if (!pages.length) {
+            $pageList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('This linear test has no test pages.') + '</div>');
+            updateSummary();
+            return;
+        }
+
+        selectedPageIds = new Set(importablePages.map(function(page) {
+            return String(page.hiddenID);
+        }));
+
+        $.each(pages, function(_, page) {
+            const pageId = String(page.hiddenID);
+            const missing = !page.exists;
+            const blocked = page.exists && page.canRead === false;
+            const duplicate = page.exists && !blocked && currentIds.has(pageId);
+            const disabled = missing || blocked || duplicate;
+            const $checkbox = $('<input type="checkbox">').val(pageId).prop('disabled', disabled);
+            if (!disabled) $checkbox.prop('checked', selectedPageIds.has(pageId));
+
+            const $row = $('<label class="tmExistingEntriesEntry tmExistingStructurePage"></label>').append($checkbox);
+            if (missing) $row.addClass('tmExistingStructureMissing');
+            if (blocked) $row.addClass('tmExistingStructureMissing');
+            if (duplicate) $row.addClass('tmExistingStructureDuplicate');
+
+            const subline = missing
+                ? UILANG.m('Missing test page reference') + ' ID: ' + pageId
+                : blocked
+                    ? UILANG.m('You do not have read access to this test page.')
+                : [page.itemGroup, page.code ? UILANG.m('Code') + ': ' + page.code : ''].filter(Boolean).join(' · ');
+            const $content = $('<span class="tmExistingEntriesEntryContent"></span>')
+                .append($('<strong></strong>').text(missing ? UILANG.m('Test page has been deleted!') : (blocked ? UILANG.m('Blocked test page') : page.name)))
+                .append($('<small></small>').text(subline));
+            $row.append($content);
+            if (missing) {
+                $row.append($('<span class="tmExistingEntriesConflictBadge tmExistingStructureMissingBadge"></span>').text(UILANG.m('Missing')));
+            } else if (blocked) {
+                $row.append($('<span class="tmExistingEntriesConflictBadge tmExistingStructureMissingBadge"></span>').text(UILANG.m('No access')));
+            } else if (duplicate) {
+                $row.append($('<span class="tmExistingEntriesConflictBadge"></span>').text(UILANG.m('Already in test')));
+            } else if (Number(page.maxScore) > 0) {
+                $row.append($('<span class="tmExistingStructureScoreBadge"></span>').text(page.maxScore + ' ' + UILANG.m(Number(page.maxScore) === 1 ? 'point' : 'points')));
+            }
+
+            $checkbox.on('change', function() {
+                if (this.checked) selectedPageIds.add(pageId);
+                else selectedPageIds.delete(pageId);
+                updateSummary();
+            });
+            $pageList.append($row);
+        });
+        updateSummary();
+    }
+
+    function renderTestList(filter) {
+        const $list = $('#' + prefix + 'Tests').empty();
+        const query = String(filter || '').trim().toLocaleLowerCase();
+        selectedTemplate = null;
+        renderPages();
+        const visibleTemplates = templates.filter(function(template) {
+            return !query || String(template.name || '').toLocaleLowerCase().indexOf(query) !== -1;
+        });
+        if (!visibleTemplates.length) {
+            $list.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('No accessible linear tests with a structure were found.') + '</div>');
+            return;
+        }
+        $.each(visibleTemplates, function(_, template) {
+            const pageCount = (template.pages || []).length;
+            const $row = $('<button type="button" class="tmExistingEntriesTest tmExistingStructureTest"></button>')
+                .attr('title', template.name)
+                .append($('<strong></strong>').text(template.name))
+                .append($('<small></small>').text(pageCount + ' ' + UILANG.m(pageCount === 1 ? 'test page' : 'test pages')))
+                .on('click', function() {
+                    $('#' + prefix + 'Tests .tmExistingEntriesTest').removeClass('tmExistingEntriesTestSelected');
+                    $row.addClass('tmExistingEntriesTestSelected');
+                    selectedTemplate = template;
+                    renderPages();
+                });
+            $list.append($row);
+        });
+    }
+
+    $('#' + prefix + 'Filter').on('input', function() {
+        renderTestList($(this).val());
+    });
+    $('#' + prefix + 'SelectAll').on('click', function() {
+        selectedPageIds = new Set(selectablePages().map(function(page) {
+            return String(page.hiddenID);
+        }));
+        $('#' + prefix + 'Pages input[type="checkbox"]:not(:disabled)').prop('checked', true);
+        updateSummary();
+    });
+    $('#' + prefix + 'SelectNone').on('click', function() {
+        selectedPageIds = new Set();
+        $('#' + prefix + 'Pages input[type="checkbox"]').prop('checked', false);
+        updateSummary();
+    });
+
+    startAjax('fetchLinearStructureTemplates', {
+        targetTestId: serverData.testLevel.id
+    }).then(function(res) {
+        templates = res && res.data && Array.isArray(res.data.linearStructureTemplates)
+            ? res.data.linearStructureTemplates
+            : [];
+        renderTestList('');
+    }).catch(function() {
+        templates = [];
+        renderTestList('');
+    });
+}
+
+function openExistingTestpoolsDialog() {
+    if (!serverData.testLevel || !serverData.testLevel.id || !serverData.testLevel.structure || serverData.testLevel.structure.type !== 'fluid') return;
+    if (isTestPublished()) {
+        showMessage(UILANG.m('This test is Published (Locked). Test pools cannot be changed while the test is locked.'), 'warning');
+        return;
+    }
+
+    const prefix = 'tmExistingTestpools';
+    const currentPools = serverData.testLevel.testpools || [];
+    const currentPoolNames = new Set(currentPools.map(function(pool) {
+        return String(pool.name || '').toLocaleLowerCase();
+    }));
+    let templates = [];
+    let selectedTemplate = null;
+    let selectedPoolIds = new Set();
+    let previewPool = null;
+
+    const dialogData = {
+        buttons: [{
+            label: UILANG.m('Cancel'),
+            cancel: true,
+            value: 'cancel'
+        }, {
+            label: UILANG.m('Import testpools'),
+            default: true,
+            disabled: true,
+            value: 'load'
+        }],
+        contents:
+            '<div class="tmExistingEntriesDialog tmExistingTestpoolsDialog">' +
+            '<aside class="tmExistingEntriesSources">' +
+            '<label class="tmExistingEntriesFilter" for="' + prefix + 'Filter">' +
+            '<span>' + UILANG.m('Filter tests') + '</span>' +
+            '<input id="' + prefix + 'Filter" type="text" autocomplete="off">' +
+            '</label>' +
+            '<div id="' + prefix + 'Tests" class="tmExistingEntriesTestList">' +
+            '<div class="tmExistingEntriesEmpty">' + UILANG.m('Loading available tests...') + '</div>' +
+            '</div>' +
+            '</aside>' +
+            '<section class="tmExistingEntriesSelection">' +
+            '<div class="tmExistingEntriesSelectionHeader">' +
+            '<div><span class="tmExistingEntriesEyebrow">' + UILANG.m('Source fluid test') + '</span>' +
+            '<strong id="' + prefix + 'SourceTitle">' + UILANG.m('Select a test') + '</strong></div>' +
+            '<div class="tmExistingEntriesSelectionActions">' +
+            '<button id="' + prefix + 'SelectAll" type="button" disabled>' + UILANG.m('Select all') + '</button>' +
+            '<button id="' + prefix + 'SelectNone" type="button" disabled>' + UILANG.m('Deselect all') + '</button>' +
+            '</div>' +
+            '</div>' +
+            '<div id="' + prefix + 'Pools" class="tmExistingEntriesEntryList tmExistingTestpoolList">' +
+            '<div class="tmExistingEntriesEmpty">' + UILANG.m('Choose a fluid test to see its testpools.') + '</div>' +
+            '</div>' +
+            '<div id="' + prefix + 'Summary" class="tmExistingEntriesSummary">' + UILANG.m('No testpools selected.') + '</div>' +
+            '</section>' +
+            '<section class="tmExistingTestpoolPreview">' +
+            '<div class="tmExistingEntriesSelectionHeader">' +
+            '<div><span class="tmExistingEntriesEyebrow">' + UILANG.m('Included test pages') + '</span>' +
+            '<strong id="' + prefix + 'PreviewTitle">' + UILANG.m('Select a testpool') + '</strong></div>' +
+            '</div>' +
+            '<div id="' + prefix + 'Pages" class="tmExistingEntriesEntryList tmExistingTestpoolPagePreview">' +
+            '<div class="tmExistingEntriesEmpty">' + UILANG.m('Select a testpool to see its included test pages.') + '</div>' +
+            '</div>' +
+            '</section>' +
+            '</div>',
+        title: UILANG.m('Load existing testpools'),
+        width: 1260,
+        returnPromise: true,
+        replaceExisting: 'loadExistingTestpoolsDialog'
+    };
+    const dialogResult = new nxDialog('loadExistingTestpoolsDialog', dialogData);
+    const loadDialog = window.nxDialogManager.instances.loadExistingTestpoolsDialog;
+
+    dialogResult.then(function(res) {
+        if (res.button !== 'load' || !selectedTemplate || selectedPoolIds.size === 0) return;
+        startAjax('importFluidTestpoolsFromTemplate', {
+            targetTestId: serverData.testLevel.id,
+            sourceTestId: selectedTemplate.id,
+            poolIds: Array.from(selectedPoolIds)
+        });
+    });
+
+    function poolImportable(pool) {
+        return !currentPoolNames.has(String(pool.name || '').toLocaleLowerCase()) && Number(pool.importablePageCount || 0) > 0;
+    }
+
+    function selectablePools() {
+        if (!selectedTemplate) return [];
+        return (selectedTemplate.pools || []).filter(poolImportable);
+    }
+
+    function poolCounts(pool) {
+        const pages = pool.pages || [];
+        return {
+            total: pages.length,
+            importable: Number(pool.importablePageCount || 0),
+            missing: Number(pool.missingPageCount || 0),
+            blocked: Number(pool.blockedPageCount || 0)
+        };
+    }
+
+    function formatPoolCountLine(pool) {
+        const counts = poolCounts(pool);
+        const parts = [];
+        parts.push(counts.importable + ' ' + UILANG.m(counts.importable === 1 ? 'importable test page' : 'importable test pages'));
+        if (counts.blocked > 0) {
+            parts.push(counts.blocked + ' ' + UILANG.m(counts.blocked === 1 ? 'page without access' : 'pages without access'));
+        }
+        if (counts.missing > 0) {
+            parts.push(counts.missing + ' ' + UILANG.m(counts.missing === 1 ? 'missing page' : 'missing pages'));
+        }
+        return parts.join(' · ');
+    }
+
+    function updateSummary() {
+        const selectedCount = selectedPoolIds.size;
+        const pools = selectedTemplate ? (selectedTemplate.pools || []) : [];
+        const conflictCount = pools.filter(function(pool) {
+            return currentPoolNames.has(String(pool.name || '').toLocaleLowerCase());
+        }).length;
+        const unavailableCount = pools.filter(function(pool) {
+            return !currentPoolNames.has(String(pool.name || '').toLocaleLowerCase()) && Number(pool.importablePageCount || 0) === 0;
+        }).length;
+        const blockedPages = pools.reduce(function(total, pool) {
+            return total + Number(pool.blockedPageCount || 0);
+        }, 0);
+        const missingPages = pools.reduce(function(total, pool) {
+            return total + Number(pool.missingPageCount || 0);
+        }, 0);
+
+        let summary = UILANG.m('No testpools selected.');
+        if (selectedCount > 0) {
+            summary = selectedCount + ' ' + UILANG.m(selectedCount === 1 ? 'testpool selected.' : 'testpools selected.');
+        }
+        if (conflictCount > 0) {
+            summary += ' ' + conflictCount + ' ' + UILANG.m(conflictCount === 1 ? 'testpool already exists.' : 'testpools already exist.');
+        }
+        if (unavailableCount > 0) {
+            summary += ' ' + unavailableCount + ' ' + UILANG.m(unavailableCount === 1 ? 'testpool has no importable pages.' : 'testpools have no importable pages.');
+        }
+        if (blockedPages > 0) {
+            summary += ' ' + blockedPages + ' ' + UILANG.m(blockedPages === 1 ? 'page is not accessible.' : 'pages are not accessible.');
+        }
+        if (missingPages > 0) {
+            summary += ' ' + missingPages + ' ' + UILANG.m(missingPages === 1 ? 'missing page reference will be skipped.' : 'missing page references will be skipped.');
+        }
+
+        $('#' + prefix + 'Summary').text(summary);
+        if (selectedCount > 0) loadDialog.enableButton('load');
+        else loadDialog.disableButton('load');
+    }
+
+    function renderPoolPreview() {
+        const $pageList = $('#' + prefix + 'Pages').empty();
+        const $previewTitle = $('#' + prefix + 'PreviewTitle');
+        if (!previewPool) {
+            $previewTitle.text(UILANG.m('Select a testpool'));
+            $pageList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('Select a testpool to see its included test pages.') + '</div>');
+            return;
+        }
+
+        const pages = previewPool.pages || [];
+        $previewTitle.text(previewPool.name);
+        if (!pages.length) {
+            $pageList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('This testpool has no test pages.') + '</div>');
+            return;
+        }
+
+        $.each(pages, function(index, page) {
+            const missing = !page.exists;
+            const blocked = page.exists && page.canRead === false;
+            const $row = $('<div class="tmExistingTestpoolPreviewPage"></div>');
+            if (missing || blocked) $row.addClass('tmExistingTestpoolPreviewPageBlocked');
+            $row.append($('<span class="tmExistingTestpoolPreviewIndex"></span>').text(index + 1));
+
+            const $content = $('<span class="tmExistingEntriesEntryContent"></span>');
+            $content.append($('<strong></strong>').text(missing ? UILANG.m('Missing test page') : (blocked ? UILANG.m('Blocked test page') : page.name)));
+            if (missing) {
+                $content.append($('<small></small>').text(UILANG.m('deleted reference') + ' ID: ' + page.hiddenID));
+            } else if (blocked) {
+                $content.append($('<small></small>').text(UILANG.m('no read access')));
+            } else {
+                $content.append($('<small></small>').text([page.itemGroup, page.code ? UILANG.m('Code') + ': ' + page.code : ''].filter(Boolean).join(' · ')));
+            }
+            $row.append($content);
+
+            if (missing) {
+                $row.append($('<span class="tmExistingEntriesConflictBadge tmExistingStructureMissingBadge"></span>').text(UILANG.m('Missing')));
+            } else if (blocked) {
+                $row.append($('<span class="tmExistingEntriesConflictBadge tmExistingStructureMissingBadge"></span>').text(UILANG.m('No access')));
+            }
+            $pageList.append($row);
+        });
+    }
+
+    function renderPools() {
+        const $poolList = $('#' + prefix + 'Pools').empty();
+        const $sourceTitle = $('#' + prefix + 'SourceTitle');
+        const $selectAll = $('#' + prefix + 'SelectAll');
+        const $selectNone = $('#' + prefix + 'SelectNone');
+        selectedPoolIds = new Set();
+        previewPool = null;
+
+        if (!selectedTemplate) {
+            $sourceTitle.text(UILANG.m('Select a test'));
+            $selectAll.prop('disabled', true);
+            $selectNone.prop('disabled', true);
+            $poolList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('Choose a fluid test to see its testpools.') + '</div>');
+            renderPoolPreview();
+            updateSummary();
+            return;
+        }
+
+        const pools = selectedTemplate.pools || [];
+        const importablePools = selectablePools();
+        $sourceTitle.text(selectedTemplate.name);
+        $selectAll.prop('disabled', importablePools.length === 0);
+        $selectNone.prop('disabled', importablePools.length === 0);
+        if (!pools.length) {
+            $poolList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('This fluid test has no testpools.') + '</div>');
+            renderPoolPreview();
+            updateSummary();
+            return;
+        }
+
+        selectedPoolIds = new Set(importablePools.map(function(pool) {
+            return String(pool.id);
+        }));
+        previewPool = importablePools[0] || pools[0] || null;
+
+        $.each(pools, function(_, pool) {
+            const poolId = String(pool.id);
+            const exists = currentPoolNames.has(String(pool.name || '').toLocaleLowerCase());
+            const noImportablePages = Number(pool.importablePageCount || 0) === 0;
+            const disabled = exists || noImportablePages;
+            const $checkbox = $('<input type="checkbox">').val(poolId).prop('disabled', disabled);
+            if (!disabled) $checkbox.prop('checked', selectedPoolIds.has(poolId));
+
+            const $row = $('<div class="tmExistingEntriesEntry tmExistingTestpoolEntry"></div>');
+            if (exists) $row.addClass('tmExistingEntriesEntryConflict');
+            if (noImportablePages) $row.addClass('tmExistingStructureMissing');
+
+            const $content = $('<span class="tmExistingEntriesEntryContent tmExistingTestpoolContent"></span>')
+                .append($('<strong></strong>').text(pool.name))
+                .append($('<small></small>').text(formatPoolCountLine(pool)));
+
+            const $label = $('<label class="tmExistingTestpoolSelect"></label>').append($checkbox).append($content);
+            const pageCount = (pool.pages || []).length;
+            const $pageButton = $('<button type="button" class="tmExistingTestpoolPageButton"></button>')
+                .attr('title', UILANG.m('Show test pages'))
+                .append($('<strong></strong>').text(pageCount))
+                .append($('<span></span>').text(UILANG.m(pageCount === 1 ? 'page' : 'pages')))
+                .on('click', function(event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    previewPool = pool;
+                    $('#' + prefix + 'Pools .tmExistingTestpoolEntry').removeClass('tmExistingTestpoolEntryPreviewed');
+                    $row.addClass('tmExistingTestpoolEntryPreviewed');
+                    renderPoolPreview();
+                });
+
+            let $badge = null;
+            if (exists) {
+                $badge = $('<span class="tmExistingEntriesConflictBadge"></span>').text(UILANG.m('Already exists'));
+            } else if (noImportablePages) {
+                $badge = $('<span class="tmExistingEntriesConflictBadge tmExistingStructureMissingBadge"></span>').text(UILANG.m('No import'));
+            } else if (Number(pool.blockedPageCount || 0) > 0 || Number(pool.missingPageCount || 0) > 0) {
+                $badge = $('<span class="tmExistingEntriesConflictBadge tmExistingTestpoolPartialBadge"></span>').text(UILANG.m('Partial import'));
+            }
+            $row.append($label);
+            if ($badge) $row.append($badge);
+            $row.append($pageButton);
+
+            $checkbox.on('change', function() {
+                if (this.checked) selectedPoolIds.add(poolId);
+                else selectedPoolIds.delete(poolId);
+                updateSummary();
+            });
+            if (previewPool && String(previewPool.id) === poolId) {
+                $row.addClass('tmExistingTestpoolEntryPreviewed');
+            }
+            $poolList.append($row);
+        });
+        renderPoolPreview();
+        updateSummary();
+    }
+
+    function renderTestList(filter) {
+        const $list = $('#' + prefix + 'Tests').empty();
+        const query = String(filter || '').trim().toLocaleLowerCase();
+        selectedTemplate = null;
+        renderPools();
+        const visibleTemplates = templates.filter(function(template) {
+            return !query || String(template.name || '').toLocaleLowerCase().indexOf(query) !== -1;
+        });
+        if (!visibleTemplates.length) {
+            $list.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('No accessible fluid tests with testpools were found.') + '</div>');
+            return;
+        }
+        $.each(visibleTemplates, function(_, template) {
+            const poolCount = (template.pools || []).length;
+            const importableCount = (template.pools || []).filter(poolImportable).length;
+            const $row = $('<button type="button" class="tmExistingEntriesTest tmExistingStructureTest"></button>')
+                .attr('title', template.name)
+                .append($('<strong></strong>').text(template.name))
+                .append($('<small></small>').text(poolCount + ' ' + UILANG.m(poolCount === 1 ? 'testpool' : 'testpools') + ' · ' + importableCount + ' ' + UILANG.m('importable')))
+                .on('click', function() {
+                    $('#' + prefix + 'Tests .tmExistingEntriesTest').removeClass('tmExistingEntriesTestSelected');
+                    $row.addClass('tmExistingEntriesTestSelected');
+                    selectedTemplate = template;
+                    renderPools();
+                });
+            $list.append($row);
+        });
+    }
+
+    $('#' + prefix + 'Filter').on('input', function() {
+        renderTestList($(this).val());
+    });
+    $('#' + prefix + 'SelectAll').on('click', function() {
+        selectedPoolIds = new Set(selectablePools().map(function(pool) {
+            return String(pool.id);
+        }));
+        $('#' + prefix + 'Pools input[type="checkbox"]:not(:disabled)').prop('checked', true);
+        updateSummary();
+    });
+    $('#' + prefix + 'SelectNone').on('click', function() {
+        selectedPoolIds = new Set();
+        $('#' + prefix + 'Pools input[type="checkbox"]').prop('checked', false);
+        updateSummary();
+    });
+
+    startAjax('fetchFluidTestpoolTemplates', {
+        targetTestId: serverData.testLevel.id
+    }).then(function(res) {
+        templates = res && res.data && Array.isArray(res.data.fluidTestpoolTemplates)
+            ? res.data.fluidTestpoolTemplates
+            : [];
+        renderTestList('');
+    }).catch(function() {
+        templates = [];
+        renderTestList('');
+    });
+}
+
+function openExistingMutationStructureDialog() {
+    if (!serverData.testLevel || !serverData.testLevel.id || !serverData.testLevel.structure || serverData.testLevel.structure.type !== 'mutation') return;
+
+    const prefix = 'tmExistingMutation';
+    const currentItems = serverData.testLevel.structure.items || [];
+    const currentIds = new Set(currentItems.map(function(item) {
+        return String(item.hiddenID);
+    }));
+    let templates = [];
+    let selectedTemplate = null;
+    let selectedTestIds = new Set();
+    let previewTest = null;
+
+    const dialogData = {
+        buttons: [{
+            label: UILANG.m('Cancel'),
+            cancel: true,
+            value: 'cancel'
+        }, {
+            label: UILANG.m('Import linear tests'),
+            default: true,
+            disabled: true,
+            value: 'load'
+        }],
+        contents:
+            '<div class="tmExistingEntriesDialog tmExistingMutationDialog">' +
+            '<aside class="tmExistingEntriesSources">' +
+            '<label class="tmExistingEntriesFilter" for="' + prefix + 'Filter">' +
+            '<span>' + UILANG.m('Filter tests') + '</span>' +
+            '<input id="' + prefix + 'Filter" type="text" autocomplete="off">' +
+            '</label>' +
+            '<div id="' + prefix + 'Tests" class="tmExistingEntriesTestList">' +
+            '<div class="tmExistingEntriesEmpty">' + UILANG.m('Loading available mutation tests...') + '</div>' +
+            '</div>' +
+            '</aside>' +
+            '<section class="tmExistingEntriesSelection">' +
+            '<div class="tmExistingEntriesSelectionHeader">' +
+            '<div><span class="tmExistingEntriesEyebrow">' + UILANG.m('Source mutation test') + '</span>' +
+            '<strong id="' + prefix + 'SourceTitle">' + UILANG.m('Select a test') + '</strong></div>' +
+            '<div class="tmExistingEntriesSelectionActions">' +
+            '<button id="' + prefix + 'SelectAll" type="button" disabled>' + UILANG.m('Select all') + '</button>' +
+            '<button id="' + prefix + 'SelectNone" type="button" disabled>' + UILANG.m('Deselect all') + '</button>' +
+            '</div>' +
+            '</div>' +
+            '<div id="' + prefix + 'LinearTests" class="tmExistingEntriesEntryList tmExistingMutationLinearList">' +
+            '<div class="tmExistingEntriesEmpty">' + UILANG.m('Choose a mutation test to see its linear tests.') + '</div>' +
+            '</div>' +
+            '<div id="' + prefix + 'Summary" class="tmExistingEntriesSummary">' + UILANG.m('No linear tests selected.') + '</div>' +
+            '</section>' +
+            '<section class="tmExistingTestpoolPreview tmExistingMutationPreview">' +
+            '<div class="tmExistingEntriesSelectionHeader">' +
+            '<div><span class="tmExistingEntriesEyebrow">' + UILANG.m('Test pages') + '</span>' +
+            '<strong id="' + prefix + 'PreviewTitle">' + UILANG.m('Select a linear test') + '</strong></div>' +
+            '</div>' +
+            '<div id="' + prefix + 'Pages" class="tmExistingEntriesEntryList tmExistingTestpoolPagePreview">' +
+            '<div class="tmExistingEntriesEmpty">' + UILANG.m('Select a linear test to see its test pages.') + '</div>' +
+            '</div>' +
+            '</section>' +
+            '</div>',
+        title: UILANG.m('Load existing linear tests'),
+        width: 1260,
+        returnPromise: true,
+        replaceExisting: 'loadExistingMutationStructureDialog'
+    };
+    const dialogResult = new nxDialog('loadExistingMutationStructureDialog', dialogData);
+    const loadDialog = window.nxDialogManager.instances.loadExistingMutationStructureDialog;
+
+    dialogResult.then(function(res) {
+        if (res.button !== 'load' || !selectedTemplate || selectedTestIds.size === 0) return;
+        startAjax('importMutationStructureFromTemplate', {
+            targetTestId: serverData.testLevel.id,
+            sourceTestId: selectedTemplate.id,
+            testIds: Array.from(selectedTestIds)
+        });
+    });
+
+    function linearImportable(linearTest) {
+        return linearTest.exists &&
+            linearTest.type === 'linear' &&
+            linearTest.canRead !== false &&
+            linearTest.canEdit !== false &&
+            !currentIds.has(String(linearTest.hiddenID));
+    }
+
+    function selectableLinearTests() {
+        if (!selectedTemplate) return [];
+        return (selectedTemplate.linearTests || []).filter(linearImportable);
+    }
+
+    function linearStatus(linearTest) {
+        const id = String(linearTest.hiddenID);
+        if (!linearTest.exists) return {badge: UILANG.m('Missing'), className: 'tmExistingStructureMissingBadge', text: UILANG.m('The referenced linear test has been deleted.')};
+        if (linearTest.canRead === false || linearTest.canEdit === false) return {badge: UILANG.m('No import'), className: 'tmExistingStructureMissingBadge', text: UILANG.m('Linear test blocked')};
+        if (linearTest.type !== 'linear') return {badge: UILANG.m('No import'), className: 'tmExistingStructureMissingBadge', text: UILANG.m('Only linear tests can be imported into a mutation test.')};
+        if (currentIds.has(id)) return {badge: UILANG.m('Already in test'), className: '', text: UILANG.m('This linear test is already assigned to the current mutation test.')};
+        return null;
+    }
+
+    function pageCountText(count) {
+        return count + ' ' + UILANG.m(count === 1 ? 'page' : 'pages');
+    }
+
+    function updateSummary() {
+        const selectedCount = selectedTestIds.size;
+        const linearTests = selectedTemplate ? (selectedTemplate.linearTests || []) : [];
+        const duplicateCount = linearTests.filter(function(linearTest) {
+            return linearTest.exists && currentIds.has(String(linearTest.hiddenID));
+        }).length;
+        const missingCount = linearTests.filter(function(linearTest) {
+            return !linearTest.exists;
+        }).length;
+        const blockedCount = linearTests.filter(function(linearTest) {
+            return linearTest.exists && (linearTest.canRead === false || linearTest.canEdit === false || linearTest.type !== 'linear');
+        }).length;
+        const missingPages = linearTests.reduce(function(total, linearTest) {
+            return total + Number(linearTest.missingPageCount || 0);
+        }, 0);
+
+        let summary = UILANG.m('No linear tests selected.');
+        if (selectedCount > 0) {
+            summary = selectedCount + ' ' + UILANG.m(selectedCount === 1 ? 'linear test selected.' : 'linear tests selected.');
+        }
+        if (duplicateCount > 0) {
+            summary += ' ' + duplicateCount + ' ' + UILANG.m(duplicateCount === 1 ? 'linear test is already in this mutation test.' : 'linear tests are already in this mutation test.');
+        }
+        if (blockedCount > 0) {
+            summary += ' ' + blockedCount + ' ' + UILANG.m(blockedCount === 1 ? 'linear test is not ready to import.' : 'linear tests are not ready to import.');
+        }
+        if (missingCount > 0) {
+            summary += ' ' + missingCount + ' ' + UILANG.m(missingCount === 1 ? 'linear test reference is missing.' : 'linear test references are missing.');
+        }
+        if (missingPages > 0) {
+            summary += ' ' + missingPages + ' ' + UILANG.m(missingPages === 1 ? 'missing test page reference will remain visible in preview.' : 'missing test page references will remain visible in preview.');
+        }
+
+        $('#' + prefix + 'Summary').text(summary);
+        if (selectedCount > 0) loadDialog.enableButton('load');
+        else loadDialog.disableButton('load');
+    }
+
+    function renderLinearPreview() {
+        const $pageList = $('#' + prefix + 'Pages').empty();
+        const $previewTitle = $('#' + prefix + 'PreviewTitle');
+        if (!previewTest) {
+            $previewTitle.text(UILANG.m('Select a linear test'));
+            $pageList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('Select a linear test to see its test pages.') + '</div>');
+            return;
+        }
+
+        const pages = previewTest.pages || [];
+        $previewTitle.text(previewTest.name || UILANG.m('Linear test'));
+        if (!previewTest.exists) {
+            $pageList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('The referenced linear test has been deleted.') + '</div>');
+            return;
+        }
+        if (previewTest.canRead === false) {
+            $pageList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('You do not have read access to this linear test.') + '</div>');
+            return;
+        }
+        if (!pages.length) {
+            $pageList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('This linear test has no test pages.') + '</div>');
+            return;
+        }
+
+        $.each(pages, function(index, page) {
+            const missing = !page.exists;
+            const $row = $('<div class="tmExistingTestpoolPreviewPage"></div>');
+            if (missing) $row.addClass('tmExistingTestpoolPreviewPageBlocked');
+            $row.append($('<span class="tmExistingTestpoolPreviewIndex"></span>').text(index + 1));
+
+            const $content = $('<span class="tmExistingEntriesEntryContent"></span>');
+            $content.append($('<strong></strong>').text(missing ? UILANG.m('Missing test page') : page.name));
+            if (missing) {
+                $content.append($('<small></small>').text(UILANG.m('deleted reference') + ' ID: ' + page.hiddenID));
+            } else {
+                $content.append($('<small></small>').text([page.itemGroup, page.code ? UILANG.m('Code') + ': ' + page.code : ''].filter(Boolean).join(' · ')));
+            }
+            $row.append($content);
+
+            if (missing) {
+                $row.append($('<span class="tmExistingEntriesConflictBadge tmExistingStructureMissingBadge"></span>').text(UILANG.m('Missing')));
+            }
+            $pageList.append($row);
+        });
+    }
+
+    function renderLinearTests() {
+        const $linearList = $('#' + prefix + 'LinearTests').empty();
+        const $sourceTitle = $('#' + prefix + 'SourceTitle');
+        const $selectAll = $('#' + prefix + 'SelectAll');
+        const $selectNone = $('#' + prefix + 'SelectNone');
+        selectedTestIds = new Set();
+        previewTest = null;
+
+        if (!selectedTemplate) {
+            $sourceTitle.text(UILANG.m('Select a test'));
+            $selectAll.prop('disabled', true);
+            $selectNone.prop('disabled', true);
+            $linearList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('Choose a mutation test to see its linear tests.') + '</div>');
+            renderLinearPreview();
+            updateSummary();
+            return;
+        }
+
+        const linearTests = selectedTemplate.linearTests || [];
+        const importableTests = selectableLinearTests();
+        $sourceTitle.text(selectedTemplate.name);
+        $selectAll.prop('disabled', importableTests.length === 0);
+        $selectNone.prop('disabled', importableTests.length === 0);
+        if (!linearTests.length) {
+            $linearList.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('This mutation test has no assigned linear tests.') + '</div>');
+            renderLinearPreview();
+            updateSummary();
+            return;
+        }
+
+        selectedTestIds = new Set(importableTests.map(function(linearTest) {
+            return String(linearTest.hiddenID);
+        }));
+        previewTest = importableTests[0] || linearTests[0] || null;
+
+        $.each(linearTests, function(_, linearTest) {
+            const testId = String(linearTest.hiddenID);
+            const status = linearStatus(linearTest);
+            const disabled = status !== null;
+            const $checkbox = $('<input type="checkbox">').val(testId).prop('disabled', disabled);
+            if (!disabled) $checkbox.prop('checked', selectedTestIds.has(testId));
+
+            const $row = $('<div class="tmExistingEntriesEntry tmExistingTestpoolEntry tmExistingMutationLinearEntry"></div>');
+            if (disabled) $row.addClass('tmExistingStructureMissing');
+
+            const name = linearTest.name || (linearTest.exists ? UILANG.m('Blocked linear test') : UILANG.m('Missing linear test'));
+            const subline = status ? status.text : pageCountText(Number(linearTest.pageCount || 0));
+            const $content = $('<span class="tmExistingEntriesEntryContent tmExistingTestpoolContent"></span>')
+                .append($('<strong></strong>').text(name))
+                .append($('<small></small>').text(subline));
+
+            const $label = $('<label class="tmExistingTestpoolSelect"></label>').append($checkbox).append($content);
+            const pageCount = Number(linearTest.pageCount || 0);
+            const $pageButton = $('<button type="button" class="tmExistingTestpoolPageButton"></button>')
+                .attr('title', UILANG.m('Show test pages'))
+                .append($('<strong></strong>').text(pageCount))
+                .append($('<span></span>').text(UILANG.m(pageCount === 1 ? 'page' : 'pages')))
+                .on('click', function(event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    previewTest = linearTest;
+                    $('#' + prefix + 'LinearTests .tmExistingMutationLinearEntry').removeClass('tmExistingTestpoolEntryPreviewed');
+                    $row.addClass('tmExistingTestpoolEntryPreviewed');
+                    renderLinearPreview();
+                });
+
+            $row.append($label);
+            if (status) {
+                $row.append($('<span class="tmExistingEntriesConflictBadge ' + status.className + '"></span>').text(status.badge));
+            }
+            $row.append($pageButton);
+
+            $checkbox.on('change', function() {
+                if (this.checked) selectedTestIds.add(testId);
+                else selectedTestIds.delete(testId);
+                updateSummary();
+            });
+            if (previewTest && String(previewTest.hiddenID) === testId) {
+                $row.addClass('tmExistingTestpoolEntryPreviewed');
+            }
+            $linearList.append($row);
+        });
+        renderLinearPreview();
+        updateSummary();
+    }
+
+    function renderTestList(filter) {
+        const $list = $('#' + prefix + 'Tests').empty();
+        const query = String(filter || '').trim().toLocaleLowerCase();
+        selectedTemplate = null;
+        renderLinearTests();
+        const visibleTemplates = templates.filter(function(template) {
+            return !query || String(template.name || '').toLocaleLowerCase().indexOf(query) !== -1;
+        });
+        if (!visibleTemplates.length) {
+            $list.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('No accessible mutation tests with assigned linear tests were found.') + '</div>');
+            return;
+        }
+        $.each(visibleTemplates, function(_, template) {
+            const testCount = (template.linearTests || []).length;
+            const importableCount = (template.linearTests || []).filter(linearImportable).length;
+            const $row = $('<button type="button" class="tmExistingEntriesTest tmExistingStructureTest"></button>')
+                .attr('title', template.name)
+                .append($('<strong></strong>').text(template.name))
+                .append($('<small></small>').text(testCount + ' ' + UILANG.m(testCount === 1 ? 'linear test' : 'linear tests') + ' · ' + importableCount + ' ' + UILANG.m('importable')))
+                .on('click', function() {
+                    $('#' + prefix + 'Tests .tmExistingEntriesTest').removeClass('tmExistingEntriesTestSelected');
+                    $row.addClass('tmExistingEntriesTestSelected');
+                    selectedTemplate = template;
+                    renderLinearTests();
+                });
+            $list.append($row);
+        });
+    }
+
+    $('#' + prefix + 'Filter').on('input', function() {
+        renderTestList($(this).val());
+    });
+    $('#' + prefix + 'SelectAll').on('click', function() {
+        selectedTestIds = new Set(selectableLinearTests().map(function(linearTest) {
+            return String(linearTest.hiddenID);
+        }));
+        $('#' + prefix + 'LinearTests input[type="checkbox"]:not(:disabled)').prop('checked', true);
+        updateSummary();
+    });
+    $('#' + prefix + 'SelectNone').on('click', function() {
+        selectedTestIds = new Set();
+        $('#' + prefix + 'LinearTests input[type="checkbox"]').prop('checked', false);
+        updateSummary();
+    });
+
+    startAjax('fetchMutationStructureTemplates', {
+        targetTestId: serverData.testLevel.id
+    }).then(function(res) {
+        templates = res && res.data && Array.isArray(res.data.mutationStructureTemplates)
+            ? res.data.mutationStructureTemplates
+            : [];
+        renderTestList('');
+    }).catch(function() {
+        templates = [];
+        renderTestList('');
+    });
+}
+
 //Legal text editor
-function legalText(){
+function legalText() {
+	cleanupMetaTinyMceEditors();
+
+    let lteDialogNormalized = false;
 
     let dialogData = {
         buttons: [{
@@ -4071,17 +7375,22 @@ function legalText(){
         contents: '<div id="legalMsg"></div><div style="height:550px;" id="legalTextEditor"></div>',
         title: UILANG.m('Edit privacy policy'),
         returnPromise: true,
-        width: 1200
+        replaceExisting: 'lteEditor',
+
+        width: 1250
     };
 
     showDialog('lteEditor', dialogData).then(
         (res) => {
             if (res.button === 'ok') {
                 const writeObj = {};
-                $.each(languages, function(key, value) {
-                    writeObj[key]=tinymce.get('container_'+key).getContent();
+                $.each(languages, function (key, value) {
+                    let html = tinymce.get('container_' + key).getContent();
+                    html = collapseOasysRoot(html);
+                    writeObj[key] = html;
                 });
-                //Save modified privacy policy
+                writeObj.customCSS = legalCustomCss || '';
+
                 startAjax('saveTest', {
                     id: serverData.testLevel.id,
                     metaData: writeObj,
@@ -4089,16 +7398,31 @@ function legalText(){
                     currentSkin: serverData.testLevel.skin.skin
                 });
             }
-            //Kill all editors
-            tinymce.remove();
+			cleanupMetaTinyMceEditors();
         }
     );
 
-    $('#legalMsg').append(UILANG.m('Create or edit your privacy policy in different languages here and set the visibility using the skin settings of your test (might not be available for all skins).'));
+    // Top info bar: text on the left, "Load existing" on the right (same height)
+    $('#legalMsg').append(
+        '<div id="legalMsgBar" ' +
+        'style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">' +
+        '<div id="legalMsgText" style="flex:1;margin-right:10px;">' +
+        UILANG.m('Create or edit your privacy policy in different languages here and set the visibility using the skin settings of your test (might not be available for all skins).') +
+        '</div>' +
+        '<div style="flex:0 0 auto;display:flex;align-items:center;">' +
+        '<button type="button" id="btnLoadPrivacyFromExisting" class="nx-btn nx-btn-small" ' +
+        'style="display:inline-flex;align-items:center;padding:4px 10px;">' +
+        '<span class="nx-icon nx-icon-folder-open"></span>' +
+        '<span>' + UILANG.m('Load existing') + '</span>' +
+        '</button>' +
+        '</div>' +
+        '</div>'
+    );
 
     const legalTabs = new jsTabs($('#legalTextEditor'), 'lte');
     const tabList = {};
     const containers = [];
+    let currentLegalLanguage = null; // track active language tab
 
     $('#legalTextEditor').append('<div id="editorCont"></div>');
 
@@ -4110,24 +7434,148 @@ function legalText(){
         case "FR":
             userLang = "fr_FR";
             break;
+        default:
+            userLang = "en";
+            break;
     }
 
-    //prepare content
-    const content = JSON.parse(serverData.testLevel.metadata);
+    // prepare content – metadata may be null/empty/invalid
+    let content = {};
+    try {
+        if (serverData.testLevel.metadata) {
+            content = JSON.parse(serverData.testLevel.metadata);
+        }
+    } catch (e) {
+        content = {};
+    }
 
-    $.each(languages, function(key, value) {
+    let legalCustomCss = '';
+    if (content &&
+        content.privacy_policy &&
+        typeof content.privacy_policy === 'object' &&
+        Object.prototype.hasOwnProperty.call(content.privacy_policy, 'customCSS')
+    ) {
+        legalCustomCss = content.privacy_policy.customCSS || '';
+    }
+
+    const legalEditors = [];
+    // Inject CSS into all privacy-policy TinyMCE instances of this dialog
+    function applyLegalCustomCssToAllEditors() {
+
+        if (!legalEditors.length) {
+            return;
+        }
+
+        legalEditors.forEach(function (ed) {
+            if (!ed) return;
+
+            try {
+                const doc = ed.getDoc && ed.getDoc();
+                if (doc) {
+                    const old = doc.querySelector('style[data-legal-css="1"]');
+                    if (old) {
+                        old.parentNode.removeChild(old);
+                    }
+                }
+            } catch (e) {
+                console.warn('Error cleaning old legal CSS style:', e);
+            }
+
+            // nothing more to do if CSS is empty – we just removed the old style
+            if (!legalCustomCss) {
+                return;
+            }
+
+            try {
+                if (ed.dom && typeof ed.dom.addStyle === 'function') {
+                    ed.dom.addStyle(legalCustomCss);
+
+                    const doc = ed.getDoc && ed.getDoc();
+                    if (doc) {
+                        const styles = doc.getElementsByTagName('style');
+                        if (styles.length > 0) {
+                            styles[styles.length - 1].setAttribute('data-legal-css', '1');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Error injecting legal CSS into editor', ed.id, e);
+            }
+        });
+    }
+
+
+
+// Custom CSS dialog using your nxDialog/showDialog infrastructure
+    function openLegalCustomCssDialog() {
+
+        const escCss = legalCustomCss || '';
+
+        const dialogDataCss = {
+            buttons: [{
+                label: UILANG.m('cancel'),
+                cancel: true,
+                value: 'cancel'
+            }, {
+                label: 'Save',
+                default: true,
+                value: 'ok'
+            }],
+            title: 'Custom CSS',
+            width: 900,
+            returnPromise: true,
+            datafields: ['legalCustomCssArea'],
+            dataFormat: 'object',
+            doNotStripHTML: true,
+
+            contents:
+                '<div>' +
+                '<div style="margin-bottom:6px;">' +
+                UILANG.m('Enter custom CSS that will be applied to all languages of the privacy policy editor.') +
+                '</div>' +
+                '<textarea id="legalCustomCssArea" ' +
+                'style="width:100%;height:360px;resize:vertical;' +
+                'font-family:monospace;font-size:12px;' +
+                'border:1px solid #ccc;border-radius:4px;padding:6px;">' +
+                $('<div/>').text(escCss).html() +
+                '</textarea>' +
+                '</div>'
+        };
+
+        // use the same helper you use for the main meta dialog
+        showDialog('lteCustomCss', dialogDataCss).then(function (res) {
+            if (res && res.button === 'ok' && res.data) {
+                // VALUE COMES FROM nxDialog, NOT FROM $('#...') (DOM is already removed)
+                legalCustomCss = res.data.legalCustomCssArea || '';
+                // apply immediately in all language editors
+                applyLegalCustomCssToAllEditors();
+            }
+        });
+    }
+
+
+    $.each(languages, function (key, value) {
         tabList[key] = key;
-        //Add container for each language and preload content
-        containers.push('container_'+key);
+        // Add container for each language and preload content
+        containers.push('container_' + key);
         let preLoad;
         if (content && content.privacy_policy && Object.prototype.hasOwnProperty.call(content.privacy_policy, key)) {
-            preLoad=content.privacy_policy[key];
+            preLoad = content.privacy_policy[key];
         } else {
-            preLoad='';
+            preLoad = '';
         }
-        $('#editorCont').append('<div id="div_'+key+'"><textarea id="container_'+key+'">'+preLoad+'</textarea></div>');
+
+        preLoad = expandOasysRoot(preLoad);
+
+        $('#editorCont').append(
+            '<div id="div_' + key + '">' +
+            '<textarea id="container_' + key + '">' + preLoad + '</textarea>' +
+            '</div>'
+        );
+
         tinymce.init({
             selector: '#container_' + key,
+            testId: serverData.testLevel.id,
             promotion: false,
             plugins: [
                 "charmap",
@@ -4144,15 +7592,25 @@ function legalText(){
                 "link",
                 "anchor",
                 "insertdatetime",
-                "fullscreen"
+                "fullscreen",
+                "tmimagebrowser"
             ],
-            toolbar: 'undo redo | formatselect | bold italic backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | table',
+            toolbar: [
+                'undo redo | blocks fontsize | bold italic underline forecolor backcolor | ' +
+                'alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | hr | tmimagebrowser | fullscreen metapreviewbutton',
+                'customcss'
+            ],
             menubar: 'edit view insert format tools table',
+            contextmenu: 'undo redo | bold italic underline | link | align',
+            convert_urls: false,
+            relative_urls: false,
+            remove_script_host: false,
             menu: {
                 edit: { title: 'Edit', items: 'undo redo | cut copy paste | selectall | searchreplace' },
-                view: { title: 'View', items: 'code | visualaid visualchars visualblocks | preview fullscreen' },
+                view: { title: 'View', items: 'metapreview | code | visualchars visualblocks | fullscreen' },
+                insert: { title: 'Insert', items: 'link inserttable charmap hr insertdatetime' },
                 format: { title: 'Format', items: 'bold italic underline strikethrough superscript subscript codeformat | formats blockformats fontsize align | forecolor backcolor | removeformat' },
-                tools: { title: 'Tools', items: 'spellchecker spellcheckerlanguage | code wordcount' },
+                tools: { title: 'Tools', items: 'code' },
                 table: { title: 'Table', items: 'inserttable tableprops deletetable row column cell' }
             },
             // Disable image upload and image-related options
@@ -4160,57 +7618,375 @@ function legalText(){
             paste_data_images: false,
             min_height: 500,
             resize: false,
-            language: userLang
+            language: userLang,
+            setup: function (editor) {
+                legalEditors.push(editor);
+                editor.ui.registry.addButton('customcss', {
+                    text: UILANG.m('Custom CSS'),
+                    icon: 'sourcecode',
+                    tooltip: 'Custom CSS',
+                    onAction: function () {
+                        openLegalCustomCssDialog();
+                    }
+                });
+                editor.ui.registry.addMenuItem('metapreview', {
+                    text: UILANG.m('Preview'),
+                    icon: 'preview',
+                    onAction: function () {
+                        openMetaPageCurrentPreview(editor, legalCustomCss, 'privacy_policy');
+                    }
+                });
+                editor.ui.registry.addButton('metapreviewbutton', {
+                    icon: 'preview',
+                    tooltip: UILANG.m('Preview'),
+                    onAction: function () {
+                        openMetaPageCurrentPreview(editor, legalCustomCss, 'privacy_policy');
+                    }
+                });
+                editor.on('init', function () {
+                    if (legalCustomCss) {
+                        applyLegalCustomCssToAllEditors();
+                    }
+                    if (!lteDialogNormalized) {
+                        lteDialogNormalized = true;
+                        requestAnimationFrame(() => {
+                            const dlg = window.nxDialogManager?.instances?.lteEditor;
+                            if (dlg && typeof dlg.normalizeInitialPosition === 'function') {
+                                dlg.normalizeInitialPosition();
+                            }
+                        });
+                    }
+                });
+            }
         });
     });
 
-    legalTabs.setTabs(tabList);
+    // determine initial tab based on test options
+    let initialLanguage = null;
+
+    const testOptions =
+        serverData &&
+        serverData.testLevel &&
+        serverData.testLevel.options &&
+        !Array.isArray(serverData.testLevel.options)
+            ? serverData.testLevel.options
+            : {};
+
+    $.each(languages, function (key) {
+        if (!initialLanguage && testOptions[key] === true) {
+            initialLanguage = key;
+        }
+    });
+
+    // fallback: first tab
+    if (!initialLanguage) {
+        initialLanguage = Object.keys(tabList)[0];
+    }
+
+    legalTabs.setTabs(tabList, initialLanguage);
 
     // init jsTabs click handler
     let tSel = legalTabs.getEventType('select');
     $(window).off(tSel);
-    $(window).on(tSel, function(ret) {
+    $(window).on(tSel, function (ret) {
         for (let c in containers) {
-            $('#div_'+containers[c].replace("container_", "")).hide();
+            $('#div_' + containers[c].replace("container_", "")).hide();
         }
-        $('#div_'+ret.originalEvent.detail).show();
+        const selectedLang = ret.originalEvent.detail;
+        $('#div_' + selectedLang).show();
+        currentLegalLanguage = selectedLang;
     });
 
-    $.each(containers, function(key, val) {
-        if(key!==0) {
-            let lang=val.replace("container_", "");
-            $('#div_'+lang).hide();
+    // initial visibility: show first language, hide others
+    $.each(containers, function (key, val) {
+        let lang = val.replace("container_", "");
+        if (lang === initialLanguage) {
+            $('#div_' + lang).show();
+            currentLegalLanguage = lang;
+        } else {
+            $('#div_' + lang).hide();
         }
     });
+
+    // wire up "Load existing" button
+    $('#btnLoadPrivacyFromExisting').off('click').on('click', function () {
+        openPrivacyFromExistingDialog(currentLegalLanguage);
+    });
+
+    // ---------------------------------------------------------------------
+    // Helper dialog: load privacy policy text from another test
+    // ---------------------------------------------------------------------
+    function openPrivacyFromExistingDialog(initialLanguage) {
+        let selectedTemplate = null;
+        let templates = [];
+        let previewLanguage = initialLanguage || null;
+
+        function resetPreview() {
+            const $prev = $('#ltlPreview');
+            const $header = $('#ltlPreviewHeader');
+            if ($prev.length) $prev.empty();
+            if ($header.length) $header.text('');
+            selectedTemplate = null;
+        }
+
+        const dialogData = {
+            buttons: [{
+                label: UILANG.m('cancel'),
+                'cancel': true,
+                value: 'cancel'
+            }, {
+                label: UILANG.m('Use selected'),
+                'default': true,
+                value: 'ok'
+            }],
+            contents:
+                '<div id="ltlRoot" class="tmMetaLoadDialog">' +
+                '<aside id="ltlLeft" class="tmMetaLoadSources">' +
+                '<label class="tmExistingEntriesFilter" for="ltlFilter"><span>' + UILANG.m('Filter tests') + '</span><input id="ltlFilter" type="text" autocomplete="off"></label>' +
+                '<div id="ltlList" class="tmExistingEntriesTestList"></div>' +
+                '</aside>' +
+                '<section id="ltlRight" class="tmMetaLoadPreview">' +
+                '<div id="ltlTabs"></div>' +
+                '<div id="ltlPreviewWrapper" class="tmMetaLoadPreviewWrapper">' +
+                '<div id="ltlPreviewHeader" class="tmMetaLoadPreviewHeader"></div>' +
+                '<div id="ltlPreview" class="tmMetaLoadPreviewContent"></div>' +
+                '</div>' +
+                '</section>' +
+                '</div>',
+            title: UILANG.m('Load existing privacy policy'),
+            returnPromise: true,
+            width: 1150
+        };
+
+        showDialog('legalTextLoadExisting', dialogData).then(function (res) {
+            if (res.button === 'ok' && selectedTemplate && selectedTemplate.privacy_policy) {
+
+                // Build metaData payload from selected template
+                const metaData = {};
+                $.each(languages, function (langKey) {
+                    metaData[langKey] = selectedTemplate.privacy_policy[langKey] || '';
+                });
+                metaData.customCSS = selectedTemplate.privacy_policy.customCSS || '';
+
+                startAjax('normalizeMetaUploads', {
+                    id: serverData.testLevel.id,
+                    metaType: 'privacy_policy',
+                    metaData: metaData
+                }).then((resp) => {
+					if (resp.error) return;
+                    const normalized = resp.metaData || metaData;
+
+                    $.each(languages, function (langKey) {
+                        const vRaw = normalized[langKey] || '';
+                        const v    = expandOasysRoot(vRaw);
+                        const ed   = tinymce.get('container_' + langKey);
+                        if (ed) {
+                            ed.setContent(v);
+                        }
+                    });
+
+                    legalCustomCss = normalized.customCSS || metaData.customCSS || '';
+                    applyLegalCustomCssToAllEditors();
+                });
+            }
+        });
+
+
+        // --- jsTabs for language selection in preview ---
+        const langKeys = Object.keys(languages);
+        if (!previewLanguage || $.inArray(previewLanguage, langKeys) === -1) {
+            previewLanguage = langKeys[0];
+        }
+
+        const previewTabs = new jsTabs($('#ltlTabs'), 'ltlTabs');
+        const previewTabList = {};
+        $.each(langKeys, function (i, langKey) {
+            previewTabList[langKey] = langKey;
+        });
+
+        const pSel = previewTabs.getEventType('select');
+        $(window).off(pSel);
+        $(window).on(pSel, function (ret) {
+            // jsTabs dispatches selected key here
+            previewLanguage = ret.detail;
+            renderPreview();
+        });
+
+        // IMPORTANT: preselect the current language via jsTabs API
+        previewTabs.setTabs(previewTabList, previewLanguage);
+
+        // Initially: disable tabs until a template is selected
+        disablePreviewTabs();
+
+        function disablePreviewTabs() {
+            const $tabs = $('#ltlTabs .jsTab');
+            $tabs.removeClass('jstActive')
+                .addClass('jstDisabled')
+                .css({
+                    opacity: 0.3,
+                    pointerEvents: 'none'
+                });
+        }
+
+        function enablePreviewTabs() {
+            const $tabs = $('#ltlTabs .jsTab');
+            $tabs.removeClass('jstDisabled')
+                .css({
+                    opacity: '',
+                    pointerEvents: ''
+                });
+            // ensure correct language tab is marked active
+            previewTabs.select(previewLanguage);
+        }
+
+
+        function renderPreview() {
+            const $prev   = $('#ltlPreview');
+            const $header = $('#ltlPreviewHeader');
+            if (!$prev.length) return;
+
+            // Clear old content and measure actual usable width
+            $prev.empty();
+
+            const rect = $prev[0].getBoundingClientRect();
+            const style = window.getComputedStyle($prev[0]);
+
+            const paddingLeft  = parseFloat(style.paddingLeft);
+            const paddingRight = parseFloat(style.paddingRight);
+            const borderLeft   = parseFloat(style.borderLeftWidth);
+            const borderRight  = parseFloat(style.borderRightWidth);
+
+            const prevWidth = rect.width - paddingLeft - paddingRight - borderLeft - borderRight;
+
+            $header.text(selectedTemplate ? selectedTemplate.name : '');
+
+            if (!selectedTemplate || !selectedTemplate.privacy_policy) {
+                return;
+            }
+
+            let html = selectedTemplate.privacy_policy[previewLanguage] || '';
+            html = expandOasysRoot(html);
+
+            let customCss = selectedTemplate.privacy_policy.customCSS || '';
+            customCss = customCss.replace(/\bbody\b/g, '#ltlPreview');
+            const cssBlock = customCss ? `<style>${customCss}</style>` : '';
+
+            $prev.html(cssBlock + '<div id="ltlPreviewInner">' + html + '</div>');
+            const $inner = $('#ltlPreviewInner');
+
+            $inner.css({
+                transform: '',
+                transformOrigin: '',
+                width: ''
+            });
+
+            const contentWidth = $inner[0] ? $inner[0].scrollWidth : 0;
+
+            if (prevWidth > 0 && contentWidth > prevWidth) {
+                const scale = prevWidth / contentWidth;
+                $inner.css({
+                    transform: 'scale(' + scale + ')',
+                    transformOrigin: 'top left',
+                    width: contentWidth + 'px'
+                });
+            }
+        }
+
+        function renderList(filter) {
+            const $list = $('#ltlList');
+            $list.empty();
+
+            // always clear preview when (re)rendering the list
+            resetPreview();
+
+            if (!templates.length) {
+                $list.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('No tests with a privacy policy were found.') + '</div>');
+                return;
+            }
+
+            const q = (filter || '').toLowerCase();
+
+            $.each(templates, function (idx, t) {
+                if (q && t.name.toLowerCase().indexOf(q) === -1) {
+                    return; // filtered out
+                }
+
+                const $row = $('<button type="button" class="tmExistingEntriesTest ltlRow"></button>')
+                    .text(t.name)
+                    .attr('data-idx', idx)
+                    .on('click', function () {
+                        $('.ltlRow').removeClass('selected tmExistingEntriesTestSelected');
+                        $(this).addClass('selected tmExistingEntriesTestSelected');
+                        selectedTemplate = templates[idx];
+                        // enable language tabs once we have a template
+                        enablePreviewTabs();
+                        renderPreview();
+                    });
+
+                $list.append($row);
+            });
+        }
+
+        $('#ltlFilter').on('input', function () {
+            renderList($(this).val());
+        });
+
+        // Load templates from backend
+        startAjax('fetchPrivacyTemplates', {
+			languages: Object.keys(languages),
+			targetTestId: serverData.testLevel.id
+        })
+            .then(function (res) {
+                if (res && res.data && res.data.privacyTemplates) {
+                    templates = res.data.privacyTemplates;
+                } else {
+                    templates = [];
+                }
+                renderList('');
+            })
+            .catch(function (err) {
+                console.error('Error loading privacy templates', err);
+                templates = [];
+                renderList('');
+            });
+    }
 }
 
+
 //Score screen editor
-function scoreScreen(){
+function scoreScreen() {
+	cleanupMetaTinyMceEditors();
+
+    let seDialogNormalized = false;
 
     let dialogData = {
         buttons: [{
             label: UILANG.m('cancel'),
-            'cancel': true,
+            cancel: true,
             value: 'cancel'
         }, {
             label: UILANG.m('Save'),
-            'default': true,
+            default: true,
             value: 'ok'
         }],
         contents: '<div id="scoreMsg"></div><div style="height:550px;" id="scoreScreenEditor"></div>',
         title: UILANG.m('Edit score screen'),
         returnPromise: true,
-        width: 1200
+        replaceExisting: 'seEditor',
+        width: 1250
     };
 
     showDialog('seEditor', dialogData).then(
         (res) => {
             if (res.button === 'ok') {
                 const writeObj = {};
-                $.each(languages, function(key, value) {
-                    writeObj[key]=tinymce.get('container_'+key).getContent();
+                $.each(languages, function (key) {
+                    let html = getScoreContentForSave(tinymce.get('container_' + key));
+                    html = collapseOasysRoot(html);
+                    writeObj[key] = html;
                 });
-                //Save modified score screen
+                writeObj.customCSS = scoreCustomCss || '';
+
                 startAjax('saveTest', {
                     id: serverData.testLevel.id,
                     metaData: writeObj,
@@ -4218,96 +7994,329 @@ function scoreScreen(){
                     currentSkin: serverData.testLevel.skin.skin
                 });
             }
-            //Kill all editors
-            tinymce.remove();
+			cleanupMetaTinyMceEditors();
         }
     );
 
-    $('#scoreMsg').append(UILANG.m('Customize the score screen displayed after a test using the WYSIWYG editor. Add variables & navigation button using the custom icons in the toolbar.'));
+    $('#scoreMsg').append(
+        '<div id="scoreMsgBar" ' +
+        'style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">' +
+        '<div id="scoreMsgText" style="flex:1;margin-right:10px;">' +
+        UILANG.m('Customize the score screen displayed after a test using the WYSIWYG editor. Add variables, conditional blocks and navigation button using the custom icons in the toolbar.') +
+        '</div>' +
+        '<div style="flex:0 0 auto;display:flex;align-items:center;">' +
+        '<button type="button" id="btnLoadScoreFromExisting" class="nx-btn nx-btn-small" ' +
+        'style="display:inline-flex;align-items:center;padding:4px 10px;">' +
+        '<span class="nx-icon nx-icon-folder-open"></span>' +
+        '<span>' + UILANG.m('Load existing') + '</span>' +
+        '</button>' +
+        '</div>' +
+        '</div>'
+    );
 
-    const legalTabs = new jsTabs($('#scoreScreenEditor'), 'lte');
+    const scoreTabs = new jsTabs($('#scoreScreenEditor'), 'lte');
     const tabList = {};
     const containers = [];
+    let currentScoreLanguage = null;
 
     $('#scoreScreenEditor').append('<div id="editorCont"></div>');
 
     let userLang;
     switch (settings.interfaceLanguage) {
-        case "DE":
-            userLang = "de";
+        case 'DE':
+            userLang = 'de';
             break;
-        case "FR":
-            userLang = "fr_FR";
+        case 'FR':
+            userLang = 'fr_FR';
+            break;
+        default:
+            userLang = 'en';
             break;
     }
 
-    //prepare content
-    const content = JSON.parse(serverData.testLevel.metadata);
+    let content = {};
+    try {
+        if (serverData.testLevel.metadata) {
+            content = JSON.parse(serverData.testLevel.metadata);
+        }
+    } catch (e) {
+        content = {};
+    }
 
-    $.each(languages, function(key, value) {
-        tabList[key] = key;
-        //Add container for each language and preload content
-        containers.push('container_'+key);
-        let preLoad;
-        const defaultContent = {
-            DE: `<h1 style="text-align: center;"><strong></strong></h1> 
-     <h1 style="text-align: center;"><strong>Punktzahl</strong></h1> 
-     <h1 style="text-align: center;"><strong><span class="non-editable-variable" contenteditable="false">[@ SCORED @]</span>  
-     /  <span class="non-editable-variable" contenteditable="false">[@ TOTAL @]</span> <br></strong></h1> 
-     <p style="text-align: center;"><strong></strong></p> 
-     <p style="text-align: center;"><strong><span class="non-editable-variable button-variable" 
-     contenteditable="false" data-url="" data-action="close" data-label="Test beenden">Test beenden</span></strong></p>`,
+    let scoreCustomCss = '';
+    if (
+        content &&
+        content.score_screen &&
+        typeof content.score_screen === 'object' &&
+        Object.prototype.hasOwnProperty.call(content.score_screen, 'customCSS')
+    ) {
+        scoreCustomCss = content.score_screen.customCSS || '';
+    }
 
-            EN: `<h1 style="text-align: center;"><strong></strong></h1> 
-     <h1 style="text-align: center;"><strong>Score</strong></h1> 
-     <h1 style="text-align: center;"><strong><span class="non-editable-variable" contenteditable="false">[@ SCORED @]</span>  
-     /  <span class="non-editable-variable" contenteditable="false">[@ TOTAL @]</span> <br></strong></h1> 
-     <p style="text-align: center;"><strong></strong></p> 
-     <p style="text-align: center;"><strong><span class="non-editable-variable button-variable" 
-     contenteditable="false" data-url="" data-action="close" data-label="Close test">Close test</span></strong></p>`,
+    const scoreEditors = [];
 
-            FR: `<h1 style="text-align: center;"><strong></strong></h1> 
-     <h1 style="text-align: center;"><strong>Score</strong></h1> 
-     <h1 style="text-align: center;"><strong><span class="non-editable-variable" contenteditable="false">[@ SCORED @]</span>  
-     /  <span class="non-editable-variable" contenteditable="false">[@ TOTAL @]</span> <br></strong></h1> 
-     <p style="text-align: center;"><strong></strong></p> 
-     <p style="text-align: center;"><strong><span class="non-editable-variable button-variable" 
-     contenteditable="false" data-url="" data-action="close" data-label="Fermer le test">Fermer le test</span></strong></p>`,
+    function getScoreContentForSave(editor) {
+        if (!editor) return '';
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = editor.getContent();
+        wrapper.querySelectorAll('.score-conditional-remove').forEach(function (removeNode) {
+            removeNode.remove();
+        });
+        return wrapper.innerHTML;
+    }
 
-            LU: `<h1 style="text-align: center;"><strong></strong></h1> 
-     <h1 style="text-align: center;"><strong>Punktzuel</strong></h1> 
-     <h1 style="text-align: center;"><strong><span class="non-editable-variable" contenteditable="false">[@ SCORED @]</span>  
-     /  <span class="non-editable-variable" contenteditable="false">[@ TOTAL @]</span> <br></strong></h1> 
-     <p style="text-align: center;"><strong></strong></p> 
-     <p style="text-align: center;"><strong><span class="non-editable-variable button-variable" 
-     contenteditable="false" data-url="" data-action="close" data-label="Test zoumaachen">Test zoumaachen</span></strong></p>`
-        };
+    function getScoreEditorBaseCss() {
+        return (
+            '.non-editable-variable {' +
+            'background-color:#eee;' +
+            'padding:2px 5px;' +
+            'border-radius:4px;' +
+            'font-weight:bold;' +
+            '}' +
+            '.button-variable {' +
+            'background-color:#d9edf7;' +
+            'color:#31708f;' +
+            'cursor:pointer !important;' +
+            'user-select:none;' +
+            '}' +
+            '.button-variable * {' +
+            'cursor:pointer !important;' +
+            '}' +
+            '.score-conditional-block {' +
+            'position:relative;' +
+            'border:2px solid #f0ad4e;' +
+            'border-radius:8px;' +
+            'padding:14px 42px 12px 12px;' +
+            'margin:12px 0;' +
+            'background:#fffaf2;' +
+            '}' +
+            '.score-conditional-meta {' +
+            'display:inline-block;' +
+            'margin-bottom:10px;' +
+            'padding:4px 8px;' +
+            'border-radius:999px;' +
+            'background:#f0ad4e;' +
+            'color:#fff;' +
+            'font-size:12px;' +
+            'font-weight:bold;' +
+            'cursor:pointer !important;' +
+            'user-select:none;' +
+            '}' +
+            '.score-conditional-meta * {' +
+            'cursor:pointer !important;' +
+            '}' +
+            '.score-conditional-remove {' +
+            'position:absolute;' +
+            'top:10px;' +
+            'right:10px;' +
+            'width:22px;' +
+            'height:22px;' +
+            'display:grid;' +
+            'place-items:center;' +
+            'border-radius:999px;' +
+            'box-sizing:border-box;' +
+            'background:#d9534f;' +
+            'color:#fff;' +
+            'font-family:Arial,sans-serif;' +
+            'font-size:18px;' +
+            'font-weight:bold;' +
+            'line-height:1;' +
+            'padding:0;' +
+            'text-align:center;' +
+            'cursor:pointer !important;' +
+            'user-select:none;' +
+            'z-index:2;' +
+            '}' +
+            '.score-conditional-remove * {' +
+            'cursor:pointer !important;' +
+            '}' +
+            '.score-conditional-content {' +
+            'min-height:30px;' +
+            '}'
+        );
+    }
 
-
-        if (content && content.score_screen && Object.prototype.hasOwnProperty.call(content.score_screen, key) && content.score_screen[key].trim() !== "") {
-            preLoad = content.score_screen[key];
-        } else {
-            preLoad = defaultContent.hasOwnProperty(key) ? defaultContent[key] : defaultContent[languageFallbacks[key]];
+    function applyScoreCustomCssToAllEditors() {
+        if (!scoreEditors.length) {
+            return;
         }
 
-        $('#editorCont').append('<div id="div_'+key+'"><textarea id="container_'+key+'">'+preLoad+'</textarea></div>');
+        const baseVarCss = getScoreEditorBaseCss();
+
+        scoreEditors.forEach(function (ed) {
+            if (!ed) {
+                return;
+            }
+
+            try {
+                const doc = ed.getDoc && ed.getDoc();
+                if (doc) {
+                    const old = doc.querySelector('style[data-score-css="1"]');
+                    if (old) {
+                        old.parentNode.removeChild(old);
+                    }
+                }
+            } catch (e) {
+                console.warn('Error cleaning old score CSS style:', e);
+            }
+
+            if (!scoreCustomCss && !baseVarCss) {
+                return;
+            }
+
+            try {
+                if (ed.dom && typeof ed.dom.addStyle === 'function') {
+                    const combinedCss = baseVarCss + '\n' + (scoreCustomCss || '');
+                    ed.dom.addStyle(combinedCss);
+
+                    const doc = ed.getDoc && ed.getDoc();
+                    if (doc) {
+                        const styles = doc.getElementsByTagName('style');
+                        if (styles.length > 0) {
+                            styles[styles.length - 1].setAttribute('data-score-css', '1');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Error injecting score CSS into editor', ed.id, e);
+            }
+        });
+    }
+
+    function openScoreCustomCssDialog() {
+        const escCss = scoreCustomCss || '';
+
+        const dialogDataCss = {
+            buttons: [{
+                label: UILANG.m('cancel'),
+                cancel: true,
+                value: 'cancel'
+            }, {
+                label: 'Save',
+                default: true,
+                value: 'ok'
+            }],
+            title: 'Custom CSS',
+            width: 900,
+            returnPromise: true,
+            datafields: ['scoreCustomCssArea'],
+            dataFormat: 'object',
+            doNotStripHTML: true,
+            contents:
+                '<div>' +
+                '<div style="margin-bottom:6px;">' +
+                UILANG.m('Enter custom CSS that will be applied to all languages of the score screen editor.') +
+                '</div>' +
+                '<textarea id="scoreCustomCssArea" ' +
+                'style="width:100%;height:360px;resize:vertical;' +
+                'font-family:monospace;font-size:12px;' +
+                'border:1px solid #ccc;border-radius:4px;padding:6px;">' +
+                $('<div/>').text(escCss).html() +
+                '</textarea>' +
+                '</div>'
+        };
+
+        showDialog('scoreCustomCss', dialogDataCss).then(function (res) {
+            if (res && res.button === 'ok' && res.data) {
+                scoreCustomCss = res.data.scoreCustomCssArea || '';
+                applyScoreCustomCssToAllEditors();
+            }
+        });
+    }
+
+    $.each(languages, function (key) {
+        tabList[key] = key;
+        containers.push('container_' + key);
+        let preLoad;
+
+        const defaultContent = {
+            DE: `<h1 style="text-align: center;"><strong></strong></h1>
+<h1 style="text-align: center;"><strong>Punktzahl</strong></h1>
+<h1 style="text-align: center;"><strong><span class="non-editable-variable" contenteditable="false">[@ SCORED @]</span> / <span class="non-editable-variable" contenteditable="false">[@ TOTAL @]</span> <br></strong></h1>
+<p style="text-align: center;"><strong></strong></p>
+<p style="text-align: center;"><strong><span class="non-editable-variable button-variable" contenteditable="false" data-url="" data-action="close" data-label="Test beenden">Test beenden</span></strong></p>`,
+
+            EN: `<h1 style="text-align: center;"><strong></strong></h1>
+<h1 style="text-align: center;"><strong>Score</strong></h1>
+<h1 style="text-align: center;"><strong><span class="non-editable-variable" contenteditable="false">[@ SCORED @]</span> / <span class="non-editable-variable" contenteditable="false">[@ TOTAL @]</span> <br></strong></h1>
+<p style="text-align: center;"><strong></strong></p>
+<p style="text-align: center;"><strong><span class="non-editable-variable button-variable" contenteditable="false" data-url="" data-action="close" data-label="Close test">Close test</span></strong></p>`,
+
+            FR: `<h1 style="text-align: center;"><strong></strong></h1>
+<h1 style="text-align: center;"><strong>Score</strong></h1>
+<h1 style="text-align: center;"><strong><span class="non-editable-variable" contenteditable="false">[@ SCORED @]</span> / <span class="non-editable-variable" contenteditable="false">[@ TOTAL @]</span> <br></strong></h1>
+<p style="text-align: center;"><strong></strong></p>
+<p style="text-align: center;"><strong><span class="non-editable-variable button-variable" contenteditable="false" data-url="" data-action="close" data-label="Fermer le test">Fermer le test</span></strong></p>`,
+
+            LU: `<h1 style="text-align: center;"><strong></strong></h1>
+<h1 style="text-align: center;"><strong>Punktzuel</strong></h1>
+<h1 style="text-align: center;"><strong><span class="non-editable-variable" contenteditable="false">[@ SCORED @]</span> / <span class="non-editable-variable" contenteditable="false">[@ TOTAL @]</span> <br></strong></h1>
+<p style="text-align: center;"><strong></strong></p>
+<p style="text-align: center;"><strong><span class="non-editable-variable button-variable" contenteditable="false" data-url="" data-action="close" data-label="Test zoumaachen">Test zoumaachen</span></strong></p>`
+        };
+
+        if (
+            content &&
+            content.score_screen &&
+            Object.prototype.hasOwnProperty.call(content.score_screen, key) &&
+            typeof content.score_screen[key] === 'string' &&
+            content.score_screen[key].trim() !== ''
+        ) {
+            preLoad = content.score_screen[key];
+        } else {
+            preLoad = defaultContent.hasOwnProperty(key)
+                ? defaultContent[key]
+                : defaultContent[languageFallbacks[key]];
+        }
+
+        preLoad = expandOasysRoot(preLoad);
+
+        $('#editorCont').append('<div id="div_' + key + '"><textarea id="container_' + key + '">' + preLoad + '</textarea></div>');
 
         tinymce.init({
             selector: '#container_' + key,
+            testId: serverData.testLevel.id,
             promotion: false,
             plugins: [
-                "charmap", "code", "preview", "searchreplace", "table",
-                "visualblocks", "visualchars", "wordcount", "lists",
-                "advlist", "autolink", "link", "anchor", "insertdatetime",
-                "fullscreen"
+                'charmap',
+                'code',
+                'preview',
+                'searchreplace',
+                'table',
+                'visualblocks',
+                'visualchars',
+                'wordcount',
+                'lists',
+                'advlist',
+                'autolink',
+                'link',
+                'anchor',
+                'insertdatetime',
+                'fullscreen',
+                'tmimagebrowser'
             ],
-            toolbar: 'undo redo | formatselect | bold italic backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | table | scored total percentage addbutton',
+            toolbar: [
+                'undo redo | blocks fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | hr | tmimagebrowser | fullscreen metapreviewbutton',
+                'customcss scored total percentage addbutton conditionalblock'
+            ],
             menubar: 'edit view insert format tools table',
+            contextmenu: 'undo redo | bold italic underline | link | align | bullist numlist | table',
+            convert_urls: false,
+            relative_urls: false,
+            remove_script_host: false,
+            menu: {
+                edit: { title: 'Edit', items: 'undo redo | cut copy paste | selectall | searchreplace' },
+                view: { title: 'View', items: 'metapreview | code | visualchars visualblocks | fullscreen' },
+                insert: { title: 'Insert', items: 'link inserttable charmap hr insertdatetime' },
+                format: { title: 'Format', items: 'bold italic underline strikethrough superscript subscript codeformat | formats blockformats fontsize align | forecolor backcolor | removeformat' },
+                tools: { title: 'Tools', items: 'code' },
+                table: { title: 'Table', items: 'inserttable tableprops deletetable row column cell' }
+            },
             min_height: 500,
-            resize: false, // Ensures the editor is NOT resizable
+            resize: false,
             language: userLang,
             valid_elements: '*[*]',
-            extended_valid_elements: 'span[class|contenteditable|data-url|data-action]',
+			extended_valid_elements: 'span[class|style|contenteditable|data-url|data-action|data-label],div[class|style|contenteditable|data-condition-metric|data-condition-operator|data-condition-value|data-condition-max-value]',
             setup: function (editor) {
                 const translations = {
                     en: {
@@ -4315,52 +8324,439 @@ function scoreScreen(){
                         total: 'Total',
                         percentage: 'Percentage',
                         addbutton: 'Add Button',
+                        conditionalblock: 'Conditional Block',
                         definebuttonlabel: 'Button label',
                         enter_url: 'Enter URL',
                         insert: 'Insert',
                         update: 'Update',
                         cancel: 'Cancel',
                         choose_action: 'Choose Action',
-                        close_test: 'Close Test',
+                        close_test: 'Close test',
                         open_url: 'Open URL',
-                        url_required: 'URL is required for "Open URL"'
+                        url_required: 'URL is required for "Open URL"',
+                        url_invalid: 'Please enter a valid URL starting with http:// or https://',
+                        condition_metric: 'Condition type',
+                        condition_operator: 'Operator',
+                        condition_value: 'Value',
+						condition_max_value: 'Upper value',
+						condition_min_value: 'Lower value',
+						between: 'Between',
+						between_inclusive: 'Between (inclusive)',
+						between_upper_inclusive: 'Between (lower exclusive, upper inclusive)',
+						between_lower_inclusive: 'Between (lower inclusive, upper exclusive)',
+						include_lower: 'Included',
+						include_upper: 'Included',
+                        points: 'Points',
+                        percentage_label: 'Percentage',
+                        show_when: 'Show when',
+                        remove_block: 'Remove block',
+                        nested_condition_not_allowed: 'A conditional block cannot be placed inside another conditional block.',
+                        condition_value_required: 'Please enter a value for the condition.',
+                        condition_value_invalid: 'Please enter a numeric value.',
+						condition_percentage_range: 'Percentage must be between 0 and 100.',
+						condition_range_order: 'The upper value must be greater than the lower value.',
+						condition_points_increment: 'Points must be entered as whole or half points.'
                     },
                     de: {
                         scored: 'Erreicht',
                         total: 'Gesamt',
                         percentage: 'Prozent',
                         addbutton: 'Button',
-                        definebuttonlabel: 'Button label',
+                        conditionalblock: 'Bedingter Block',
+                        definebuttonlabel: 'Button-Beschriftung',
                         enter_url: 'URL eingeben',
-                        insert: 'Einfügen',
+                        insert: 'Einfugen',
                         update: 'Aktualisieren',
                         cancel: 'Abbrechen',
-                        choose_action: 'Aktion auswählen',
+                        choose_action: 'Aktion auswahlen',
                         close_test: 'Test beenden',
-                        open_url: 'URL öffnen',
-                        url_required: 'Eine URL ist erforderlich für „URL öffnen“'
+                        open_url: 'URL offnen',
+                        url_required: 'Eine URL ist erforderlich fur "URL offnen"',
+                        url_invalid: 'Bitte eine gultige URL mit http:// oder https:// eingeben.',
+                        condition_metric: 'Bedingungstyp',
+                        condition_operator: 'Operator',
+                        condition_value: 'Wert',
+						condition_max_value: 'Oberer Wert',
+						condition_min_value: 'Unterer Wert',
+						between: 'Zwischen',
+						between_inclusive: 'Zwischen (inklusive)',
+						between_upper_inclusive: 'Zwischen (unten exklusiv, oben inklusiv)',
+						between_lower_inclusive: 'Zwischen (unten inklusiv, oben exklusiv)',
+						include_lower: 'Eingeschlossen',
+						include_upper: 'Eingeschlossen',
+                        points: 'Punkte',
+                        percentage_label: 'Prozent',
+                        show_when: 'Anzeigen wenn',
+                        remove_block: 'Block entfernen',
+                        nested_condition_not_allowed: 'Ein bedingter Block kann nicht in einem anderen bedingten Block platziert werden.',
+                        condition_value_required: 'Bitte einen Wert fur die Bedingung eingeben.',
+                        condition_value_invalid: 'Bitte einen numerischen Wert eingeben.',
+						condition_percentage_range: 'Der Prozentwert muss zwischen 0 und 100 liegen.',
+						condition_range_order: 'Der obere Wert muss grosser als der untere Wert sein.',
+						condition_points_increment: 'Punkte mussen als ganze oder halbe Punkte eingegeben werden.'
                     },
                     fr_FR: {
                         scored: 'Obtenu',
                         total: 'Total',
                         percentage: 'Pourcentage',
                         addbutton: 'Bouton',
-                        definebuttonlabel: 'Libellé du bouton',
-                        enter_url: 'Entrer l’URL',
-                        insert: 'Insérer',
-                        update: 'Mettre à jour',
+                        conditionalblock: 'Bloc conditionnel',
+                        definebuttonlabel: 'Libelle du bouton',
+                        enter_url: 'Entrer URL',
+                        insert: 'Inserer',
+                        update: 'Mettre a jour',
                         cancel: 'Annuler',
                         choose_action: 'Choisir une action',
                         close_test: 'Fermer le test',
                         open_url: 'Ouvrir URL',
-                        url_required: 'Une URL est requise pour "Ouvrir URL"'
+                        url_required: 'Une URL est requise pour "Ouvrir URL"',
+                        url_invalid: 'Veuillez saisir une URL valide commencant par http:// ou https://.',
+                        condition_metric: 'Type de condition',
+                        condition_operator: 'Operateur',
+                        condition_value: 'Valeur',
+						condition_max_value: 'Valeur superieure',
+						condition_min_value: 'Valeur inferieure',
+						between: 'Entre',
+						between_inclusive: 'Entre (inclusif)',
+						between_upper_inclusive: 'Entre (borne basse exclusive, haute inclusive)',
+						between_lower_inclusive: 'Entre (borne basse inclusive, haute exclusive)',
+						include_lower: 'Inclus',
+						include_upper: 'Inclus',
+                        points: 'Points',
+                        percentage_label: 'Pourcentage',
+                        show_when: 'Afficher si',
+                        remove_block: 'Supprimer le bloc',
+                        nested_condition_not_allowed: 'Un bloc conditionnel ne peut pas être placé dans un autre bloc conditionnel.',
+                        condition_value_required: 'Veuillez saisir une valeur pour la condition.',
+                        condition_value_invalid: 'Veuillez saisir une valeur numerique.',
+						condition_percentage_range: 'Le pourcentage doit etre compris entre 0 et 100.',
+						condition_range_order: 'La valeur superieure doit etre plus grande que la valeur inferieure.',
+						condition_points_increment: 'Les points doivent etre saisis en points entiers ou demi-points.'
                     }
                 };
 
-                const lang = translations[userLang] || translations['en'];
+                const lang = translations[userLang] || translations.en;
 
                 function insertVariable(variable) {
-                    editor.insertContent(`<span class="non-editable-variable" contenteditable="false">[@ ${variable} @]</span>&nbsp;`);
+                    editor.insertContent(
+                        `<span class="non-editable-variable" contenteditable="false">[@ ${variable} @]</span>&nbsp;`
+                    );
+                }
+
+                function getConditionMetricLabel(metric) {
+                    return metric === 'points' ? lang.points : lang.percentage_label;
+                }
+
+				function buildConditionalLabel(metric, operator, value, maxValue) {
+					if (operator === 'between') return `${lang.show_when} ${value} < ${getConditionMetricLabel(metric)} < ${maxValue}`;
+					if (operator === 'betweenInclusive') return `${lang.show_when} ${value} ≤ ${getConditionMetricLabel(metric)} ≤ ${maxValue}`;
+					if (operator === 'betweenUpperInclusive') return `${lang.show_when} ${value} < ${getConditionMetricLabel(metric)} ≤ ${maxValue}`;
+					if (operator === 'betweenLowerInclusive') return `${lang.show_when} ${value} ≤ ${getConditionMetricLabel(metric)} < ${maxValue}`;
+					return `${lang.show_when} ${getConditionMetricLabel(metric)} ${operator} ${value}`;
+                }
+
+				function createConditionalMetaNode(doc, metric, operator, value, maxValue) {
+                    const meta = doc.createElement('div');
+                    meta.className = 'score-conditional-meta';
+                    meta.setAttribute('contenteditable', 'false');
+					meta.textContent = buildConditionalLabel(metric, operator, value, maxValue);
+                    return meta;
+                }
+
+                function createConditionalRemoveNode(doc) {
+                    const remove = doc.createElement('div');
+                    remove.className = 'score-conditional-remove';
+                    remove.setAttribute('contenteditable', 'false');
+                    remove.setAttribute('title', lang.remove_block);
+                    remove.setAttribute('aria-label', lang.remove_block);
+                    remove.textContent = '\u00d7';
+                    return remove;
+                }
+
+                function normalizeConditionalBlocks() {
+                    const body = editor.getBody();
+                    if (!body) {
+                        return;
+                    }
+
+                    const blocks = body.querySelectorAll('.score-conditional-block');
+                    blocks.forEach(function (block) {
+                        const metric = block.getAttribute('data-condition-metric') || 'percentage';
+                        const operator = block.getAttribute('data-condition-operator') || '>=';
+                        const value = block.getAttribute('data-condition-value') || '0';
+						const maxValue = block.getAttribute('data-condition-max-value') || '';
+
+                        let meta = block.querySelector(':scope > .score-conditional-meta');
+                        let removeNode = block.querySelector(':scope > .score-conditional-remove');
+                        let contentNode = block.querySelector(':scope > .score-conditional-content');
+
+                        if (!contentNode) {
+                            contentNode = editor.getDoc().createElement('div');
+                            contentNode.className = 'score-conditional-content';
+
+                            Array.from(block.childNodes).forEach(function (child) {
+                                if ((meta && child === meta) || (removeNode && child === removeNode)) {
+                                    return;
+                                }
+                                contentNode.appendChild(child);
+                            });
+
+                            block.appendChild(contentNode);
+                        }
+
+                        if (!meta) {
+							meta = createConditionalMetaNode(editor.getDoc(), metric, operator, value, maxValue);
+                            block.insertBefore(meta, block.firstChild);
+                        } else {
+                            meta.setAttribute('contenteditable', 'false');
+							meta.textContent = buildConditionalLabel(metric, operator, value, maxValue);
+                        }
+
+                        if (!removeNode) {
+                            removeNode = createConditionalRemoveNode(editor.getDoc());
+                            block.insertBefore(removeNode, block.firstChild);
+                        } else {
+                            removeNode.setAttribute('contenteditable', 'false');
+                            removeNode.setAttribute('title', lang.remove_block);
+                            removeNode.setAttribute('aria-label', lang.remove_block);
+                            removeNode.textContent = '\u00d7';
+                        }
+
+                    });
+                }
+
+                function isSelectionInsideConditionalBlock() {
+                    const node = editor.selection && editor.selection.getNode();
+                    return !!(node && node.closest && node.closest('.score-conditional-block'));
+                }
+
+                function isSelectionTouchingConditionalMeta() {
+                    const selection = editor.selection;
+                    if (!selection) {
+                        return false;
+                    }
+
+                    const node = selection.getNode();
+                    if (node && node.closest && node.closest('.score-conditional-meta')) {
+                        return true;
+                    }
+
+                    const rng = selection.getRng();
+                    if (!rng) {
+                        return false;
+                    }
+
+                    const startNode = rng.startContainer && rng.startContainer.nodeType === 1
+                        ? rng.startContainer
+                        : rng.startContainer && rng.startContainer.parentNode;
+                    const endNode = rng.endContainer && rng.endContainer.nodeType === 1
+                        ? rng.endContainer
+                        : rng.endContainer && rng.endContainer.parentNode;
+
+                    return !!(
+                        startNode && startNode.closest && startNode.closest('.score-conditional-meta')
+                    ) || !!(
+                        endNode && endNode.closest && endNode.closest('.score-conditional-meta')
+                    );
+                }
+
+                function validateConditionalValue(metric, rawValue) {
+                    const value = String(rawValue || '').trim();
+
+                    if (!value) {
+                        editor.windowManager.alert(lang.condition_value_required);
+                        return null;
+                    }
+
+                    const numericValue = Number(value);
+                    if (Number.isNaN(numericValue)) {
+                        editor.windowManager.alert(lang.condition_value_invalid);
+                        return null;
+                    }
+
+                    if (metric === 'percentage' && (numericValue < 0 || numericValue > 100)) {
+                        editor.windowManager.alert(lang.condition_percentage_range);
+                        return null;
+                    }
+
+					if (metric === 'points' && Math.abs(numericValue * 2 - Math.round(numericValue * 2)) > Number.EPSILON) {
+						editor.windowManager.alert(lang.condition_points_increment);
+						return null;
+					}
+
+                    return value;
+                }
+
+                function openConditionalBlockDialog(editorInstance, existingBlock) {
+                    const initialMetric = existingBlock ? (existingBlock.getAttribute('data-condition-metric') || 'percentage') : 'percentage';
+					const storedOperator = existingBlock ? (existingBlock.getAttribute('data-condition-operator') || '>=') : '>=';
+					const initialOperator = isRangeOperator(storedOperator) ? 'range' : storedOperator;
+                    const initialValue = existingBlock ? (existingBlock.getAttribute('data-condition-value') || '80') : '80';
+					const initialMaxValue = existingBlock ? (existingBlock.getAttribute('data-condition-max-value') || '') : '';
+					const initialIncludeLower = storedOperator === 'betweenInclusive' || storedOperator === 'betweenLowerInclusive';
+					const initialIncludeUpper = storedOperator === 'betweenInclusive' || storedOperator === 'betweenUpperInclusive';
+
+					function isRangeOperator(operator) {
+						return ['range', 'between', 'betweenInclusive', 'betweenUpperInclusive', 'betweenLowerInclusive'].includes(operator);
+					}
+
+					function showRangeFields(show) {
+						setTimeout(function () {
+							const labels = Array.from(document.querySelectorAll('.tox-dialog .tox-label, .tox-dialog .tox-checkbox__label'));
+							const groupsFor = function (text) {
+								return labels.filter(function (node) { return (node.textContent || '').trim() === text; }).map(function (label) {
+									return label.closest('.tox-form__group');
+								}).filter(Boolean);
+							};
+							const groupFor = function (text) {
+								const label = labels.find(function (node) { return (node.textContent || '').trim() === text; });
+								return label && label.closest('.tox-form__group');
+							};
+							const valueGroup = groupFor(lang.condition_value);
+							const rangeValueGroup = groupFor(lang.condition_min_value);
+							const maxValueGroup = groupFor(lang.condition_max_value);
+							const includedGroups = groupsFor(lang.include_lower).concat(
+								lang.include_upper === lang.include_lower ? [] : groupsFor(lang.include_upper)
+							);
+							let rangeGrid = rangeValueGroup && rangeValueGroup.parentElement;
+							while (rangeGrid && (!maxValueGroup || !rangeGrid.contains(maxValueGroup) || includedGroups.some(function (group) { return !rangeGrid.contains(group); }))) {
+								rangeGrid = rangeGrid.parentElement;
+							}
+							includedGroups.forEach(function (group) {
+								group.classList.add('scoreConditionalIncludedGroup');
+								const checkbox = group.querySelector('input[type="checkbox"]');
+								if (checkbox) checkbox.classList.add('scoreConditionalIncludedCheckbox');
+							});
+							[rangeValueGroup, maxValueGroup].forEach(function (group) {
+								const input = group && group.querySelector('input');
+								if (input) input.classList.add('scoreConditionalRangeInput');
+							});
+							if (valueGroup) valueGroup.style.display = show ? 'none' : '';
+							if (rangeGrid) {
+								rangeGrid.classList.add('scoreConditionalRangeGrid');
+								rangeGrid.style.display = show ? 'grid' : 'none';
+								rangeGrid.style.setProperty('grid-template-columns', 'minmax(280px, 1fr) max-content', 'important');
+							}
+						}, 0);
+					}
+
+					const dialogApi = editorInstance.windowManager.open({
+                        title: lang.conditionalblock,
+                        body: {
+                            type: 'panel',
+                            items: [
+                                {
+                                    type: 'selectbox',
+                                    name: 'metric',
+                                    label: lang.condition_metric,
+                                    items: [
+                                        { text: lang.points, value: 'points' },
+                                        { text: lang.percentage_label, value: 'percentage' }
+                                    ]
+                                },
+                                {
+                                    type: 'selectbox',
+                                    name: 'operator',
+                                    label: lang.condition_operator,
+                                    items: [
+                                        { text: '>', value: '>' },
+                                        { text: '>=', value: '>=' },
+                                        { text: '<', value: '<' },
+                                        { text: '<=', value: '<=' },
+										{ text: '=', value: '=' },
+										{ text: lang.between, value: 'range' }
+                                    ]
+                                },
+                                {
+                                    type: 'input',
+                                    name: 'value',
+                                    label: lang.condition_value
+								},
+								{
+									type: 'grid',
+									columns: 2,
+									items: [
+										{type: 'input', name: 'rangeValue', label: lang.condition_min_value},
+										{type: 'checkbox', name: 'includeLower', label: lang.include_lower},
+										{type: 'input', name: 'maxValue', label: lang.condition_max_value},
+										{type: 'checkbox', name: 'includeUpper', label: lang.include_upper}
+									]
+                                }
+                            ]
+                        },
+                        initialData: {
+                            metric: initialMetric,
+                            operator: initialOperator,
+							value: initialValue,
+							rangeValue: initialValue,
+							maxValue: initialMaxValue,
+							includeLower: initialIncludeLower,
+							includeUpper: initialIncludeUpper
+                        },
+                        buttons: [
+                            { type: 'cancel', text: lang.cancel },
+                            {
+                                type: 'submit',
+                                text: existingBlock ? lang.update : lang.insert,
+                                primary: true
+                            }
+                        ],
+						onChange: function (api, details) {
+							if (details.name === 'operator') showRangeFields(api.getData().operator === 'range');
+						},
+                        onSubmit: function (api) {
+                            const data = api.getData();
+							const sanitizedValue = validateConditionalValue(data.metric, data.operator === 'range' ? data.rangeValue : data.value);
+                            if (sanitizedValue === null) {
+                                return;
+                            }
+							const isRange = data.operator === 'range';
+							const sanitizedMaxValue = isRange ? validateConditionalValue(data.metric, data.maxValue) : null;
+							if (isRange && sanitizedMaxValue === null) return;
+							if (isRange && Number(sanitizedMaxValue) <= Number(sanitizedValue)) {
+								editorInstance.windowManager.alert(lang.condition_range_order);
+								return;
+							}
+
+							let savedOperator = data.operator;
+							if (isRange) {
+								if (data.includeLower && data.includeUpper) savedOperator = 'betweenInclusive';
+								else if (data.includeLower) savedOperator = 'betweenLowerInclusive';
+								else if (data.includeUpper) savedOperator = 'betweenUpperInclusive';
+								else savedOperator = 'between';
+							}
+							const labelText = buildConditionalLabel(data.metric, savedOperator, sanitizedValue, sanitizedMaxValue);
+
+                            if (existingBlock) {
+                                existingBlock.setAttribute('data-condition-metric', data.metric);
+								existingBlock.setAttribute('data-condition-operator', savedOperator);
+                                existingBlock.setAttribute('data-condition-value', sanitizedValue);
+								if (isRange) existingBlock.setAttribute('data-condition-max-value', sanitizedMaxValue);
+								else existingBlock.removeAttribute('data-condition-max-value');
+
+                                const metaNode = existingBlock.querySelector('.score-conditional-meta');
+                                if (metaNode) {
+                                    metaNode.textContent = labelText;
+                                }
+                            } else {
+                                const conditionalHtml =
+									`<div class="score-conditional-block" data-condition-metric="${data.metric}" data-condition-operator="${savedOperator}" data-condition-value="${sanitizedValue}"${isRange ? ` data-condition-max-value="${sanitizedMaxValue}"` : ''}>` +
+                                    `<div class="score-conditional-remove" contenteditable="false" title="${tinymce.DOM.encode(lang.remove_block)}" aria-label="${tinymce.DOM.encode(lang.remove_block)}">&times;</div>` +
+                                    `<div class="score-conditional-meta" contenteditable="false">${tinymce.DOM.encode(labelText)}</div>` +
+                                    '<div class="score-conditional-content"><p></p></div>' +
+                                    '</div><p></p>';
+
+                                editorInstance.insertContent(conditionalHtml);
+                            }
+
+                            setTimeout(function () {
+                                normalizeConditionalBlocks();
+                            }, 0);
+
+                            api.close();
+                        }
+                    });
+					showRangeFields(dialogApi.getData().operator === 'range');
                 }
 
                 editor.ui.registry.addButton('scored', {
@@ -4389,17 +8785,63 @@ function scoreScreen(){
 
                 editor.ui.registry.addButton('addbutton', {
                     text: lang.addbutton,
-                    icon: 'link',
+                    icon: 'plus',
                     onAction: function () {
-                        openButtonDialog(editor, '', 'close', '', false);
+                        openButtonDialog(editor, '', 'close', lang.close_test, false);
                     }
                 });
 
-                function openButtonDialog(editor, existingUrl, existingAction, existingLabel, isEditing = false) {
-                    let actionType = existingAction || 'close';
-                    let urlValue = existingUrl !== undefined ? existingUrl : '';
-                    let labelValue = existingLabel || lang.close_test;
+                editor.ui.registry.addButton('conditionalblock', {
+                    text: lang.conditionalblock,
+                    icon: 'embed',
+                    onAction: function () {
+                        if (isSelectionInsideConditionalBlock()) {
+                            editor.windowManager.alert(lang.nested_condition_not_allowed);
+                            return;
+                        }
+                        openConditionalBlockDialog(editor, null);
+                    }
+                });
 
+                scoreEditors.push(editor);
+
+                editor.ui.registry.addButton('customcss', {
+                    text: 'Custom CSS',
+                    icon: 'sourcecode',
+                    onAction: function () {
+                        openScoreCustomCssDialog();
+                    }
+                });
+                editor.ui.registry.addMenuItem('metapreview', {
+                    text: UILANG.m('Preview'),
+                    icon: 'preview',
+                    onAction: function () {
+                        openMetaPageCurrentPreview(editor, scoreCustomCss, 'score_screen');
+                    }
+                });
+                editor.ui.registry.addButton('metapreviewbutton', {
+                    icon: 'preview',
+                    tooltip: UILANG.m('Preview'),
+                    onAction: function () {
+                        openMetaPageCurrentPreview(editor, scoreCustomCss, 'score_screen');
+                    }
+                });
+
+                editor.on('init', function () {
+                    applyScoreCustomCssToAllEditors();
+
+                    if (!seDialogNormalized) {
+                        seDialogNormalized = true;
+                        requestAnimationFrame(() => {
+                            const dlg = window.nxDialogManager && window.nxDialogManager.instances && window.nxDialogManager.instances.seEditor;
+                            if (dlg && typeof dlg.normalizeInitialPosition === 'function') {
+                                dlg.normalizeInitialPosition();
+                            }
+                        });
+                    }
+                });
+
+                function openButtonDialog(editorInstance, urlValue, actionType, labelValue, isEditing) {
                     function getDialogConfig(selectedAction) {
                         return {
                             title: lang.addbutton,
@@ -4423,14 +8865,16 @@ function scoreScreen(){
                                         ],
                                         value: selectedAction
                                     },
-                                    ...(selectedAction === 'open_url' ? [{
-                                        type: 'input',
-                                        name: 'url',
-                                        label: lang.enter_url,
-                                        placeholder: 'https://example.com',
-                                        value: urlValue,
-                                        required: true
-                                    }] : [])
+                                    ...(selectedAction === 'open_url'
+                                        ? [{
+                                            type: 'input',
+                                            name: 'url',
+                                            label: lang.enter_url,
+                                            placeholder: 'https://example.com',
+                                            value: urlValue,
+                                            required: true
+                                        }]
+                                        : [])
                                 ]
                             },
                             buttons: [
@@ -4456,20 +8900,33 @@ function scoreScreen(){
                             },
                             onSubmit: function (api) {
                                 const data = api.getData();
+                                const selectedAction = data.action;
+                                const url = selectedAction === 'open_url' ? (data.url || '').trim() : '';
 
-                                if (data.action === 'open_url' && !data.url) {
-                                    editor.windowManager.alert(lang.url_required);
-                                    return;
+                                if (selectedAction === 'open_url') {
+                                    if (!url) {
+                                        editorInstance.windowManager.alert(lang.url_required);
+                                        return;
+                                    }
+                                    if (typeof isValidHttpUrl === 'function' && !isValidHttpUrl(url)) {
+                                        editorInstance.windowManager.alert(lang.url_invalid);
+                                        return;
+                                    }
                                 }
 
-                                const actionKeyword = data.label;
-                                const buttonVar = `<span class="non-editable-variable button-variable" contenteditable="false" data-action="${data.action}" data-url="${data.action === 'close' ? '' : data.url}" data-label="${data.label}">${actionKeyword}</span>&nbsp;`;
+                                const labelText =
+                                    data.label ||
+                                    (selectedAction === 'open_url' ? lang.open_url : lang.close_test);
 
-                                const selectedNode = editor.selection.getNode();
-                                if (selectedNode.classList.contains('button-variable')) {
+                                const buttonVar =
+                                    `<span class="non-editable-variable button-variable" contenteditable="false" ` +
+                                    `data-action="${selectedAction}" data-url="${url}" data-label="${labelText}">${labelText}</span>&nbsp;`;
+
+                                const selectedNode = editorInstance.selection.getNode();
+                                if (selectedNode.classList && selectedNode.classList.contains('button-variable')) {
                                     selectedNode.outerHTML = buttonVar;
                                 } else {
-                                    editor.insertContent(buttonVar);
+                                    editorInstance.insertContent(buttonVar);
                                 }
 
                                 api.close();
@@ -4477,21 +8934,1748 @@ function scoreScreen(){
                         };
                     }
 
-                    editor.windowManager.open(getDialogConfig(actionType));
+                    editorInstance.windowManager.open(getDialogConfig(actionType));
                 }
+
                 editor.on('click', function (e) {
-                    if (e.target.classList.contains('non-editable-variable')) {
+                    const target = e.target;
+
+                    if (target && target.closest) {
+                        const removeNode = target.closest('.score-conditional-remove');
+                        if (removeNode) {
+                            e.preventDefault();
+                            const blockToRemove = removeNode.closest('.score-conditional-block');
+                            if (blockToRemove) {
+                                blockToRemove.remove();
+                            }
+                            return;
+                        }
+
+                        const metaNode = target.closest('.score-conditional-meta');
+                        if (metaNode) {
+                            e.preventDefault();
+                            const block = metaNode.closest('.score-conditional-block');
+                            if (block) {
+                                openConditionalBlockDialog(editor, block);
+                            }
+                            return;
+                        }
+                    }
+
+                    if (target && target.classList && target.classList.contains('non-editable-variable')) {
                         e.preventDefault();
-                        if (e.target.classList.contains('button-variable')) {
-                            const currentAction = e.target.getAttribute('data-action') || 'close';
-                            const currentUrl = e.target.getAttribute('data-url') !== undefined ? e.target.getAttribute('data-url') : '';
-                            const currentLabel = e.target.getAttribute('data-label') || lang.close_test;
+                        if (target.classList.contains('button-variable')) {
+                            const currentAction = target.getAttribute('data-action') || 'close';
+                            const currentUrl = target.getAttribute('data-url') || '';
+                            const currentLabel = target.getAttribute('data-label') || lang.close_test;
                             openButtonDialog(editor, currentUrl, currentAction, currentLabel, true);
                         }
                     }
                 });
 
+                editor.on('keydown', function (e) {
+                    if ((e.key === 'Backspace' || e.key === 'Delete') && isSelectionTouchingConditionalMeta()) {
+                        e.preventDefault();
+                    }
+                });
+
+                editor.on('SetContent change input undo redo', function () {
+                    setTimeout(function () {
+                        normalizeConditionalBlocks();
+                    }, 0);
+                });
             },
+            content_style: getScoreEditorBaseCss()
+        });
+    });
+
+    let initialLanguage = null;
+
+    const testOptions =
+        serverData &&
+        serverData.testLevel &&
+        serverData.testLevel.options &&
+        !Array.isArray(serverData.testLevel.options)
+            ? serverData.testLevel.options
+            : {};
+
+    $.each(languages, function (key) {
+        if (!initialLanguage && testOptions[key] === true) {
+            initialLanguage = key;
+        }
+    });
+
+    if (!initialLanguage) {
+        initialLanguage = Object.keys(tabList)[0];
+    }
+
+    scoreTabs.setTabs(tabList, initialLanguage);
+
+    let tSel = scoreTabs.getEventType('select');
+    $(window).off(tSel);
+    $(window).on(tSel, function (ret) {
+        for (let c in containers) {
+            $('#div_' + containers[c].replace('container_', '')).hide();
+        }
+        const selectedLang = ret.originalEvent.detail;
+        $('#div_' + selectedLang).show();
+        currentScoreLanguage = selectedLang;
+    });
+
+    $.each(containers, function (key, val) {
+        let lang = val.replace('container_', '');
+        if (lang === initialLanguage) {
+            $('#div_' + lang).show();
+            currentScoreLanguage = lang;
+        } else {
+            $('#div_' + lang).hide();
+        }
+    });
+
+    $('#btnLoadScoreFromExisting').off('click').on('click', function () {
+        openScoreFromExistingDialog(currentScoreLanguage);
+    });
+
+    function openScoreFromExistingDialog(initialLanguageForPreview) {
+        let selectedTemplate = null;
+        let templates = [];
+        let previewLanguage = initialLanguageForPreview || null;
+
+        function resetPreview() {
+            const $prev = $('#sslPreview');
+            const $header = $('#sslPreviewHeader');
+            if ($prev.length) {
+                $prev.empty();
+            }
+            if ($header.length) {
+                $header.text('');
+            }
+            selectedTemplate = null;
+        }
+
+        const dialogDataLoad = {
+            buttons: [{
+                label: UILANG.m('cancel'),
+                cancel: true,
+                value: 'cancel'
+            }, {
+                label: UILANG.m('Use selected'),
+                default: true,
+                value: 'ok'
+            }],
+            contents:
+                '<div id="sslRoot" class="tmMetaLoadDialog">' +
+                '<aside id="sslLeft" class="tmMetaLoadSources">' +
+                '<label class="tmExistingEntriesFilter" for="sslFilter"><span>' + UILANG.m('Filter tests') + '</span><input id="sslFilter" type="text" autocomplete="off"></label>' +
+                '<div id="sslList" class="tmExistingEntriesTestList"></div>' +
+                '</aside>' +
+                '<section id="sslRight" class="tmMetaLoadPreview">' +
+                '<div id="sslTabs"></div>' +
+                '<div id="sslPreviewWrapper" class="tmMetaLoadPreviewWrapper">' +
+                '<div id="sslPreviewHeader" class="tmMetaLoadPreviewHeader"></div>' +
+                '<div id="sslPreview" class="tmMetaLoadPreviewContent"></div>' +
+                '</div>' +
+                '</section>' +
+                '</div>',
+            title: UILANG.m('Load existing score screen'),
+            returnPromise: true,
+            width: 1150
+        };
+
+        showDialog('scoreScreenLoadExisting', dialogDataLoad).then(function (res) {
+            if (res.button === 'ok' && selectedTemplate && selectedTemplate.score_screen) {
+                const metaData = {};
+                $.each(languages, function (langKey) {
+                    metaData[langKey] = selectedTemplate.score_screen[langKey] || '';
+                });
+                metaData.customCSS = selectedTemplate.score_screen.customCSS || '';
+
+                startAjax('normalizeMetaUploads', {
+                    id: serverData.testLevel.id,
+                    metaType: 'score_screen',
+                    metaData: metaData
+                }).then((resp) => {
+					if (resp.error) return;
+                    const normalized = resp.metaData || metaData;
+
+                    $.each(languages, function (langKey) {
+                        const vRaw = normalized[langKey] || '';
+                        const v = expandOasysRoot(vRaw);
+                        const ed = tinymce.get('container_' + langKey);
+                        if (ed) {
+                            ed.setContent(v);
+                        }
+                    });
+
+                    scoreCustomCss = normalized.customCSS || metaData.customCSS || '';
+                    applyScoreCustomCssToAllEditors();
+                });
+            }
+        });
+
+        const langKeys = Object.keys(languages);
+        if (!previewLanguage || $.inArray(previewLanguage, langKeys) === -1) {
+            previewLanguage = langKeys[0];
+        }
+
+        const previewTabs = new jsTabs($('#sslTabs'), 'sslTabs');
+        const previewTabList = {};
+        $.each(langKeys, function (i, langKey) {
+            previewTabList[langKey] = langKey;
+        });
+
+        const pSel = previewTabs.getEventType('select');
+        $(window).off(pSel);
+        $(window).on(pSel, function (ret) {
+            previewLanguage = ret.detail;
+            renderPreview();
+        });
+
+        previewTabs.setTabs(previewTabList, previewLanguage);
+        disablePreviewTabs();
+
+        function disablePreviewTabs() {
+            const $tabs = $('#sslTabs .jsTab');
+            $tabs.removeClass('jstActive')
+                .addClass('jstDisabled')
+                .css({
+                    opacity: 0.4,
+                    pointerEvents: 'none'
+                });
+        }
+
+        function enablePreviewTabs() {
+            const $tabs = $('#sslTabs .jsTab');
+            $tabs.removeClass('jstDisabled')
+                .css({
+                    opacity: '',
+                    pointerEvents: ''
+                });
+            previewTabs.select(previewLanguage);
+        }
+
+        function renderPreview() {
+            const $prev = $('#sslPreview');
+            const $header = $('#sslPreviewHeader');
+            if (!$prev.length) {
+                return;
+            }
+
+            $prev.empty();
+
+            const rect = $prev[0].getBoundingClientRect();
+            const style = window.getComputedStyle($prev[0]);
+
+            const paddingLeft = parseFloat(style.paddingLeft);
+            const paddingRight = parseFloat(style.paddingRight);
+            const borderLeft = parseFloat(style.borderLeftWidth);
+            const borderRight = parseFloat(style.borderRightWidth);
+
+            const prevWidth = rect.width - paddingLeft - paddingRight - borderLeft - borderRight;
+
+            $header.text(selectedTemplate ? selectedTemplate.name : '');
+
+            if (!selectedTemplate || !selectedTemplate.score_screen) {
+                return;
+            }
+
+            let html = selectedTemplate.score_screen[previewLanguage] || '';
+            html = expandOasysRoot(html);
+
+            const baseCss =
+                '<style>' +
+                getScoreEditorBaseCss() +
+                '#sslPreview .button-variable,' +
+                '#sslPreview .button-variable *,' +
+                '#sslPreview .score-conditional-meta,' +
+                '#sslPreview .score-conditional-meta *,' +
+                '#sslPreview .score-conditional-remove,' +
+                '#sslPreview .score-conditional-remove * {' +
+                'cursor:default !important;' +
+                '}' +
+                '</style>';
+
+            let customCss = selectedTemplate.score_screen.customCSS || '';
+            customCss = customCss.replace(/\bbody\b/g, '#sslPreview');
+            const cssBlock = customCss ? `<style>${customCss}</style>` : '';
+
+            $prev.html(baseCss + cssBlock + '<div id="sslPreviewInner">' + html + '</div>');
+            const $inner = $('#sslPreviewInner');
+
+            $inner.css({
+                transform: '',
+                transformOrigin: '',
+                width: ''
+            });
+
+            const contentWidth = $inner[0] ? $inner[0].scrollWidth : 0;
+
+            if (prevWidth > 0 && contentWidth > prevWidth) {
+                const scale = prevWidth / contentWidth;
+                $inner.css({
+                    transform: 'scale(' + scale + ')',
+                    transformOrigin: 'top left',
+                    width: contentWidth + 'px'
+                });
+            }
+        }
+
+        function renderList(filter) {
+            const $list = $('#sslList');
+            $list.empty();
+            resetPreview();
+
+            if (!templates.length) {
+                $list.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('No tests with a score screen were found.') + '</div>');
+                return;
+            }
+
+            const q = (filter || '').toLowerCase();
+
+            $.each(templates, function (idx, t) {
+                if (q && t.name.toLowerCase().indexOf(q) === -1) {
+                    return;
+                }
+
+                const $row = $('<button type="button" class="tmExistingEntriesTest sslRow"></button>')
+                    .text(t.name)
+                    .attr('data-idx', idx)
+                    .on('click', function () {
+                        $('.sslRow').removeClass('selected tmExistingEntriesTestSelected');
+                        $(this).addClass('selected tmExistingEntriesTestSelected');
+                        selectedTemplate = templates[idx];
+                        enablePreviewTabs();
+                        renderPreview();
+                    });
+
+                $list.append($row);
+            });
+        }
+
+        $('#sslFilter').on('input', function () {
+            renderList($(this).val());
+        });
+
+        startAjax('fetchScoreTemplates', {
+			languages: Object.keys(languages),
+			targetTestId: serverData.testLevel.id
+        })
+            .then(function (res) {
+                if (res && res.data && res.data.scoreTemplates) {
+                    templates = res.data.scoreTemplates;
+                } else {
+                    templates = [];
+                }
+                renderList('');
+            })
+            .catch(function (err) {
+                console.error('Error loading score templates', err);
+                templates = [];
+                renderList('');
+            });
+    }
+}
+
+// Optional frontend helper for the rendered score screen.
+// Call this after inserting the saved HTML into the DOM.
+function applyScoreConditionsToScoreScreen(rootEl, scored, total) {
+    if (!rootEl) {
+        return;
+    }
+
+    const percentage = total > 0 ? (scored / total) * 100 : 0;
+
+    function evaluateCondition(actual, operator, expected, maximum) {
+        switch (operator) {
+            case '>':
+                return actual > expected;
+            case '>=':
+                return actual >= expected;
+            case '<':
+                return actual < expected;
+            case '<=':
+                return actual <= expected;
+            case '=':
+                return actual === expected;
+			case 'between':
+				return Number.isFinite(maximum) && actual > expected && actual < maximum;
+			case 'betweenInclusive':
+				return Number.isFinite(maximum) && actual >= expected && actual <= maximum;
+			case 'betweenUpperInclusive':
+				return Number.isFinite(maximum) && actual > expected && actual <= maximum;
+			case 'betweenLowerInclusive':
+				return Number.isFinite(maximum) && actual >= expected && actual < maximum;
+            default:
+                return false;
+        }
+    }
+
+    rootEl.querySelectorAll('.score-conditional-block').forEach(function (block) {
+        const metric = block.getAttribute('data-condition-metric') || 'percentage';
+        const operator = block.getAttribute('data-condition-operator') || '>=';
+        const rawValue = block.getAttribute('data-condition-value') || '0';
+        const expected = Number(rawValue);
+		const rawMaximum = block.getAttribute('data-condition-max-value');
+		const maximum = rawMaximum === null || rawMaximum.trim() === '' ? NaN : Number(rawMaximum);
+
+        if (Number.isNaN(expected)) {
+            block.style.display = 'none';
+            return;
+        }
+
+        const actual = metric === 'points' ? Number(scored) : percentage;
+		const isVisible = evaluateCondition(actual, operator, expected, maximum);
+
+        block.style.display = isVisible ? '' : 'none';
+    });
+}
+
+
+function landingPage() {
+	cleanupMetaTinyMceEditors();
+
+    let lpDialogNormalized = false;
+
+    let dialogData = {
+        buttons: [{
+            label: UILANG.m('cancel'),
+            cancel: true,
+            value: 'cancel'
+        }, {
+            label: UILANG.m('Save'),
+            default: true,
+            value: 'ok'
+        }],
+        contents:
+            '<div id="landingMsg"></div>' +
+            '<div id="landingOptions" style="padding:8px 10px;border:1px solid #ddd;border-radius:6px;background:#f8f8f8;font-size:0.9rem;">' +
+            '<div style="margin-bottom:4px;font-weight:bold;">' + UILANG.m('Landing page behaviour') + '</div>' +
+            '<label style="display:block;margin-bottom:4px;">' +
+            '<input type="radio" name="landingMode" value="default" style="margin-right:4px;">' +
+            UILANG.m('Use global landing page from system settings') +
+            '</label>' +
+            '<div id="landingGlobalInfo" style="margin:4px 0 8px 23px;font-size:0.85rem;color:#555;"></div>' +
+            '<label style="display:block;margin-bottom:0;">' +
+            '<input type="radio" name="landingMode" value="custom" style="margin-right:4px;">' +
+            UILANG.m('Use a custom landing page per language') +
+            '</label>' +
+            '</div>' +
+            '<div style="height:605px;display:flex;flex-direction:column;" id="landingPageEditor">' +
+            '<div id="lpTabsContainer"></div>' +
+            '<div id="landingEditorCont" style="flex:1 1 auto;"></div>' +
+            '</div>',
+        title: UILANG.m('Edit landing page'),
+        returnPromise: true,
+        replaceExisting: 'lpEditor',
+        width: 1250
+    };
+
+    showDialog('lpEditor', dialogData).then(
+        (res) => {
+            if (res.button === 'ok') {
+                const mode = selectedLandingMode || 'default';
+
+                const writeObj = {
+                    mode: mode
+                };
+
+                $.each(languages, function (key) {
+                    const ed = tinymce.get('container_' + key);
+                    let html = ed ? ed.getContent() : '';
+                    html = collapseOasysRoot(html);
+                    writeObj[key] = html;
+                });
+                writeObj.customCSS = landingCustomCss || '';
+                startAjax('saveTest', {
+                    id: serverData.testLevel.id,
+                    metaData: writeObj,
+                    metaType: 'landing_page',
+                    currentSkin: serverData.testLevel.skin.skin
+                });
+            }
+			cleanupMetaTinyMceEditors();
+        }
+    );
+
+    $('#landingMsg').append(
+        '<div id="landingMsgBar" ' +
+        'style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">' +
+        '<div id="landingMsgText" style="flex:1;margin-right:10px;">' +
+        UILANG.m('Configure the landing page a user should see. You can either use the global system setting or define a custom landing page per language.') +
+        '</div>' +
+        '<div style="flex:0 0 auto;display:flex;align-items:center;">' +
+        '<button type="button" id="btnLoadLandingFromExisting" class="nx-btn nx-btn-small" ' +
+        'style="align-items:center;padding:4px 10px;">' +
+        '<span class="nx-icon nx-icon-folder-open"></span>' +
+        '<span>' + UILANG.m('Load existing') + '</span>' +
+        '</button>' +
+        '</div>' +
+        '</div>'
+    );
+
+    const landingTabs = new jsTabs($('#lpTabsContainer'), 'lpTabs');
+    const tabList = {};
+    const containers = [];
+    let currentLandingLanguage = null;
+
+    let userLang;
+    switch (settings.interfaceLanguage) {
+        case 'DE':
+            userLang = 'de';
+            break;
+        case 'FR':
+            userLang = 'fr_FR';
+            break;
+        default:
+            userLang = 'en';
+            break;
+    }
+
+    const languageFallbacks = {
+        DE: 'EN',
+        FR: 'EN',
+        LU: 'DE'
+    };
+
+    let baseLandingUrl = '';
+    if (settings && settings.rootURL) {
+        let ru = settings.rootURL.trim().replace(/\/+$/, '');
+
+        if (/^https?:\/\//i.test(ru) || /^\/\//.test(ru)) {
+            baseLandingUrl = ru;
+        } else if (window.location && window.location.origin) {
+            if (ru.charAt(0) !== '/') {
+                ru = '/' + ru;
+            }
+            baseLandingUrl = window.location.origin + ru;
+        }
+    } else if (window.location && window.location.origin) {
+        let path = window.location.pathname.replace(/\/+$/, '');
+        baseLandingUrl = window.location.origin + path;
+    } else {
+        baseLandingUrl = '';
+    }
+
+    const testId = serverData.testLevel.id;
+
+    let content = {};
+    let landingOptions = { mode: 'default' };
+
+    try {
+        const meta = JSON.parse(serverData.testLevel.metadata || '{}');
+        if (meta && typeof meta === 'object' && meta.landing_page && typeof meta.landing_page === 'object') {
+            content = meta.landing_page;
+            landingOptions.mode = content.mode || 'default';
+        }
+    } catch (e) {
+        content = {};
+        landingOptions = { mode: 'default' };
+    }
+
+    let landingCustomCss = '';
+    if (content && typeof content === 'object' &&
+        Object.prototype.hasOwnProperty.call(content, 'customCSS')
+    ) {
+        landingCustomCss = content.customCSS || '';
+    }
+
+    const landingEditors = [];
+
+    const currentMode = landingOptions.mode || 'default';
+
+    let selectedLandingMode = currentMode;
+
+    $('input[name="landingMode"][value="' + currentMode + '"]').prop('checked', true);
+    if (!$('input[name="landingMode"]:checked').length) {
+        $('input[name="landingMode"][value="default"]').prop('checked', true);
+    }
+    selectedLandingMode = $('input[name="landingMode"]:checked').val() || 'default';
+
+    const globalLanding = (settings && typeof settings.landingPage !== 'undefined' && settings.landingPage !== null)
+        ? ('' + settings.landingPage)
+        : '';
+    if (globalLanding && globalLanding.trim() !== '') {
+        $('#landingGlobalInfo').html(
+            UILANG.m('Current global landing page from system settings:') +
+            ' <code>' + $('<div/>').text(globalLanding).html() + '</code>'
+        );
+    } else {
+        $('#landingGlobalInfo').html(
+            UILANG.m('No global landing page is defined in the system settings. The standard login page will be used.')
+        );
+    }
+
+    function applyLandingCustomCssToAllEditors() {
+        if (!landingEditors.length) {
+            return;
+        }
+
+        const baseVarCss =
+            '.non-editable-variable {' +
+            'background-color:#eee;' +
+            'padding:2px 5px;' +
+            'border-radius:4px;' +
+            'font-weight:bold;' +
+            '}' +
+            '.button-variable {' +
+            'background-color:#d9edf7;' +
+            'color:#31708f;' +
+            'cursor:pointer !important;' +
+            'user-select:none;' +
+            '}' +
+            '.button-variable * {' +
+            'cursor:pointer !important;' +
+            '}';
+
+        landingEditors.forEach(function (ed) {
+            if (!ed) {
+                return;
+            }
+
+            try {
+                const doc = ed.getDoc && ed.getDoc();
+                if (doc) {
+                    const old = doc.querySelector('style[data-landing-css="1"]');
+                    if (old) {
+                        old.parentNode.removeChild(old);
+                    }
+                }
+            } catch (e) {
+                console.warn('Error cleaning old landing CSS style:', e);
+            }
+
+            if (!landingCustomCss && !baseVarCss) {
+                return;
+            }
+
+            try {
+                if (ed.dom && typeof ed.dom.addStyle === 'function') {
+                    const combinedCss = baseVarCss + '\n' + (landingCustomCss || '');
+                    ed.dom.addStyle(combinedCss);
+
+                    const doc = ed.getDoc && ed.getDoc();
+                    if (doc) {
+                        const styles = doc.getElementsByTagName('style');
+                        if (styles.length > 0) {
+                            styles[styles.length - 1].setAttribute('data-landing-css', '1');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Error injecting landing CSS into editor', ed.id, e);
+            }
+        });
+    }
+
+    function openLandingCustomCssDialog() {
+        const escCss = landingCustomCss || '';
+
+        const dialogDataCss = {
+            buttons: [{
+                label: UILANG.m('cancel'),
+                cancel: true,
+                value: 'cancel'
+            }, {
+                label: 'Save',
+                default: true,
+                value: 'ok'
+            }],
+            title: 'Custom CSS',
+            width: 900,
+            returnPromise: true,
+            datafields: ['landingCustomCssArea'],
+            dataFormat: 'object',
+            doNotStripHTML: true,
+            contents:
+                '<div>' +
+                '<div style="margin-bottom:6px;">' +
+                UILANG.m('Enter custom CSS that will be applied to all languages of the landing page editor.') +
+                '</div>' +
+                '<textarea id="landingCustomCssArea" ' +
+                'style="width:100%;height:360px;resize:vertical;' +
+                'font-family:monospace;font-size:12px;' +
+                'border:1px solid #ccc;border-radius:4px;padding:6px;">' +
+                $('<div/>').text(escCss).html() +
+                '</textarea>' +
+                '</div>'
+        };
+
+        showDialog('landingCustomCss', dialogDataCss).then(function (res) {
+            if (res && res.button === 'ok' && res.data) {
+                landingCustomCss = res.data.landingCustomCssArea || '';
+                applyLandingCustomCssToAllEditors();
+            }
+        });
+    }
+
+    function updateLandingModeUI() {
+        const mode = $('input[name="landingMode"]:checked').val() || 'default';
+        selectedLandingMode = mode;
+
+        const isCustom = (mode === 'custom');
+
+        $('#landingPageEditor').css({
+            visibility: isCustom ? 'visible' : 'hidden',
+            pointerEvents: isCustom ? 'auto' : 'none'
+        });
+
+        $('#btnLoadLandingFromExisting').css({
+            visibility: isCustom ? 'visible' : 'hidden',
+            pointerEvents: isCustom ? 'auto' : 'none'
+        });
+    }
+
+    $('input[name="landingMode"]').on('change', function () {
+        const val = $(this).val();
+        selectedLandingMode = val || 'default';
+        updateLandingModeUI();
+    });
+
+    $.each(languages, function (key) {
+        tabList[key] = key;
+        containers.push('container_' + key);
+
+        const defaultContent = {
+            DE: '',
+            EN: '',
+            FR: '',
+            LU: ''
+        };
+
+        let preLoad;
+        if (content && Object.prototype.hasOwnProperty.call(content, key) &&
+            typeof content[key] === 'string' && content[key].trim() !== '') {
+            preLoad = content[key];
+        } else {
+            if (Object.prototype.hasOwnProperty.call(defaultContent, key)) {
+                preLoad = defaultContent[key];
+            } else {
+                const fb = languageFallbacks[key] || 'EN';
+                preLoad = defaultContent[fb] || defaultContent.EN;
+            }
+        }
+
+        preLoad = expandOasysRoot(preLoad);
+
+        const sep = baseLandingUrl.indexOf('?') === -1 ? '?' : '&';
+
+        const landingUrl = baseLandingUrl
+            ? (baseLandingUrl + sep +
+                'landingPageId=' + encodeURIComponent(testId))
+            : '';
+
+        let urlHintHtml = '';
+        if (landingUrl) {
+            urlHintHtml =
+                '<div class="landing-url-hint" ' +
+                'style="font-size:0.8rem;color:#555;margin-top:6px;"><strong>' +
+                UILANG.m('Link for this landing page:') + ' ' +
+                '</strong><code id="lpLink_' + key + '" style="word-break:break-all;">' +
+                $('<div/>').text(landingUrl).html() +
+                '</code>' +
+                '<span class="lp-copy-link" data-lang="' + key + '" ' +
+                'title="' + UILANG.m('Copy to clipboard') + '" ' +
+                'style="' +
+                'margin-left:8px;' +
+                'display:inline-flex;' +
+                'align-items:center;' +
+                'justify-content:center;' +
+                'cursor:pointer;' +
+                'opacity:0.7;' +
+                'vertical-align:middle;' +
+                '">' +
+                '<svg xmlns="http://www.w3.org/2000/svg" ' +
+                'width="18" height="18" ' +
+                'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+                'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+                'style="display:block;">' +
+                '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>' +
+                '<path d="M5 15H4a2 2 0 0 1-2-2V4 ' +
+                'a2 2 0 0 1 2-2h9 ' +
+                'a2 2 0 0 1 2 2v1"></path>' +
+                '</svg>' +
+                '</span>' +
+                '</div>';
+        }
+
+        $('#landingEditorCont').append(
+            '<div id="div_' + key + '">' +
+            '<textarea id="container_' + key + '">' + preLoad + '</textarea>' +
+            urlHintHtml +
+            '</div>'
+        );
+
+        tinymce.init({
+            selector: '#container_' + key,
+            testId: serverData.testLevel.id,
+            promotion: false,
+            plugins: [
+                'charmap',
+                'code',
+                'preview',
+                'searchreplace',
+                'table',
+                'visualblocks',
+                'visualchars',
+                'wordcount',
+                'lists',
+                'advlist',
+                'autolink',
+                'link',
+                'anchor',
+                'insertdatetime',
+                'fullscreen',
+                'tmimagebrowser'
+            ],
+            toolbar: [
+                'undo redo | blocks fontsize | bold italic underline forecolor backcolor | ' +
+                'alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | hr | tmimagebrowser | fullscreen metapreviewbutton',
+                'customcss languagechooser login password loginbutton'
+            ],
+            menubar: 'edit view insert format tools table',
+            contextmenu: 'undo redo | bold italic underline | link | align | bullist numlist | table',
+            convert_urls: false,
+            relative_urls: false,
+            remove_script_host: false,
+            menu: {
+                edit:   { title: 'Edit',   items: 'undo redo | cut copy paste | selectall | searchreplace' },
+                view:   { title: 'View',   items: 'metapreview | code | visualchars visualblocks | fullscreen' },
+                insert: { title: 'Insert', items: 'link inserttable charmap hr insertdatetime' },
+                format: { title: 'Format', items: 'bold italic underline strikethrough superscript subscript | blockformats fontsize align | forecolor backcolor | removeformat' },
+                tools:  { title: 'Tools',  items: 'spellchecker spellcheckerlanguage | code' },
+                table:  { title: 'Table',  items: 'inserttable tableprops deletetable row column cell' }
+            },
+            min_height: 525,
+            resize: false,
+            language: userLang,
+            valid_elements: '*[*]',
+            extended_valid_elements: 'span[class|style|contenteditable|data-url|data-action|data-label|data-login|data-password]',
+            content_style: `
+        .non-editable-variable {
+            background-color: #eee;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .button-variable {
+            background-color: #d9edf7;
+            color: #31708f;
+            cursor: pointer !important;
+            user-select: none;
+        }
+        .button-variable * {
+            cursor: pointer !important;
+        }`,
+            setup: function (editor) {
+                landingEditors.push(editor);
+
+                const translations = {
+                    en: {
+                        languagechooser: 'Language chooser',
+                        login: 'Login field',
+                        password: 'Password field',
+                        loginbutton: 'Login button',
+                        definebuttonlabel: 'Button label',
+                        login_value: 'Login (optional)',
+                        password_value: 'Password (optional)',
+                        default_label: 'Start',
+                        insert: 'Insert',
+                        update: 'Update',
+                        cancel: 'Cancel'
+                    },
+                    de: {
+                        languagechooser: 'Sprachauswahl',
+                        login: 'Login-Feld',
+                        password: 'Passwort-Feld',
+                        loginbutton: 'Login-Button',
+                        definebuttonlabel: 'Button-Beschriftung',
+                        login_value: 'Login (optional)',
+                        password_value: 'Passwort (optional)',
+                        default_label: 'Start',
+                        insert: 'Einfügen',
+                        update: 'Aktualisieren',
+                        cancel: 'Abbrechen'
+                    },
+                    fr_FR: {
+                        languagechooser: 'Sélecteur de langue',
+                        login: 'Champ login',
+                        password: 'Champ mot de passe',
+                        loginbutton: 'Bouton de connexion',
+                        definebuttonlabel: 'Libellé du bouton',
+                        login_value: 'Login (optionnel)',
+                        password_value: 'Mot de passe (optionnel)',
+                        default_label: 'Start',
+                        insert: 'Insérer',
+                        update: 'Mettre à jour',
+                        cancel: 'Annuler'
+                    }
+                };
+
+                const lang = translations[userLang] || translations.en;
+
+                function insertVariable(variable) {
+                    editor.insertContent(
+                        `<span class="non-editable-variable" contenteditable="false">[@ ${variable} @]</span>&nbsp;`
+                    );
+                }
+
+                editor.ui.registry.addButton('languagechooser', {
+                    style: 'color:red',
+                    text: lang.languagechooser,
+                    icon: 'code-sample',
+                    onAction: function () {
+                        insertVariable('LANGUAGE-CHOOSER');
+                    }
+                });
+
+                editor.ui.registry.addButton('login', {
+                    text: lang.login,
+                    icon: 'code-sample',
+                    onAction: function () {
+                        insertVariable('LOGIN');
+                    }
+                });
+
+                editor.ui.registry.addButton('password', {
+                    text: lang.password,
+                    icon: 'code-sample',
+                    onAction: function () {
+                        insertVariable('PASSWORD');
+                    }
+                });
+
+                function openLandingLoginButtonDialog(labelValue, loginValue, passwordValue, isEditing) {
+                    editor.windowManager.open({
+                        title: lang.loginbutton,
+                        body: {
+                            type: 'panel',
+                            items: [
+                                {
+                                    type: 'input',
+                                    name: 'label',
+                                    label: lang.definebuttonlabel,
+                                    value: labelValue || '',
+                                    placeholder: lang.default_label
+                                },
+                                {
+                                    type: 'input',
+                                    name: 'login',
+                                    label: lang.login_value,
+                                    value: loginValue || ''
+                                },
+                                {
+                                    type: 'input',
+                                    name: 'password',
+                                    label: lang.password_value,
+                                    value: passwordValue || ''
+                                }
+                            ]
+                        },
+                        buttons: [
+                            { type: 'cancel', text: lang.cancel },
+                            {
+                                type: 'submit',
+                                text: isEditing ? lang.update : lang.insert,
+                                primary: true
+                            }
+                        ],
+                        initialData: {
+                            label: labelValue || '',
+                            login: loginValue || '',
+                            password: passwordValue || ''
+                        },
+                        onSubmit: function (api) {
+                            const data = api.getData();
+
+                            const labelText = (data.label || '').trim() || lang.default_label;
+                            const loginText = (data.login || '').trim();
+                            const passwordText = (data.password || '').trim();
+
+                            const buttonVar =
+                                `<span class="non-editable-variable button-variable" contenteditable="false" ` +
+                                `data-login="${loginText}" data-password="${passwordText}" data-label="${labelText}">` +
+                                `${labelText}</span>&nbsp;`;
+
+                            const selectedNode = editor.selection.getNode();
+                            if (selectedNode.classList && selectedNode.classList.contains('button-variable')) {
+                                selectedNode.outerHTML = buttonVar;
+                            } else {
+                                editor.insertContent(buttonVar);
+                            }
+
+                            api.close();
+                        }
+                    });
+                }
+
+                editor.ui.registry.addButton('loginbutton', {
+                    text: lang.loginbutton,
+                    icon: 'plus',
+                    onAction: function () {
+                        openLandingLoginButtonDialog('', '', '', false);
+                    }
+                });
+
+                editor.on('click', function (e) {
+                    if (e.target.classList && e.target.classList.contains('button-variable')) {
+                        e.preventDefault();
+                        const currentLabel = e.target.getAttribute('data-label') || '';
+                        const currentLogin = e.target.getAttribute('data-login') || '';
+                        const currentPassword = e.target.getAttribute('data-password') || '';
+                        openLandingLoginButtonDialog(currentLabel, currentLogin, currentPassword, true);
+                    }
+                });
+
+                editor.ui.registry.addButton('customcss', {
+                    text: 'Custom CSS',
+                    icon: 'sourcecode',
+                    onAction: function () {
+                        openLandingCustomCssDialog();
+                    }
+                });
+                editor.ui.registry.addMenuItem('metapreview', {
+                    text: UILANG.m('Preview'),
+                    icon: 'preview',
+                    onAction: function () {
+                        openMetaPageCurrentPreview(editor, landingCustomCss, 'landing_page');
+                    }
+                });
+                editor.ui.registry.addButton('metapreviewbutton', {
+                    icon: 'preview',
+                    tooltip: UILANG.m('Preview'),
+                    onAction: function () {
+                        openMetaPageCurrentPreview(editor, landingCustomCss, 'landing_page');
+                    }
+                });
+
+                editor.on('init', function () {
+                    if (landingCustomCss) {
+                        applyLandingCustomCssToAllEditors();
+                    }
+                    if (!lpDialogNormalized) {
+                        lpDialogNormalized = true;
+                        requestAnimationFrame(() => {
+                            const dlg = window.nxDialogManager?.instances?.lpEditor;
+                            if (dlg && typeof dlg.normalizeInitialPosition === 'function') {
+                                dlg.normalizeInitialPosition();
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    });
+
+    $('#landingEditorCont')
+        .off('click.landingCopy mouseenter.landingCopy mouseleave.landingCopy')
+        .on('click.landingCopy', '.lp-copy-link', function () {
+            const lang = $(this).data('lang');
+            const $code = $('#lpLink_' + lang);
+            if (!$code.length) return;
+
+            const text = $code.text();
+            if (!text) return;
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).catch(function (err) {
+                    console.warn('Clipboard copy failed (landing page):', err);
+                });
+            } else {
+                const $tmp = $('<input type="text" style="position:absolute;left:-9999px;">')
+                    .val(text)
+                    .appendTo('body');
+                $tmp.select();
+                try {
+                    document.execCommand('copy');
+                } catch (e) {
+                    console.warn('execCommand copy failed (landing page):', e);
+                }
+                $tmp.remove();
+            }
+        })
+        .on('mouseenter.landingCopy', '.lp-copy-link', function () {
+            $(this).css('opacity', '1');
+        })
+        .on('mouseleave.landingCopy', '.lp-copy-link', function () {
+            $(this).css('opacity', '0.7');
+        });
+
+    let initialLanguage = null;
+
+    const testOptions =
+        serverData &&
+        serverData.testLevel &&
+        serverData.testLevel.options &&
+        !Array.isArray(serverData.testLevel.options)
+            ? serverData.testLevel.options
+            : {};
+
+    $.each(languages, function (key) {
+        if (!initialLanguage && testOptions[key] === true) {
+            initialLanguage = key;
+        }
+    });
+
+    if (!initialLanguage) {
+        initialLanguage = Object.keys(tabList)[0];
+    }
+
+    landingTabs.setTabs(tabList, initialLanguage);
+
+    let tSel = landingTabs.getEventType('select');
+    $(window).off(tSel);
+    $(window).on(tSel, function (ret) {
+        for (let c in containers) {
+            $('#div_' + containers[c].replace('container_', '')).hide();
+        }
+        const selectedLang = ret.originalEvent.detail;
+        $('#div_' + selectedLang).show();
+        currentLandingLanguage = selectedLang;
+    });
+
+    $.each(containers, function (key, val) {
+        let lang = val.replace('container_', '');
+        if (lang === initialLanguage) {
+            $('#div_' + lang).show();
+            currentLandingLanguage = lang;
+        } else {
+            $('#div_' + lang).hide();
+        }
+    });
+
+    $('#btnLoadLandingFromExisting').off('click').on('click', function () {
+        openLandingFromExistingDialog(currentLandingLanguage);
+    });
+
+    updateLandingModeUI();
+
+    function openLandingFromExistingDialog(initialLanguageForPreview) {
+        let selectedTemplate = null;
+        let templates = [];
+        let previewLanguage = initialLanguageForPreview || null;
+
+        function resetPreview() {
+            const $prev = $('#lplPreview');
+            const $header = $('#lplPreviewHeader');
+            if ($prev.length) $prev.empty();
+            if ($header.length) $header.text('');
+            selectedTemplate = null;
+        }
+
+        const dialogDataLoad = {
+            buttons: [{
+                label: UILANG.m('cancel'),
+                cancel: true,
+                value: 'cancel'
+            }, {
+                label: UILANG.m('Use selected'),
+                default: true,
+                value: 'ok'
+            }],
+            contents:
+                '<div id="lplRoot" class="tmMetaLoadDialog">' +
+                '<aside id="lplLeft" class="tmMetaLoadSources">' +
+                '<label class="tmExistingEntriesFilter" for="lplFilter"><span>' + UILANG.m('Filter tests') + '</span><input id="lplFilter" type="text" autocomplete="off"></label>' +
+                '<div id="lplList" class="tmExistingEntriesTestList"></div>' +
+                '</aside>' +
+                '<section id="lplRight" class="tmMetaLoadPreview">' +
+                '<div id="lplTabs"></div>' +
+                '<div id="lplPreviewWrapper" class="tmMetaLoadPreviewWrapper">' +
+                '<div id="lplPreviewHeader" class="tmMetaLoadPreviewHeader"></div>' +
+                '<div id="lplPreview" class="tmMetaLoadPreviewContent"></div>' +
+                '</div>' +
+                '</section>' +
+                '</div>',
+            title: UILANG.m('Load existing landing page'),
+            returnPromise: true,
+            width: 1150
+        };
+
+        showDialog('landingPageLoadExisting', dialogDataLoad).then(function (res) {
+            if (res.button === 'ok' && selectedTemplate) {
+                selectedLandingMode = 'custom';
+                $('input[name="landingMode"][value="custom"]').prop('checked', true);
+                updateLandingModeUI();
+
+                if (selectedTemplate.landing_page) {
+                    const metaData = {};
+                    $.each(languages, function (langKey) {
+                        metaData[langKey] = selectedTemplate.landing_page[langKey] || '';
+                    });
+                    metaData.customCSS = selectedTemplate.landing_page.customCSS || '';
+
+                    startAjax('normalizeMetaUploads', {
+                        id: serverData.testLevel.id,
+                        metaType: 'landing_page',
+                        metaData: metaData
+                    }).then((resp) => {
+						if (resp.error) return;
+                        const normalized = resp.metaData || metaData;
+
+                        $.each(languages, function (langKey) {
+                            const vRaw = normalized[langKey] || '';
+                            const v = expandOasysRoot(vRaw);
+                            const ed = tinymce.get('container_' + langKey);
+                            if (ed) {
+                                ed.setContent(v);
+                            }
+                        });
+
+                        landingCustomCss = normalized.customCSS || metaData.customCSS || '';
+                        applyLandingCustomCssToAllEditors();
+                    });
+                }
+            }
+        });
+
+        const langKeys = Object.keys(languages);
+        if (!previewLanguage || $.inArray(previewLanguage, langKeys) === -1) {
+            previewLanguage = langKeys[0];
+        }
+
+        const previewTabs = new jsTabs($('#lplTabs'), 'lplTabs');
+        const previewTabList = {};
+        $.each(langKeys, function (i, langKey) {
+            previewTabList[langKey] = langKey;
+        });
+
+        const pSel = previewTabs.getEventType('select');
+        $(window).off(pSel);
+        $(window).on(pSel, function (ret) {
+            previewLanguage = ret.detail;
+            renderPreview();
+        });
+
+        previewTabs.setTabs(previewTabList, previewLanguage);
+        disablePreviewTabs();
+
+        function disablePreviewTabs() {
+            const $bar = $('#lplTabs');
+            const $tabs = $('#lplTabs .jsTab');
+
+            $bar.css({
+                borderBottomColor: '#ccc',
+                opacity: 0.4,
+                pointerEvents: 'none'
+            });
+
+            $tabs.removeClass('jstActive').css({
+                opacity: 0.6
+            });
+        }
+
+        function enablePreviewTabs() {
+            const $bar = $('#lplTabs');
+            const $tabs = $('#lplTabs .jsTab');
+
+            $bar.css({
+                borderBottomColor: '#217EAA',
+                opacity: '',
+                pointerEvents: ''
+            });
+
+            $tabs.css({
+                opacity: ''
+            });
+
+            previewTabs.select(previewLanguage);
+        }
+
+        function renderPreview() {
+            const $prev = $('#lplPreview');
+            const $header = $('#lplPreviewHeader');
+            if (!$prev.length) return;
+
+            $prev.empty();
+
+            const rect = $prev[0].getBoundingClientRect();
+            const style = window.getComputedStyle($prev[0]);
+
+            const paddingLeft = parseFloat(style.paddingLeft);
+            const paddingRight = parseFloat(style.paddingRight);
+            const borderLeft = parseFloat(style.borderLeftWidth);
+            const borderRight = parseFloat(style.borderRightWidth);
+
+            const prevWidth = rect.width - paddingLeft - paddingRight - borderLeft - borderRight;
+
+            $header.text(selectedTemplate ? selectedTemplate.name : '');
+
+            if (!selectedTemplate || !selectedTemplate.landing_page) {
+                return;
+            }
+
+            let html = selectedTemplate.landing_page[previewLanguage] || '';
+            html = expandOasysRoot(html);
+
+            const baseCss =
+                '<style>' +
+                '.non-editable-variable{background-color:#eee;padding:2px 5px;border-radius:4px;font-weight:bold;}' +
+                '.button-variable{background-color:#d9edf7;color:#31708f;cursor:pointer !important;user-select:none;}' +
+                '.button-variable *{cursor:pointer !important;}' +
+                '#lplPreview .button-variable,' +
+                '#lplPreview .button-variable *{' +
+                'cursor:default !important;' +
+                '}' +
+                '</style>';
+
+            let customCss = selectedTemplate.landing_page.customCSS || '';
+            customCss = customCss.replace(/\bbody\b/g, '#lplPreview');
+            const cssBlock = customCss ? `<style>${customCss}</style>` : '';
+
+            $prev.html(baseCss + cssBlock + '<div id="lplPreviewInner">' + html + '</div>');
+            const $inner = $('#lplPreviewInner');
+
+            $inner.css({
+                transform: '',
+                transformOrigin: '',
+                width: ''
+            });
+
+            const contentWidth = $inner[0] ? $inner[0].scrollWidth : 0;
+
+            if (prevWidth > 0 && contentWidth > prevWidth) {
+                const scale = prevWidth / contentWidth;
+                $inner.css({
+                    transform: 'scale(' + scale + ')',
+                    transformOrigin: 'top left',
+                    width: contentWidth + 'px'
+                });
+            }
+        }
+
+        function renderList(filter) {
+            const $list = $('#lplList');
+            $list.empty();
+
+            resetPreview();
+            disablePreviewTabs();
+
+            if (!templates.length) {
+                $list.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('No tests with custom landing pages were found.') + '</div>');
+                return;
+            }
+
+            const q = (filter || '').toLowerCase();
+
+            $.each(templates, function (idx, t) {
+                if (q && t.name.toLowerCase().indexOf(q) === -1) {
+                    return;
+                }
+
+                const $row = $('<button type="button" class="tmExistingEntriesTest lplRow"></button>')
+                    .text(t.name)
+                    .attr('data-idx', idx)
+                    .on('click', function () {
+                        $('.lplRow').removeClass('selected tmExistingEntriesTestSelected');
+                        $(this).addClass('selected tmExistingEntriesTestSelected');
+                        selectedTemplate = templates[idx];
+                        enablePreviewTabs();
+                        renderPreview();
+                    });
+
+                $list.append($row);
+            });
+        }
+
+        $('#lplFilter').on('input', function () {
+            renderList($(this).val());
+        });
+
+        startAjax('fetchLandingTemplates', {
+			languages: Object.keys(languages),
+			targetTestId: serverData.testLevel.id
+        })
+            .then(function (res) {
+                if (res && res.data && res.data.landingTemplates) {
+                    templates = res.data.landingTemplates.filter(function (t) {
+                        if (t.landing_mode !== 'custom') return false;
+                        if (!t.landing_page) return false;
+                        const langs = Object.keys(languages);
+                        for (let i = 0; i < langs.length; i++) {
+                            const lk = langs[i];
+                            const v = t.landing_page[lk] || '';
+                            if (typeof v === 'string' && v.trim() !== '') {
+                                return true;
+                            }
+                        }
+                        return false;
+                    });
+                } else {
+                    templates = [];
+                }
+                renderList('');
+            })
+            .catch(function (err) {
+                console.error('Error loading landing templates', err);
+                templates = [];
+                renderList('');
+            });
+    }
+}
+
+
+
+function finishScreen() {
+	cleanupMetaTinyMceEditors();
+
+    let feDialogNormalized = false;
+
+    let dialogData = {
+        buttons: [{
+            label: UILANG.m('cancel'),
+            cancel: true,
+            value: 'cancel'
+        }, {
+            label: UILANG.m('Save'),
+            default: true,
+            value: 'ok'
+        }],
+        contents:
+            '<div id="finishMsg"></div>' +
+            '<div id="finishOptions" style="padding:8px 10px;border:1px solid #ddd;border-radius:6px;background:#f8f8f8;font-size:0.9rem;">' +
+            '<div style="margin-bottom:4px;font-weight:bold;">' + UILANG.m('Finish behaviour') + '</div>' +
+            '<label style="display:block;margin-bottom:4px;">' +
+            '<input type="radio" name="finishMode" value="default" style="margin-right:4px;">' +
+            UILANG.m('Return to login page after test (no finish screen)') +
+            '</label>' +
+            '<label style="display:block;margin-bottom:4px;">' +
+            '<input type="radio" name="finishMode" value="url" style="margin-right:4px;">' +
+            UILANG.m('Open a custom URL after test:') +
+            ' <input type="text" id="finishUrl" style="width:55%;margin-left:6px;padding:3px 5px;border-radius:4px;border:1px solid #ccc;" placeholder="https://example.com">' +
+            '</label>' +
+            '<label style="display:block;margin-bottom:0;">' +
+            '<input type="radio" name="finishMode" value="custom" style="margin-right:4px;">' +
+            UILANG.m('Show a custom finish screen (per language)') +
+            '</label>' +
+            '</div>' +
+            '<div style="height:585px;display:flex;flex-direction:column;" id="finishScreenEditor">' +
+            '<div id="feTabsContainer"></div>' +
+            '<div id="finishEditorCont" style="flex:1 1 auto;"></div>' +
+            '</div>',
+        title: UILANG.m('Edit finish screen'),
+        returnPromise: true,
+        replaceExisting: 'feEditor',
+        width: 1250
+    };
+
+    showDialog('feEditor', dialogData).then(
+        (res) => {
+            if (res.button === 'ok') {
+
+                const mode = selectedFinishMode || 'default';
+                let url = (typeof enteredFinishUrl === 'string') ? enteredFinishUrl.trim() : '';
+
+                const writeObj = {
+                    mode: mode,
+                    url: url
+                };
+
+                $.each(languages, function (key) {
+                    const ed = tinymce.get('container_' + key);
+                    let html = ed ? ed.getContent() : '';
+                    html = collapseOasysRoot(html);
+                    writeObj[key] = html;
+                });
+                writeObj.customCSS = finishCustomCss || '';
+                startAjax('saveTest', {
+                    id: serverData.testLevel.id,
+                    metaData: writeObj,
+                    metaType: 'finish_screen',
+                    currentSkin: serverData.testLevel.skin.skin
+                });
+            }
+			cleanupMetaTinyMceEditors();
+        }
+    );
+
+    $('#finishMsg').append(
+        '<div id="finishMsgBar" ' +
+        'style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">' +
+        '<div id="finishMsgText" style="flex:1;margin-right:10px;">' +
+        UILANG.m('Configure what happens when the test is finished. You can either return to the login page, open a custom URL, or show a custom finish screen per language.') +
+        '</div>' +
+        '<div style="flex:0 0 auto;display:flex;align-items:center;">' +
+        '<button type="button" id="btnLoadFinishFromExisting" class="nx-btn nx-btn-small" ' +
+        'style="align-items:center;padding:4px 10px;">' +
+        '<span class="nx-icon nx-icon-folder-open"></span>' +
+        '<span>' + UILANG.m('Load existing') + '</span>' +
+        '</button>' +
+        '</div>' +
+        '</div>'
+    );
+
+    const finishTabs = new jsTabs($('#feTabsContainer'), 'feTabs');
+    const tabList = {};
+    const containers = [];
+    let currentFinishLanguage = null;
+
+    let userLang;
+    switch (settings.interfaceLanguage) {
+        case 'DE':
+            userLang = 'de';
+            break;
+        case 'FR':
+            userLang = 'fr_FR';
+            break;
+        default:
+            userLang = 'en';
+            break;
+    }
+
+    const languageFallbacks = {
+        DE: 'EN',
+        FR: 'EN',
+        LU: 'DE'
+    };
+
+    let content = {};
+    let finishOptions = { mode: 'default', url: '' };
+
+    try {
+        const meta = JSON.parse(serverData.testLevel.metadata || '{}');
+        if (meta && typeof meta === 'object' && meta.finish_screen && typeof meta.finish_screen === 'object') {
+            content = meta.finish_screen;
+            finishOptions.mode = content.mode || 'default';
+            finishOptions.url = typeof content.url === 'string' ? content.url : '';
+        }
+    } catch (e) {
+        content = {};
+        finishOptions = { mode: 'default', url: '' };
+    }
+
+    let finishCustomCss = '';
+    if (content && typeof content === 'object' &&
+        Object.prototype.hasOwnProperty.call(content, 'customCSS')
+    ) {
+        finishCustomCss = content.customCSS || '';
+    }
+
+    const finishEditors = [];
+
+    const currentMode = finishOptions.mode || 'default';
+    const currentUrl = finishOptions.url || '';
+
+    let selectedFinishMode = currentMode;
+    let enteredFinishUrl = currentUrl;
+
+    $('input[name="finishMode"][value="' + currentMode + '"]').prop('checked', true);
+    if (!$('input[name="finishMode"]:checked').length) {
+        $('input[name="finishMode"][value="default"]').prop('checked', true);
+    }
+    $('#finishUrl').val(currentUrl);
+
+    selectedFinishMode = $('input[name="finishMode"]:checked').val() || 'default';
+    enteredFinishUrl = $('#finishUrl').val() || '';
+
+    function validateFinishUrl() {
+        const $field = $('#finishUrl');
+        if (!$field.length) return;
+
+        const raw = $field.val();
+        const val = (typeof raw === 'string') ? raw.trim() : '';
+        let isValid = true;
+
+        if (selectedFinishMode === 'url') {
+            isValid = isValidHttpUrl(val);
+        } else {
+            isValid = true;
+        }
+
+        $field.css('border-color', isValid ? '' : '#d9534f');
+    }
+
+    function updateFinishModeUI() {
+        const mode = $('input[name="finishMode"]:checked').val() || 'default';
+        selectedFinishMode = mode;
+
+        const isCustom = (mode === 'custom');
+        const isUrl = (mode === 'url');
+
+        $('#finishScreenEditor').css({
+            visibility: isCustom ? 'visible' : 'hidden',
+            pointerEvents: isCustom ? 'auto' : 'none'
+        });
+
+        $('#btnLoadFinishFromExisting').css({
+            visibility: isCustom ? 'visible' : 'hidden',
+            pointerEvents: isCustom ? 'auto' : 'none'
+        });
+
+        $('#finishUrl').prop('disabled', !isUrl);
+
+        validateFinishUrl();
+    }
+
+    $('input[name="finishMode"]').on('change', function () {
+        const val = $(this).val();
+        selectedFinishMode = val || 'default';
+        updateFinishModeUI();
+    });
+
+    $('#finishUrl').on('input', function () {
+        const raw = $(this).val();
+        enteredFinishUrl = (typeof raw === 'string') ? raw : '';
+        validateFinishUrl();
+    });
+
+    function applyFinishCustomCssToAllEditors() {
+        if (!finishEditors.length) {
+            return;
+        }
+
+        const baseVarCss =
+            '.non-editable-variable {' +
+            'background-color:#eee;' +
+            'padding:2px 5px;' +
+            'border-radius:4px;' +
+            'font-weight:bold;' +
+            '}' +
+            '.button-variable {' +
+            'background-color:#d9edf7;' +
+            'color:#31708f;' +
+            'cursor:pointer !important;' +
+            'user-select:none;' +
+            '}' +
+            '.button-variable * {' +
+            'cursor:pointer !important;' +
+            '}';
+
+        finishEditors.forEach(function (ed) {
+            if (!ed) return;
+
+            try {
+                const doc = ed.getDoc && ed.getDoc();
+                if (doc) {
+                    const old = doc.querySelector('style[data-finish-css="1"]');
+                    if (old) {
+                        old.parentNode.removeChild(old);
+                    }
+                }
+            } catch (e) {
+                console.warn('Error cleaning old finish CSS style:', e);
+            }
+
+            if (!finishCustomCss && !baseVarCss) {
+                return;
+            }
+
+            try {
+                if (ed.dom && typeof ed.dom.addStyle === 'function') {
+                    const combinedCss = baseVarCss + '\n' + (finishCustomCss || '');
+                    ed.dom.addStyle(combinedCss);
+
+                    const doc = ed.getDoc && ed.getDoc();
+                    if (doc) {
+                        const styles = doc.getElementsByTagName('style');
+                        if (styles.length > 0) {
+                            styles[styles.length - 1].setAttribute('data-finish-css', '1');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Error injecting finish CSS into editor', ed.id, e);
+            }
+        });
+    }
+
+    function openFinishCustomCssDialog() {
+        const escCss = finishCustomCss || '';
+
+        const dialogDataCss = {
+            buttons: [{
+                label: UILANG.m('cancel'),
+                cancel: true,
+                value: 'cancel'
+            }, {
+                label: 'Save',
+                default: true,
+                value: 'ok'
+            }],
+            title: 'Custom CSS',
+            width: 900,
+            returnPromise: true,
+            datafields: ['finishCustomCssArea'],
+            dataFormat: 'object',
+            doNotStripHTML: true,
+            contents:
+                '<div>' +
+                '<div style="margin-bottom:6px;">' +
+                UILANG.m('Enter custom CSS that will be applied to all languages of the finish screen editor.') +
+                '</div>' +
+                '<textarea id="finishCustomCssArea" ' +
+                'style="width:100%;height:360px;resize:vertical;' +
+                'font-family:monospace;font-size:12px;' +
+                'border:1px solid #ccc;border-radius:4px;padding:6px;">' +
+                $('<div/>').text(escCss).html() +
+                '</textarea>' +
+                '</div>'
+        };
+
+        showDialog('finishCustomCss', dialogDataCss).then(function (res) {
+            if (res && res.button === 'ok' && res.data) {
+                finishCustomCss = res.data.finishCustomCssArea || '';
+                applyFinishCustomCssToAllEditors();
+            }
+        });
+    }
+
+    $.each(languages, function (key) {
+        tabList[key] = key;
+        containers.push('container_' + key);
+
+        const defaultContent = {
+            DE: '',
+            EN: '',
+            FR: '',
+            LU: ''
+        };
+
+        let preLoad;
+        if (content && Object.prototype.hasOwnProperty.call(content, key) &&
+            typeof content[key] === 'string' && content[key].trim() !== '') {
+            preLoad = content[key];
+        } else {
+            if (Object.prototype.hasOwnProperty.call(defaultContent, key)) {
+                preLoad = defaultContent[key];
+            } else {
+                const fb = languageFallbacks[key] || 'EN';
+                preLoad = defaultContent[fb] || defaultContent.EN;
+            }
+        }
+
+        preLoad = expandOasysRoot(preLoad);
+
+        $('#finishEditorCont').append('<div id="div_' + key + '"><textarea id="container_' + key + '">' + preLoad + '</textarea></div>');
+
+        tinymce.init({
+            selector: '#container_' + key,
+            testId: serverData.testLevel.id,
+            promotion: false,
+            plugins: [
+                'charmap', 'code', 'preview', 'searchreplace', 'table',
+                'visualblocks', 'visualchars', 'wordcount', 'lists',
+                'advlist', 'autolink', 'link', 'anchor', 'insertdatetime',
+                'fullscreen', 'tmimagebrowser'
+            ],
+            toolbar: ['undo redo | blocks fontsize | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | hr | tmimagebrowser | fullscreen metapreviewbutton', 'customcss addbutton'],
+            menubar: 'edit view insert format tools table',
+            contextmenu: 'undo redo | bold italic underline | link | align | bullist numlist | table',
+            convert_urls: false,
+            relative_urls: false,
+            remove_script_host: false,
+            menu: {
+                edit: { title: 'Edit', items: 'undo redo | cut copy paste | selectall | searchreplace' },
+                view: { title: 'View', items: 'metapreview | code | visualchars visualblocks | fullscreen' },
+                insert: { title: 'Insert', items: 'link inserttable charmap hr insertdatetime' },
+                format: { title: 'Format', items: 'bold italic underline strikethrough superscript subscript codeformat | formats blockformats fontsize align | forecolor backcolor | removeformat' },
+                tools: { title: 'Tools', items: 'spellchecker spellcheckerlanguage | code' },
+                table: { title: 'Table', items: 'inserttable tableprops deletetable row column cell' }
+            },
+            min_height: 535,
+            resize: false,
+            language: userLang,
+            valid_elements: '*[*]',
+            extended_valid_elements: 'span[class|style|contenteditable|data-url|data-action|data-label]',
             content_style: `
                 .non-editable-variable {
                     background-color: #eee;
@@ -4502,29 +10686,556 @@ function scoreScreen(){
                 .button-variable {
                     background-color: #d9edf7;
                     color: #31708f;
-                }`
+                    cursor: pointer !important;
+                    user-select: none;
+                }
+                .button-variable * {
+                    cursor: pointer !important;
+                }
+            `,
+            setup: function (editor) {
+                finishEditors.push(editor);
+                const translations = {
+                    en: {
+                        addbutton: 'Add Button',
+                        definebuttonlabel: 'Button label',
+                        enter_url: 'Enter URL',
+                        insert: 'Insert',
+                        update: 'Update',
+                        cancel: 'Cancel',
+                        choose_action: 'Choose action',
+                        return_login: 'Return to login screen',
+                        open_url: 'Open URL',
+                        url_required: 'URL is required for "Open URL"',
+                        url_invalid: 'Please enter a valid URL starting with http:// or https://'
+                    },
+                    de: {
+                        addbutton: 'Button',
+                        definebuttonlabel: 'Button-Beschriftung',
+                        enter_url: 'URL eingeben',
+                        insert: 'Einfügen',
+                        update: 'Aktualisieren',
+                        cancel: 'Abbrechen',
+                        choose_action: 'Aktion auswählen',
+                        return_login: 'Zur Login-Seite zurückkehren',
+                        open_url: 'URL öffnen',
+                        url_required: 'Eine URL ist erforderlich für „URL öffnen“',
+                        url_invalid: 'Bitte eine gültige URL mit http:// oder https:// eingeben.'
+                    },
+                    fr_FR: {
+                        addbutton: 'Bouton',
+                        definebuttonlabel: 'Libellé du bouton',
+                        enter_url: 'Entrer l’URL',
+                        insert: 'Insérer',
+                        update: 'Mettre à jour',
+                        cancel: 'Annuler',
+                        choose_action: 'Choisir une action',
+                        return_login: 'Revenir à la page de connexion',
+                        open_url: 'Ouvrir URL',
+                        url_required: 'Une URL est requise pour "Ouvrir URL"',
+                        url_invalid: 'Veuillez saisir une URL valide commençant par http:// ou https://.'
+                    }
+                };
+
+                const lang = translations[userLang] || translations.en;
+
+                editor.ui.registry.addButton('addbutton', {
+                    text: lang.addbutton,
+                    icon: 'plus',
+                    onAction: function () {
+                        openButtonDialog(editor, '', 'returnToLogin', '', false);
+                    }
+                });
+                editor.ui.registry.addButton('customcss', {
+                    text: 'Custom CSS',
+                    icon: 'sourcecode',
+                    onAction: function () {
+                        openFinishCustomCssDialog();
+                    }
+                });
+                editor.ui.registry.addMenuItem('metapreview', {
+                    text: UILANG.m('Preview'),
+                    icon: 'preview',
+                    onAction: function () {
+                        openMetaPageCurrentPreview(editor, finishCustomCss, 'finish_screen');
+                    }
+                });
+                editor.ui.registry.addButton('metapreviewbutton', {
+                    icon: 'preview',
+                    tooltip: UILANG.m('Preview'),
+                    onAction: function () {
+                        openMetaPageCurrentPreview(editor, finishCustomCss, 'finish_screen');
+                    }
+                });
+
+                editor.on('init', function () {
+                    if (finishCustomCss) {
+                        applyFinishCustomCssToAllEditors();
+                    }
+                    if (!feDialogNormalized) {
+                        feDialogNormalized = true;
+                        requestAnimationFrame(() => {
+                            const dlg = window.nxDialogManager?.instances?.feEditor;
+                            if (dlg && typeof dlg.normalizeInitialPosition === 'function') {
+                                dlg.normalizeInitialPosition();
+                            }
+                        });
+                    }
+                });
+
+                function openButtonDialog(editorInstance, existingUrl, existingAction, existingLabel, isEditing = false) {
+                    let actionType = existingAction || 'returnToLogin';
+                    let urlValue = existingUrl !== undefined ? existingUrl : '';
+                    let labelValue =
+                        existingLabel ||
+                        (actionType === 'open_url' ? lang.open_url : lang.return_login);
+
+                    function getDialogConfig(selectedAction) {
+                        return {
+                            title: lang.addbutton,
+                            body: {
+                                type: 'panel',
+                                items: [
+                                    {
+                                        type: 'input',
+                                        name: 'label',
+                                        label: lang.definebuttonlabel,
+                                        value: labelValue,
+                                        placeholder: lang.return_login
+                                    },
+                                    {
+                                        type: 'selectbox',
+                                        name: 'action',
+                                        label: lang.choose_action,
+                                        items: [
+                                            { text: lang.return_login, value: 'returnToLogin' },
+                                            { text: lang.open_url, value: 'open_url' }
+                                        ],
+                                        value: selectedAction || actionType
+                                    },
+                                    ...(selectedAction === 'open_url'
+                                        ? [{
+                                            type: 'input',
+                                            name: 'url',
+                                            label: lang.enter_url,
+                                            placeholder: 'https://example.com',
+                                            value: urlValue,
+                                            required: true
+                                        }]
+                                        : [])
+                                ]
+                            },
+                            buttons: [
+                                { type: 'cancel', text: lang.cancel },
+                                {
+                                    type: 'submit',
+                                    text: isEditing ? lang.update : lang.insert,
+                                    primary: true
+                                }
+                            ],
+                            initialData: {
+                                label: labelValue,
+                                action: selectedAction || actionType,
+                                url: urlValue
+                            },
+                            onChange: function (api, details) {
+                                const data = api.getData();
+                                labelValue = data.label;
+                                if (typeof data.url !== 'undefined') {
+                                    urlValue = data.url;
+                                }
+
+                                if (details.name === 'action') {
+                                    api.redial(getDialogConfig(data.action));
+                                }
+                            },
+                            onSubmit: function (api) {
+                                const data = api.getData();
+                                const selectedAction = data.action;
+                                const url = selectedAction === 'open_url'
+                                    ? (data.url || '').trim()
+                                    : '';
+
+                                if (selectedAction === 'open_url') {
+                                    if (!url) {
+                                        editorInstance.windowManager.alert(lang.url_required);
+                                        return;
+                                    }
+                                    if (typeof isValidHttpUrl === 'function' && !isValidHttpUrl(url)) {
+                                        editorInstance.windowManager.alert(lang.url_invalid);
+                                        return;
+                                    }
+                                }
+
+                                const labelText =
+                                    data.label ||
+                                    (selectedAction === 'open_url'
+                                        ? lang.open_url
+                                        : lang.return_login);
+
+                                const buttonVar =
+                                    `<span class="non-editable-variable button-variable" ` +
+                                    `contenteditable="false" data-action="${selectedAction}" ` +
+                                    `data-url="${url}" data-label="${labelText}">${labelText}</span>&nbsp;`;
+
+                                const selectedNode = editorInstance.selection.getNode();
+                                if (selectedNode.classList &&
+                                    selectedNode.classList.contains('button-variable')) {
+                                    selectedNode.outerHTML = buttonVar;
+                                } else {
+                                    editorInstance.insertContent(buttonVar);
+                                }
+
+                                api.close();
+                            }
+                        };
+                    }
+
+                    editorInstance.windowManager.open(getDialogConfig(actionType));
+                }
+
+                editor.on('click', function (e) {
+                    if (e.target.classList &&
+                        e.target.classList.contains('non-editable-variable') &&
+                        e.target.classList.contains('button-variable')) {
+
+                        e.preventDefault();
+                        const currentAction =
+                            e.target.getAttribute('data-action') || 'returnToLogin';
+                        const currentUrl =
+                            e.target.getAttribute('data-url') !== undefined
+                                ? e.target.getAttribute('data-url')
+                                : '';
+                        const currentLabel =
+                            e.target.getAttribute('data-label') || lang.return_login;
+
+                        openButtonDialog(editor, currentUrl, currentAction, currentLabel, true);
+                    }
+                });
+            }
+
         });
     });
 
-    legalTabs.setTabs(tabList);
+    let initialLanguage = null;
 
-    // init jsTabs click handler
-    let tSel = legalTabs.getEventType('select');
+    const testOptions =
+        serverData &&
+        serverData.testLevel &&
+        serverData.testLevel.options &&
+        !Array.isArray(serverData.testLevel.options)
+            ? serverData.testLevel.options
+            : {};
+
+    $.each(languages, function (key) {
+        if (!initialLanguage && testOptions[key] === true) {
+            initialLanguage = key;
+        }
+    });
+
+    if (!initialLanguage) {
+        initialLanguage = Object.keys(tabList)[0];
+    }
+
+    finishTabs.setTabs(tabList, initialLanguage);
+
+    let tSel = finishTabs.getEventType('select');
     $(window).off(tSel);
-    $(window).on(tSel, function(ret) {
+    $(window).on(tSel, function (ret) {
         for (let c in containers) {
-            $('#div_'+containers[c].replace("container_", "")).hide();
+            $('#div_' + containers[c].replace('container_', '')).hide();
         }
-        $('#div_'+ret.originalEvent.detail).show();
+        const selectedLang = ret.originalEvent.detail;
+        $('#div_' + selectedLang).show();
+        currentFinishLanguage = selectedLang;
     });
 
-    $.each(containers, function(key, val) {
-        if(key!==0) {
-            let lang=val.replace("container_", "");
-            $('#div_'+lang).hide();
+    $.each(containers, function (key, val) {
+        let lang = val.replace('container_', '');
+        if (lang === initialLanguage) {
+            $('#div_' + lang).show();
+            currentFinishLanguage = lang;
+        } else {
+            $('#div_' + lang).hide();
         }
     });
+
+    $('#btnLoadFinishFromExisting').off('click').on('click', function () {
+        openFinishFromExistingDialog(currentFinishLanguage);
+    });
+
+    updateFinishModeUI();
+    validateFinishUrl();
+
+    function openFinishFromExistingDialog(initialLanguageForPreview) {
+        let selectedTemplate = null;
+        let templates = [];
+        let previewLanguage = initialLanguageForPreview || null;
+
+        function resetPreview() {
+            const $prev = $('#fslPreview');
+            const $header = $('#fslPreviewHeader');
+            if ($prev.length) $prev.empty();
+            if ($header.length) $header.text('');
+            selectedTemplate = null;
+        }
+
+        const dialogDataLoad = {
+            buttons: [{
+                label: UILANG.m('cancel'),
+                cancel: true,
+                value: 'cancel'
+            }, {
+                label: UILANG.m('Use selected'),
+                default: true,
+                value: 'ok'
+            }],
+            contents:
+                '<div id="fslRoot" class="tmMetaLoadDialog">' +
+                '<aside id="fslLeft" class="tmMetaLoadSources">' +
+                '<label class="tmExistingEntriesFilter" for="fslFilter"><span>' + UILANG.m('Filter tests') + '</span><input id="fslFilter" type="text" autocomplete="off"></label>' +
+                '<div id="fslList" class="tmExistingEntriesTestList"></div>' +
+                '</aside>' +
+                '<section id="fslRight" class="tmMetaLoadPreview">' +
+                '<div id="fslTabs"></div>' +
+                '<div id="fslPreviewWrapper" class="tmMetaLoadPreviewWrapper">' +
+                '<div id="fslPreviewHeader" class="tmMetaLoadPreviewHeader"></div>' +
+                '<div id="fslPreview" class="tmMetaLoadPreviewContent"></div>' +
+                '</div>' +
+                '</section>' +
+                '</div>',
+
+            title: UILANG.m('Load existing finish screen'),
+            returnPromise: true,
+            width: 1150
+        };
+
+        showDialog('finishScreenLoadExisting', dialogDataLoad).then(function (res) {
+            if (res.button === 'ok' && selectedTemplate) {
+
+                selectedFinishMode = 'custom';
+                $('input[name="finishMode"][value="custom"]').prop('checked', true);
+                updateFinishModeUI();
+
+                if (selectedTemplate.finish_screen) {
+                    const metaData = {};
+                    $.each(languages, function (langKey) {
+                        metaData[langKey] = selectedTemplate.finish_screen[langKey] || '';
+                    });
+                    metaData.customCSS = selectedTemplate.finish_screen.customCSS || '';
+
+                    startAjax('normalizeMetaUploads', {
+                        id: serverData.testLevel.id,
+                        metaType: 'finish_screen',
+                        metaData: metaData
+                    }).then((resp) => {
+						if (resp.error) return;
+                        const normalized = resp.metaData || metaData;
+
+                        $.each(languages, function (langKey) {
+                            const vRaw = normalized[langKey] || '';
+                            const v = expandOasysRoot(vRaw);
+                            const ed = tinymce.get('container_' + langKey);
+                            if (ed) {
+                                ed.setContent(v);
+                            }
+                        });
+
+                        finishCustomCss = normalized.customCSS || metaData.customCSS || '';
+                        applyFinishCustomCssToAllEditors();
+                    });
+                }
+            }
+        });
+
+        const langKeys = Object.keys(languages);
+        if (!previewLanguage || $.inArray(previewLanguage, langKeys) === -1) {
+            previewLanguage = langKeys[0];
+        }
+
+        const previewTabs = new jsTabs($('#fslTabs'), 'fslTabs');
+        const previewTabList = {};
+        $.each(langKeys, function (i, langKey) {
+            previewTabList[langKey] = langKey;
+        });
+
+        const pSel = previewTabs.getEventType('select');
+        $(window).off(pSel);
+        $(window).on(pSel, function (ret) {
+            previewLanguage = ret.detail;
+            renderPreview();
+        });
+
+        previewTabs.setTabs(previewTabList, previewLanguage);
+        disablePreviewTabs();
+
+        function disablePreviewTabs() {
+            const $bar = $('#fslTabs');
+            const $tabs = $('#fslTabs .jsTab');
+
+            $bar.css({
+                borderBottomColor: '#ccc',
+                opacity: 0.4,
+                pointerEvents: 'none'
+            });
+
+            $tabs.removeClass('jstActive').css({
+                opacity: 0.6
+            });
+        }
+
+        function enablePreviewTabs() {
+            const $bar = $('#fslTabs');
+            const $tabs = $('#fslTabs .jsTab');
+
+            $bar.css({
+                borderBottomColor: '#217EAA',
+                opacity: '',
+                pointerEvents: ''
+            });
+
+            $tabs.css({
+                opacity: ''
+            });
+
+            previewTabs.select(previewLanguage);
+        }
+
+        function renderPreview() {
+            const $prev = $('#fslPreview');
+            const $header = $('#fslPreviewHeader');
+            if (!$prev.length) return;
+
+            $prev.empty();
+
+            const rect = $prev[0].getBoundingClientRect();
+            const style = window.getComputedStyle($prev[0]);
+
+            const paddingLeft = parseFloat(style.paddingLeft);
+            const paddingRight = parseFloat(style.paddingRight);
+            const borderLeft = parseFloat(style.borderLeftWidth);
+            const borderRight = parseFloat(style.borderRightWidth);
+
+            const prevWidth = rect.width - paddingLeft - paddingRight - borderLeft - borderRight;
+
+            $header.text(selectedTemplate ? selectedTemplate.name : '');
+
+            if (!selectedTemplate || !selectedTemplate.finish_screen) {
+                return;
+            }
+
+            let html = selectedTemplate.finish_screen[previewLanguage] || '';
+            html = expandOasysRoot(html);
+
+            const baseCss =
+                '<style>' +
+                '.non-editable-variable{background-color:#eee;padding:2px 5px;border-radius:4px;font-weight:bold;}' +
+                '.button-variable{background-color:#d9edf7;color:#31708f;cursor:pointer !important;user-select:none;}' +
+                '.button-variable *{cursor:pointer !important;}' +
+                '#fslPreview .button-variable,' +
+                '#fslPreview .button-variable *{' +
+                'cursor:default !important;' +
+                '}' +
+                '</style>';
+
+            let customCss = selectedTemplate.finish_screen.customCSS || '';
+            customCss = customCss.replace(/\bbody\b/g, '#fslPreview');
+            const cssBlock = customCss ? `<style>${customCss}</style>` : '';
+
+            $prev.html(baseCss + cssBlock + '<div id="fslPreviewInner">' + html + '</div>');
+            const $inner = $('#fslPreviewInner');
+
+            $inner.css({
+                transform: '',
+                transformOrigin: '',
+                width: ''
+            });
+
+            const contentWidth = $inner[0] ? $inner[0].scrollWidth : 0;
+
+            if (prevWidth > 0 && contentWidth > prevWidth) {
+                const scale = prevWidth / contentWidth;
+                $inner.css({
+                    transform: 'scale(' + scale + ')',
+                    transformOrigin: 'top left',
+                    width: contentWidth + 'px'
+                });
+            }
+        }
+
+        function renderList(filter) {
+            const $list = $('#fslList');
+            $list.empty();
+
+            resetPreview();
+            disablePreviewTabs();
+
+            if (!templates.length) {
+                $list.append('<div class="tmExistingEntriesEmpty">' + UILANG.m('No tests with custom finish screens were found.') + '</div>');
+                return;
+            }
+
+            const q = (filter || '').toLowerCase();
+
+            $.each(templates, function (idx, t) {
+                if (q && t.name.toLowerCase().indexOf(q) === -1) {
+                    return;
+                }
+
+                const $row = $('<button type="button" class="tmExistingEntriesTest fslRow"></button>')
+                    .text(t.name)
+                    .attr('data-idx', idx)
+                    .on('click', function () {
+                        $('.fslRow').removeClass('selected tmExistingEntriesTestSelected');
+                        $(this).addClass('selected tmExistingEntriesTestSelected');
+                        selectedTemplate = templates[idx];
+                        enablePreviewTabs();
+                        renderPreview();
+                    });
+
+                $list.append($row);
+            });
+        }
+
+        $('#fslFilter').on('input', function () {
+            renderList($(this).val());
+        });
+
+        startAjax('fetchFinishTemplates', {
+			languages: Object.keys(languages),
+			targetTestId: serverData.testLevel.id
+        })
+            .then(function (res) {
+                if (res && res.data && res.data.finishTemplates) {
+                    templates = res.data.finishTemplates.filter(function (t) {
+                        if (t.finish_mode !== 'custom') return false;
+                        if (!t.finish_screen) return false;
+                        const langs = Object.keys(languages);
+                        for (let i = 0; i < langs.length; i++) {
+                            const lk = langs[i];
+                            const v = t.finish_screen[lk] || '';
+                            if (typeof v === 'string' && v.trim() !== '') {
+                                return true;
+                            }
+                        }
+                        return false;
+                    });
+                } else {
+                    templates = [];
+                }
+                renderList('');
+            })
+            .catch(function (err) {
+                console.error('Error loading finish templates', err);
+                templates = [];
+                renderList('');
+            });
+    }
 }
+
+
+
+
 
 function closePoolEditor() {
     gui.s4.fadeOut(0);
@@ -4639,6 +11350,7 @@ function launchCheck(checktype) {
 function rename(sender, button, name) {
 
     if (!button) {
+        const nameLabel = selection[0]['type'] === 'folder' ? UILANG.m('Folder name') : UILANG.m('Test name');
         const dialogData = {
             buttons: [{
                 label: UILANG.m('cancel'),
@@ -4658,7 +11370,9 @@ function rename(sender, button, name) {
             values: {
                 dialogField1: selection[0]['name']
             },
-            contents: '<p>' + UILANG.m('Please enter a new name:') + '<br><input type="text" id="dialogField1" maxlength="200" style="width: 100%; margin-top: 10px;"></p>',
+            contents: '<div class="tmDialogForm">' +
+                '<div class="tmDialogFormField"><label for="dialogField1">' + nameLabel + '</label><input type="text" id="dialogField1" maxlength="200"></div>' +
+            '</div>',
             title: UILANG.m('Rename'),
             width: 400,
             callback: rename
@@ -4689,18 +11403,13 @@ function addVariable(preFill) {
     if (preFill === 'addVariable') preFill = null;
     let dataFields = [];
     dataFields.push('newVariableName');
-    let createlocHTML = '<p>' + UILANG.m('Enter the name for the new variable:') +
-        '</p><input type="text" class="lblClick" id="newVariableName" maxlength="200" style="width: 50%;"><p>' + UILANG.m('Localized content for the new variable:') +
-        '<br>' + UILANG.m('Please add at least the languages you use in your test.') +
-        '<div class="variablesEditContainer">' +
-        '</p><table style="width:97%;border:0px;border-spacing:0px;">';
-
-    $.each(languages, function(k, v) {
-        createlocHTML += '<tr><td class="variableTfTitle"><strong>' + v + '</strong></td></tr>';
-        createlocHTML += '<tr><td><input type="text" class="lblClick" id="' + k + '_textLoc" style="width: 100%;"></td></tr>';
-        dataFields.push(k + '_textLoc');
-    });
-    createlocHTML += '</table><br /></div>';
+    let createlocHTML = '<div class="tmVariableDialog tmVariableDialog-create">' +
+        '<div class="tmVariableIntro"><span>' + UILANG.m('Enter the name for the new variable:') + '</span></div>' +
+        '<label class="tmVariableNameField" for="newVariableName"><span>' + UILANG.m('Variable name') + '</span>' +
+        '<input type="text" class="lblClick" id="newVariableName" maxlength="200"></label>' +
+        '<div class="tmVariableIntro tmVariableHint"><span>' + UILANG.m('Localized content for the new variable:') + '</span><em>' + UILANG.m('Please add at least the languages you use in your test.') + '</em></div>' +
+        buildVariableDialogLanguageFields(dataFields) +
+        '</div>';
 
     let createLocDialogData = {
         buttons: [{
@@ -4760,16 +11469,12 @@ function addVariable(preFill) {
 /* adding labels */
 function addLabel() {
 
-    let newlabelHTML = '<p>' + UILANG.m('Please enter a new name for the label:') + '<br><input type="text" id="labelname" maxlength="200" style="width: 100%; margin-top: 10px;"></p><div class="variablesEditContainer"><table style="width:100%;border:0px;border-spacing:0px;">';
     let dataFields = ['labelname'];
-    $.each(languages, function(k, v) {
-        newlabelHTML += '<tr><td colspan="2" class="labelTfTitle"><strong>' + UILANG.e(v) + '</strong></td></tr>';
-        newlabelHTML += '<tr><td>' + UILANG.m('Button') + '</td><td><input type="text" class="lblClick" id="' + k + '_button" style="width: 100%;"></td></tr>';
-        newlabelHTML += '<tr><td>' + UILANG.m('Headline') + '</td><td><input type="text" class="lblClick" id="' + k + '_headline" style="width: 100%;"></td></tr>';
-        dataFields.push(k + '_button');
-        dataFields.push(k + '_headline');
-    });
-    newlabelHTML += '</table><br /></div>';
+    let newlabelHTML = '<div class="tmLabelDialog tmLabelDialog-create">' +
+        '<label class="tmVariableNameField" for="labelname"><span>' + UILANG.m('Label name') + '</span>' +
+        '<input type="text" id="labelname" maxlength="200"></label>' +
+        buildLabelDialogLanguageFields(dataFields) +
+        '</div>';
 
     let newLabelDialogData = {
         buttons: [{
@@ -4866,16 +11571,13 @@ function addLabel() {
 
 /* editing labels */
 function editLabel(clickedId) {
-    let editlabelHTML = '<p>' + UILANG.m('Current name for the label:') + '<br><input type="text" id="labelname" maxlength="200" style="width: 97%; margin-top: 10px;"></p><div class="variablesEditContainer"><table style="width:97%;border:0px;border-spacing:0px;">';
     let dataFields = ['labelname'];
-    $.each(languages, function(k, v) {
-        editlabelHTML += '<tr><td colspan="2" class="labelTfTitle"><strong>' + v + '</strong></td></tr>';
-        editlabelHTML += '<tr><td>' + UILANG.m('Button') + '</td><td><input type="text" class="lblClick" id="' + k + '_button" style="width: 100%;"></td></tr>';
-        editlabelHTML += '<tr><td>' + UILANG.m('Headline') + '</td><td><input type="text" class="lblClick" id="' + k + '_headline" style="width: 100%;"></td></tr>';
-        dataFields.push(k + '_button');
-        dataFields.push(k + '_headline');
-    });
-    editlabelHTML += '</table><br /></div>';
+    let editlabelHTML = '<div class="tmLabelDialog tmLabelDialog-edit">' +
+        '<div class="tmVariableIntro"><span>' + UILANG.m('Current name for the label:') + '</span></div>' +
+        '<label class="tmVariableNameField" for="labelname"><span>' + UILANG.m('Label name') + '</span>' +
+        '<input type="text" id="labelname" maxlength="200"></label>' +
+        buildLabelDialogLanguageFields(dataFields) +
+        '</div>';
 
     let editLabelDialogData = {
         buttons: [{
@@ -5050,7 +11752,7 @@ function addItems() {
                 disabled: true,
                 value: 'add'
             }],
-            contents: "<div style='height:550px;' id='IGCHOOSER'></div>",
+            contents: "<div class='tmAddPagesDialog' id='IGCHOOSER'></div>",
             title: UILANG.m('Add test pages to testpool structure'),
             width: 950,
             callback: proceeder
@@ -5073,7 +11775,7 @@ function addItems() {
                 disabled: true,
                 value: 'add'
             }],
-            contents: "<div style='height:550px;' id='IGCHOOSER'></div>",
+            contents: "<div class='tmAddPagesDialog' id='IGCHOOSER'></div>",
             title: UILANG.m('Add test pages to test structure'),
             width: 950,
             callback: proceeder
@@ -5081,15 +11783,22 @@ function addItems() {
     }
     window.igBrowser = new nxDialog('addItemsDialog', dialogData);
 
-    gui.extra1 = createFlexSection('IGCHOOSER', 'extra001', 905, 905);
+    gui.extra1 = createFlexSection('IGCHOOSER', 'extra001', 905, 905, 0, 'tmAddPagesSection');
     gui.boxes.tests = createFlexBox(gui.extra1, 'itemChooser', {
-        title: UILANG.m('Page Groups'),
         minHeight: 500,
         flex: 1,
         noPadding: true
     });
 
-    $('#itemChooser').append("<table style='border:0px;border-spacing:0px;'><tr><td><div id='igContainer' ></div></td><td style='background:#e8e8e8;'><div id='igContainerToolBar' style=''></div><div id='igPreviewZone' style=''></div></td></tr></table>");
+    $('#itemChooser').append(
+        "<div class='tmAddPagesLayout'>" +
+            "<div class='tmAddPagesFileColumn'><div id='igContainer'></div></div>" +
+            "<div class='tmAddPagesRightColumn'>" +
+                "<div id='igContainerToolBar'></div>" +
+                "<div id='igPreviewZone'><div class='tmAddPagesEmptyState'>" + UILANG.m('Select a page group to choose test pages.') + "</div></div>" +
+            "</div>" +
+        "</div>"
+    );
     $('#extra001').css('padding', '0');
     $('#extra001>.jsFlexBox').css('box-shadow', 'none');
     $('#itemChooser').css('overflow', 'hidden');
@@ -5139,10 +11848,10 @@ function addItems() {
         cutItems: false,
         cutMultiple: false
     };
-    gui.library2 = new fileMgr("#igContainer", "_itemGroups", [], itembreadcrumbs, itemGroupsOpPermissions, false, itemGroupLibraryEvent);
+    gui.library2 = new FileManager("#igContainer", "_itemGroups", [], itembreadcrumbs, itemGroupsOpPermissions, false, itemGroupLibraryEvent);
 
     function clickSearchIG() {
-        gui.library2.filerSearch();
+        gui.library2.filerSearch('', {metaSearch: true});
     }
 
     function selectItems() {
@@ -5212,6 +11921,9 @@ function addItems() {
                     searchString: data
                 });
                 break;
+            case 'onMetaSearchRequest':
+                startAjax('igSearch', {...data, searchMode: 'meta'});
+                break;
             case 'onSearchItemClick':
                 oldLoc = cloneObj(igLoc);
                 igLoc.folder = data.pid.replace(/^\D*/i, '');
@@ -5256,6 +11968,7 @@ function addItems() {
             } else {
                 gui.structureView.triggerCallback();
             }
+            if(btnClicked==='add2'){deSelectItems();}
         }
     }
 }
@@ -5284,7 +11997,7 @@ function addMutationItems() {
             disabled: true,
             value: 'addClose'
         }],
-        contents: "<div style='height:550px;' id='tChooser'></div>",
+        contents: "<div class='tmMutationAssignDialog' id='tChooser'></div>",
         title: UILANG.m('Assign test to mutation test'),
         width: 950,
         callback: addTestToStructureList
@@ -5292,15 +12005,23 @@ function addMutationItems() {
 
     window.testsBrowser = new nxDialog('addTestsDialog', dialogData);
 
-    gui.extra1 = createFlexSection('tChooser', 'extra001', 905, 905);
+    gui.extra1 = createFlexSection('tChooser', 'extra001', 905, 905, 0, 'tmMutationAssignSection');
     gui.boxes.tests = createFlexBox(gui.extra1, 'testChooser', {
-        title: UILANG.m('Tests'),
         minHeight: 500,
         flex: 1,
         noPadding: true
     });
 
-    $('#testChooser').append("<table style='border:0px;border-spacing:0px;'><tr><td><div id='testsBrowserContainer' ></div></td><td style='background:#e8e8e8;'><div id='testsContainerToolBar' ></div><div id='tMsg'></div><div id='tPreviewZone'></div></td></tr></table>");
+    $('#testChooser').append(
+        "<div class='tmMutationAssignLayout'>" +
+            "<div class='tmMutationAssignFileColumn'><div id='testsBrowserContainer'></div></div>" +
+            "<div class='tmMutationAssignRightColumn'>" +
+                "<div id='testsContainerToolBar'></div>" +
+                "<div id='tMsg'></div>" +
+                "<div id='tPreviewZone'><div class='tmMutationAssignEmptyState'>" + UILANG.m('Select a linear test to preview its test pages.') + "</div></div>" +
+            "</div>" +
+        "</div>"
+    );
     $('#extra001').css('padding', '0');
     $('#extra001>.jsFlexBox').css('box-shadow', 'none');
     $('#testChooser').css('overflow', 'hidden');
@@ -5331,14 +12052,14 @@ function addMutationItems() {
         cutItems: false,
         cutMultiple: false
     };
-    gui.library2 = new fileMgr("#testsBrowserContainer", "_tests", [], testbreadcrumbs, testsOpPermissions, false, testsLibraryEvent);
+    gui.library2 = new FileManager("#testsBrowserContainer", "_tests", [], testbreadcrumbs, testsOpPermissions, false, testsLibraryEvent);
 
     function tClickSearch() {
-        gui.library2.filerSearch();
+        gui.library2.filerSearch('', {metaSearch: true});
     }
 
     //get library contents
-    startAjax('fetchTestLibrary', {
+    startAjax('fetchTestLibraryInt', {
         location: tLoc.folder
     });
 
@@ -5374,7 +12095,7 @@ function addMutationItems() {
             case 'onNavigate':
                 oldtLoc = cloneObj(tLoc);
                 tLoc.folder = data.dbId;
-                startAjax('fetchTestLibrary', {
+                startAjax('fetchTestLibraryInt', {
                     location: tLoc.folder,
                     current: oldtLoc
                 });
@@ -5382,7 +12103,7 @@ function addMutationItems() {
             case 'onBreadcrumbNavigate':
                 oldtLoc = cloneObj(tLoc);
                 tLoc.folder = data;
-                startAjax('fetchTestLibrary', {
+                startAjax('fetchTestLibraryInt', {
                     location: tLoc.folder,
                     current: oldtLoc
                 });
@@ -5392,10 +12113,13 @@ function addMutationItems() {
                     searchString: data
                 });
                 break;
+            case 'onMetaSearchRequest':
+                startAjax('testsSearch', {...data, searchMode: 'meta'});
+                break;
             case 'onSearchItemClick':
                 oldtLoc = cloneObj(tLoc);
                 tLoc.folder = data.pid.replace(/^\D*/i, '');
-                startAjax('fetchTestLibrary', {
+                startAjax('fetchTestLibraryInt', {
                     location: tLoc.folder,
                     select: data.id,
                     current: oldtLoc
@@ -5470,9 +12194,9 @@ function addFluidItems() {
         } else {
             testPoolsTxt = UILANG.m('Testpools');
         }
-        fluidHtml = '<div id="fluidContainer"><p>' + UILANG.m('The fluid test') + ' <strong>' + serverData.testLevel.name + '</strong> ' + UILANG.m('has') + ' <strong>' + serverData.testLevel.testpools.length + '</strong> ' + testPoolsTxt + '!</p><div id="cList"></div><div id="poolContentContainer"></div></div>';
+        fluidHtml = '<div id="fluidContainer" class="fluidBlockDialog"><div class="fluidBlockIntro">' + UILANG.m('The fluid test') + ' <strong>' + serverData.testLevel.name + '</strong> ' + UILANG.m('has') + ' <strong>' + serverData.testLevel.testpools.length + '</strong> ' + testPoolsTxt + '!</div><div id="cList" class="fluidBlockPoolSelect"></div><div id="poolContentContainer"></div></div>';
     } else {
-        fluidHtml = '<div id="fluidContainer"><p>' + UILANG.m('The fluid test') + ' <strong>' + serverData.testLevel.name + '</strong> ' + UILANG.m('has') + ' <strong>0</strong> ' + UILANG.m('testpools. Please create testpools first!') + '</p></div>';
+        fluidHtml = '<div id="fluidContainer" class="fluidBlockDialog"><div class="fluidBlockIntro">' + UILANG.m('The fluid test') + ' <strong>' + serverData.testLevel.name + '</strong> ' + UILANG.m('has') + ' <strong>0</strong> ' + UILANG.m('testpools. Please create testpools first!') + '</div></div>';
     }
 
     let fluidDialogData = {
@@ -5509,8 +12233,9 @@ function addFluidItems() {
         listTitle: UILANG.m('Please choose a testpool:'),
         noChoiceTitle: UILANG.m('No choices available'),
         dataId: 'tpList',
+        theme: 'backend',
         readOnly: false,
-        width: 660,
+        width: '100%',
         cssCollapsed: {
             'font-size': '14px'
         },
@@ -5541,7 +12266,26 @@ function addFluidItems() {
 
 //modify skin overrides per test item
 function editOverrides(testType, clickedId, parentId, sOverridesObj, rowName) {
-    let skinOverridesItemHTML = '<div id ="editOverridesDIV"><h3>' + UILANG.m('Change skin settings for:') + ' <span class="soValue">"' + rowName + '"</span></h3><h4>' + UILANG.m('Active skin:') + ' <span class="soValue">"' + serverData.testLevel.skin.skin + '"</span></h4></p><table id="itemSkinOverrides" style="width:97%;border:0px;border-spacing:0px;"></table><br /></div>';
+    let skinOverridesItemHTML =
+        '<div id="editOverridesDIV" class="skinOverrideEditor">' +
+            '<div class="skinOverrideHeader">' +
+                '<div class="skinOverrideHeaderMain">' +
+                    '<span>' + UILANG.m('Change skin settings for:') + '</span>' +
+                    '<strong>' + skinOverrideEscape(rowName) + '</strong>' +
+                '</div>' +
+                '<div class="skinOverrideHeaderMeta">' +
+                    '<span>' + UILANG.m('Active skin:') + '</span>' +
+                    '<strong>' + skinOverrideEscape(serverData.testLevel.skin.skin) + '</strong>' +
+                '</div>' +
+            '</div>' +
+            '<div class="skinOverrideTableWrap">' +
+                '<table id="itemSkinOverrides" class="skinOverrideTable">' +
+                    '<colgroup><col class="skinOverrideColLabel"><col class="skinOverrideColDefault"><col class="skinOverrideColControlA"><col class="skinOverrideColControlB"></colgroup>' +
+                    '<thead><tr><th colspan="2">' + UILANG.m('Current skin settings') + '</th><th colspan="2">' + UILANG.m('Current settings test page') + '</th></tr></thead>' +
+                    '<tbody></tbody>' +
+                '</table>' +
+            '</div>' +
+        '</div>';
     const dialogData = {
         buttons: [{
             label: UILANG.m('cancel'),
@@ -5555,14 +12299,13 @@ function editOverrides(testType, clickedId, parentId, sOverridesObj, rowName) {
         }],
         contents: skinOverridesItemHTML,
         title: UILANG.m('Skin override settings'),
-        width: 820,
+        width: 760,
         callback: saveOverridesFunc
     };
     window.overridesSaver = new nxDialog('editOverridesDialog', dialogData);
 
     //Show defaults and settings per item
-    let itemSkinOverridesTable = $('#itemSkinOverrides');
-    itemSkinOverridesTable.append('<tr><th colspan="2" style="width:50%;">' + UILANG.m('Current skin settings') + '</th><th colspan="2" style="width:50%;">' + UILANG.m('Current settings test page') + '</th></tr>');
+    let itemSkinOverridesTable = $('#itemSkinOverrides tbody');
 
     //Defaults
     let sOpts = serverData.testLevel.skin.skinOptions;
@@ -5574,10 +12317,13 @@ function editOverrides(testType, clickedId, parentId, sOverridesObj, rowName) {
     }
 
     $.each(sOpts, function(key, value) {
+        const controlCell = '<td colspan="2" id="so__' + key + '" class="skinOverrideControl"></td>';
+        const noOverrideCell = '<td colspan="2" class="skinOverrideControl overrideNullCell"><span>' + UILANG.m('No override allowed for this option!') + '</span></td>';
+
         switch (value.type) {
             case 'boolean':
                 if (!$.isEmptyObject(sOpts[key].perItem)) {
-                    itemSkinOverridesTable.append('<tr><td class="skinDefaultsCell" style="width:35%">' + UILANG.m(value.name) + '</td><td class="skinDefaultsCell" style="width:15%"><img src="../images/' + value.value + '.png" height="18px" /></td><td colspan="2" id="so__' + key + '" style="width:50%"></td></tr>');
+                    itemSkinOverridesTable.append(skinOverrideRow(UILANG.m(value.name), skinOverrideBoolValue(value.value), controlCell, 'is-boolean'));
                     skinOverridesObj[key] = insertToggleswitch('#so__' + key, 'ts' + key, UILANG.m(sOpts[key].perItem.name), {
                         dataId: key,
                         changeCallback: soChanged
@@ -5588,12 +12334,12 @@ function editOverrides(testType, clickedId, parentId, sOverridesObj, rowName) {
                         skinOverridesObj[key].reset(value.value);
                     }
                 } else {
-                    itemSkinOverridesTable.append('<tr><td class="skinDefaultsCell" style="width:35%">' + UILANG.m(value.name) + '</td><td class="skinDefaultsCell" style="width:15%"><img src="../images/' + value.value + '.png" height="18px" /></td><td colspan="2" class="overrideNullCell" style="width:50%">' + UILANG.m('No override allowed for this option!') + '</td></tr>');
+                    itemSkinOverridesTable.append(skinOverrideRow(UILANG.m(value.name), skinOverrideBoolValue(value.value), noOverrideCell, 'is-boolean'));
                 }
                 break;
             case 'textstring':
                 if (!$.isEmptyObject(sOpts[key].perItem)) {
-                    itemSkinOverridesTable.append('<tr><td class="skinDefaultsCell" style="width:30%">' + UILANG.m(value.name) + '</td><td  class="skinDefaultsCell" style="width:20%">' + value.value + '</td><td colspan="2" id="so__' + key + '" style="width:50%"></td></tr>');
+                    itemSkinOverridesTable.append(skinOverrideRow(UILANG.m(value.name), skinOverrideEscape(value.value), controlCell, 'is-text'));
                     skinOverridesObj[key] = insertTextfield('#so__' + key, 'ts' + key, UILANG.m(sOpts[key].perItem.name), {
                         dataId: key,
                         width: '168px',
@@ -5605,20 +12351,26 @@ function editOverrides(testType, clickedId, parentId, sOverridesObj, rowName) {
                         skinOverridesObj[key].reset(value.value);
                     }
                 } else {
-                    itemSkinOverridesTable.append('<tr><td class="skinDefaultsCell" style="width:35%">' + UILANG.m(value.name) + '</td><td class="skinDefaultsCell" style="width:15%">' + value.value + '</td><td colspan="2" class="overrideNullCell" style="width:50%">' + UILANG.m('No override allowed for this option!') + '</td></tr>');
+                    itemSkinOverridesTable.append(skinOverrideRow(UILANG.m(value.name), skinOverrideEscape(value.value), noOverrideCell, 'is-text'));
                 }
                 break;
             case 'intrange':
                 if (!$.isEmptyObject(sOpts[key].perItem)) {
 
-                    minMaxTmpValues[key] = sOpts[key].value;
+                    let defaultVals = String(value.value).split('...');
+                    let vals = String(key in saveOverrides ? saveOverrides[key] : value.value).split('...');
+                    let minRangeContainer = 'minRangeContainer_' + key;
+                    let maxRangeContainer = 'maxRangeContainer_' + key;
 
-                    if (key in saveOverrides) {
-                        let vals = saveOverrides[key].split('...');
-                    } else {
-                        let vals = value.value.split('...');
-                    }
-                    itemSkinOverridesTable.append('<tr><td  class="skinDefaultsCell" style="width:30%;">' + UILANG.m(value.name) + '</td><td  class="skinDefaultsCell" style="width:20%">' + vals[0] + ' &rarr; ' + vals[1] + '</td><td id="minRangeContainer" style="width:25%;padding-left:4px;">min:&nbsp;&nbsp;</td><td id="maxRangeContainer" style="width:25%;text-align:right;padding-right:4px;">max:&nbsp;&nbsp;</td></tr>');
+                    minMaxTmpValues[key] = vals[0] + '...' + vals[1];
+                    itemSkinOverridesTable.append(
+                        '<tr class="skinOverrideRow is-range">' +
+                            '<td class="skinDefaultsCell skinOverrideLabel">' + UILANG.m(value.name) + '</td>' +
+                            '<td class="skinDefaultsCell skinOverrideDefault">' + skinOverrideRangeValue(defaultVals) + '</td>' +
+                            '<td id="' + minRangeContainer + '" class="skinOverrideRangeCell"><span>min</span></td>' +
+                            '<td id="' + maxRangeContainer + '" class="skinOverrideRangeCell"><span>max</span></td>' +
+                        '</tr>'
+                    );
                     //create number inputs
                     let minRangeOptions = {
                         onChange: soChanged,
@@ -5636,16 +12388,16 @@ function editOverrides(testType, clickedId, parentId, sOverridesObj, rowName) {
                         dataId: key,
                         readOnly: false
                     };
-                    let minRangeX = new jsNumberInput('minRangeContainer', 'minRange', minRangeOptions);
-                    let maxRangeX = new jsNumberInput('maxRangeContainer', 'maxRange', maxRangeOptions);
+                    let minRangeX = new jsNumberInput(minRangeContainer, 'minRange_' + key, minRangeOptions);
+                    let maxRangeX = new jsNumberInput(maxRangeContainer, 'maxRange_' + key, maxRangeOptions);
                 } else {
                     let vals = value.value.split('...');
-                    itemSkinOverridesTable.append('<tr><td  class="skinDefaultsCell" style="width:30%;">' + UILANG.m(value.name) + '</td><td  class="skinDefaultsCell" style="width:20%">' + vals[0] + ' &rarr; ' + vals[1] + '</td><td colspan="2" class="overrideNullCell" style="width:50%">' + UILANG.m('No override allowed for this option!') + '</td></tr>');
+                    itemSkinOverridesTable.append(skinOverrideRow(UILANG.m(value.name), skinOverrideRangeValue(vals), noOverrideCell, 'is-range'));
                 }
                 break;
             case 'color':
                 if (!$.isEmptyObject(sOpts[key].perItem)) {
-                    itemSkinOverridesTable.append('<tr><td  class="skinDefaultsCell" style="width:30%">' + UILANG.m(value.name) + '</td><td  class="skinDefaultsCell" style="width:20%">' + value.value + '&nbsp;<span style="border:1px solid #7b7b7b;background-color:' + value.value + ';">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td colspan="2" id="so__' + key + '" style="width:50%"></td></tr>');
+                    itemSkinOverridesTable.append(skinOverrideRow(UILANG.m(value.name), skinOverrideColorValue(value.value), controlCell, 'is-color'));
                     skinOverridesObj[key] = insertLink('#so__' + key, 'ts' + key, UILANG.m(sOpts[key].perItem.name), {
                         dataId: key,
                         type: 'color',
@@ -5659,7 +12411,7 @@ function editOverrides(testType, clickedId, parentId, sOverridesObj, rowName) {
                         skinOverridesObj[key].reset(value.value);
                     }
                 } else {
-                    itemSkinOverridesTable.append('<tr><td  class="skinDefaultsCell" style="width:30%">' + UILANG.m(value.name) + '</td><td  class="skinDefaultsCell" style="width:20%">' + value.value + '&nbsp;<span style="border:1px solid #7b7b7b;background-color:' + value.value + ';">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td colspan="2" class="overrideNullCell" style="width:50%">' + UILANG.m('No override allowed for this option!') + '</td></tr>');
+                    itemSkinOverridesTable.append(skinOverrideRow(UILANG.m(value.name), skinOverrideColorValue(value.value), noOverrideCell, 'is-color'));
                 }
                 break;
         }
@@ -5667,15 +12419,12 @@ function editOverrides(testType, clickedId, parentId, sOverridesObj, rowName) {
 
     function soChanged(sender, value, dirty, dataId, type) {
         overridesSaver.enableButton('add');
-        if (sender === 'minRange' || sender === 'maxRange') {
+        if (sender.indexOf('minRange_') === 0 || sender.indexOf('maxRange_') === 0) {
             let vals = minMaxTmpValues[dataId].split('...');
-            switch (sender) {
-                case 'minRange':
-                    value = value + '...' + vals[1];
-                    break;
-                case 'maxRange':
-                    value = vals[0] + '...' + value;
-                    break;
+            if (sender.indexOf('minRange_') === 0) {
+                value = value + '...' + vals[1];
+            } else {
+                value = vals[0] + '...' + value;
             }
             minMaxTmpValues[dataId] = value;
         }
@@ -5698,6 +12447,31 @@ function editOverrides(testType, clickedId, parentId, sOverridesObj, rowName) {
             }
         }
     }
+
+    function skinOverrideRow(label, defaultValue, controlCell, rowClass) {
+        return '<tr class="skinOverrideRow ' + rowClass + '">' +
+            '<td class="skinDefaultsCell skinOverrideLabel">' + label + '</td>' +
+            '<td class="skinDefaultsCell skinOverrideDefault">' + defaultValue + '</td>' +
+            controlCell +
+        '</tr>';
+    }
+
+    function skinOverrideBoolValue(value) {
+        return '<span class="skinOverrideBool"><img src="../images/' + skinOverrideEscape(value) + '.png" alt="" /></span>';
+    }
+
+    function skinOverrideRangeValue(vals) {
+        return '<span class="skinOverrideRangeValue">' + skinOverrideEscape(vals[0]) + ' &rarr; ' + skinOverrideEscape(vals[1]) + '</span>';
+    }
+
+    function skinOverrideColorValue(value) {
+        let color = skinOverrideEscape(value);
+        return '<span class="skinOverrideColorValue"><span class="skinOverrideSwatch" style="background-color:' + color + ';"></span><span>' + color + '</span></span>';
+    }
+
+    function skinOverrideEscape(value) {
+        return $('<div>').text(value == null ? '' : String(value)).html();
+    }
 }
 
 //change label of test item
@@ -5705,7 +12479,25 @@ function changeLabel(testType, clickedId, parentId, hiddenData, rowName) {
     changesLabel = {};
     changesLabel.parentId = parentId;
     changesLabel.testType = testType;
-    let labelHTML = '<div id="labelContainer"><p>' + UILANG.m('Current label assigned:') + ' <strong>' + hiddenData + '</strong><br/>' + Object.keys(serverData.testLevel.labels).length + ' ' + UILANG.m('labels found for test') + ' "' + serverData.testLevel.name + '"</p><div id="lList"></div><div id="labelContentContainer"></div></div>';
+    let labelCount = Object.keys(serverData.testLevel.labels).length;
+    let labelHTML =
+        '<div id="labelContainer" class="assignLabelDialog">' +
+            '<div class="assignLabelSummary">' +
+                '<div class="assignLabelSummaryMain">' +
+                    '<span>' + UILANG.m('Current label assigned:') + '</span>' +
+                    '<strong>' + tmPreviewEscape(hiddenData) + '</strong>' +
+                '</div>' +
+                '<div class="assignLabelSummaryMeta">' +
+                    '<span>' + UILANG.m('labels found for test') + '</span>' +
+                    '<strong>' + labelCount + '</strong>' +
+                '</div>' +
+            '</div>' +
+            '<div class="assignLabelChooser">' +
+                '<label for="lList">' + UILANG.m('Please choose a label:') + '</label>' +
+                '<div id="lList"></div>' +
+            '</div>' +
+            '<div id="labelContentContainer" class="assignLabelContent"></div>' +
+        '</div>';
 
     let labelDialogData = {
         buttons: [{
@@ -5720,7 +12512,7 @@ function changeLabel(testType, clickedId, parentId, hiddenData, rowName) {
         }],
         contents: labelHTML,
         title: UILANG.m('Assign label'),
-        width: 700,
+        width: 760,
         callback: saveLabelChange
     };
     window.changeLabelDialog = new nxDialog('changeLabelDialog', labelDialogData);
@@ -5745,13 +12537,14 @@ function changeLabel(testType, clickedId, parentId, hiddenData, rowName) {
         listTitle: UILANG.m('Please choose a label:'),
         noChoiceTitle: UILANG.m('No choices available'),
         dataId: 'labelList',
-        width: 660,
+        theme: 'backend',
+        width: '100%',
         readOnly: false,
         cssCollapsed: {
-            'font-size': '14px'
+            'font-size': '12px'
         },
         cssExpanded: {
-            'font-size': '14px'
+            'font-size': '12px'
         }
     };
 
@@ -5773,7 +12566,12 @@ function changeLabel(testType, clickedId, parentId, hiddenData, rowName) {
             let labelListC = $('#labContainer');
             //Create Options for assigning labels to test items
             changeLabelDialog.enableButton('assign');
-            labelOptC.append('<br /><div class="divMain">' + UILANG.m('Assign chosen label to:') + '<div  class="divSub" id="labelChangeOptionsDiv"</div></div><br /><br />');
+            labelOptC.append(
+                '<div class="assignLabelOptionRow">' +
+                    '<span>' + UILANG.m('Assign chosen label to:') + '</span>' +
+                    '<div id="labelChangeOptionsDiv"></div>' +
+                '</div>'
+            );
             let labelOptions = {
                 onChange: labelOptionChanged,
                 initialValue: 'current',
@@ -5791,23 +12589,24 @@ function changeLabel(testType, clickedId, parentId, hiddenData, rowName) {
                     label: UILANG.m('all test pages with different label')
                 }],
                 dataId: 'lio',
+                theme: 'backend',
                 readOnly: false,
-                width: 300,
+                width: '280px',
                 cssCollapsed: {
-                    'font-size': '14px'
+                    'font-size': '12px'
                 },
                 cssExpanded: {
-                    'font-size': '14px'
+                    'font-size': '12px'
                 }
             };
             let labelOption = new jsDropList('labelChangeOptionsDiv', 'labelOpt', labelOptions);
             changesLabel.saveOption = 'current';
 
             labelListC.append('<h3>' + UILANG.m('Label-Content:') + '</h3>');
-            labelListC.append('<table id="labelExampleTable" style="margin-bottom:0px;border:1px solid #ccc;background-color:#fff;padding:3px;width:660px;border:0px;border-spacing:0px;"></table>');
+            labelListC.append('<table id="labelExampleTable"></table>');
             let labelExampleTable = $('#labelExampleTable');
 
-            let htmlHeadLabelExample = '<tr style="background-color:#EEE;border-top:1px solid #ccc;"><th>' + UILANG.m('Language') + '</th><th>' + UILANG.m('Button') + '</th><th>' + UILANG.m('Headline') + '</th></tr>';
+            let htmlHeadLabelExample = '<thead><tr><th>' + UILANG.m('Language') + '</th><th>' + UILANG.m('Button') + '</th><th>' + UILANG.m('Headline') + '</th></tr></thead><tbody></tbody>';
             labelExampleTable.append(htmlHeadLabelExample);
 
             //Build data
@@ -5820,10 +12619,11 @@ function changeLabel(testType, clickedId, parentId, hiddenData, rowName) {
             });
 
             $.each(languages, function(k, v) {
-                let html = sf("<tr style='border-bottom:1px dotted #ccc;'><td style='width:10%;padding:3px;'>%@</td><td style='width:20%;padding:3px;'>%@</td><td style='width:70%;padding:3px;'>%@</td></tr>", k, btnJson[k], headlineJson[k]);
-                labelExampleTable.append(html);
+                let buttonText = btnJson && typeof btnJson[k] !== 'undefined' ? btnJson[k] : '';
+                let headlineText = headlineJson && typeof headlineJson[k] !== 'undefined' ? headlineJson[k] : '';
+                let html = sf("<tr><td>%@</td><td>%@</td><td>%@</td></tr>", tmPreviewEscape(k), tmPreviewEscape(buttonText), tmPreviewEscape(headlineText));
+                labelExampleTable.find('tbody').append(html);
             });
-            $('#labelExampleTable td').addClass('lowerFontSize');
         }
     }
 }
@@ -6101,7 +12901,7 @@ let getObjectSize = function(obj) {
     return len;
 };
 
-function showMessage(msg, type) {
+function showMessage(msg, type, width) {
     let imgUrl, title;
     if (!type || type === 'error') {
         imgUrl = "../images/error.png";
@@ -6117,8 +12917,8 @@ function showMessage(msg, type) {
             cancel: true,
             value: 'ok'
         }],
-        contents: msg,
-        width: 500,
+        contents: formatActionErrorMessage(msg),
+        width: width || 500,
         title: title,
         icon: imgUrl,
         iconWidth: 64
@@ -6139,10 +12939,10 @@ function switchMessage(tbCount) {
     }
 }
 
-function showMsgNoSrchResults(msg, searchTerm, component) {
+function showMsgNoSrchResults(msg, searchTerm, component, searchOptions) {
     function showMsgNoSrchResultsCB(button) {
         if (button === 'new') {
-            component.filerSearch(searchTerm);
+            component.filerSearch(searchTerm, searchOptions || {});
         }
     }
 
@@ -6171,18 +12971,39 @@ let uniqueId = function() {
 };
 
 /* server communication */
-async function startAjax(action, data) {
+function startAjax(action, data) {
     waitDialog.show();
+    const requestToken = data && data._requestToken;
+    const previewCheckToken = data && data._previewCheckToken;
+    const previewCheckTestId = data && data._previewCheckTestId;
+    const payload = data ? Object.assign({}, data) : {};
+	if (action === 'saveTest' && serverData.testLevel &&
+		String(payload.id) === String(serverData.testLevel.id) && serverData.testLevel.editRevision) {
+		payload.editRevision = serverData.testLevel.editRevision;
+	}
+    delete payload._requestToken;
+    delete payload._previewCheckToken;
+    delete payload._previewCheckTestId;
     let params = {
         action: action,
-        data: JSON.stringify(data)
+        data: JSON.stringify(payload)
     };
     return $.ajax({
-        data: params
+        data: params,
+        success: function(res) {
+            if (typeof requestToken !== 'undefined') res._requestToken = requestToken;
+            if (typeof previewCheckToken !== 'undefined') res._previewCheckToken = previewCheckToken;
+            if (typeof previewCheckTestId !== 'undefined') res._previewCheckTestId = previewCheckTestId;
+            ajaxSuccess(res);
+        }
     });
 }
 
 function ajaxError(jqXHR, textStatus, errorThrown) {
+    if (textStatus === 'abort') {
+        waitDialog.hide();
+        return;
+    }
     waitDialog.hide();
     if (jqXHR.responseJSON !== undefined) {
         const dialogData = {
@@ -6215,7 +13036,13 @@ function labelOptionChanged(sender, saveOption, dirty, dataId) {
 
 /* adding meta tags */
 function addMetaTag() {
-    addMetaTagFunc('editMode');
+    startAjax('fetchMetaTagSuggestions', {})
+        .then(function(res) {
+            if (res && !res.error && gui.metaView) {
+                gui.metaView.setSuggestions(res.suggestions || {});
+            }
+            gui.metaView.openNewDialog();
+        });
 }
 
 function addMetaTagFunc(sender, button, mkey, mvalue) {
@@ -6234,7 +13061,10 @@ function addMetaTagFunc(sender, button, mkey, mvalue) {
             datafields: ['dialogField1', 'dialogField2'],
             mandatory: ['dialogField1', 'dialogField2'],
             focus: 'dialogField1',
-            contents: '<p>' + UILANG.m('Please enter a new meta tag for the test.') + '<br /><br />' + UILANG.m('Meta-key (e.g. "Subject"):') + '<br /><input class="dfs" type="text" maxlength="200" id="dialogField1" style="width: 100%; margin-top: 10px;"><br /><br />' + UILANG.m('Meta-value (e.g. "Mathematics"):') + '<br /><input class="dfs" type="text" id="dialogField2" maxlength="200" style="width: 100%; margin-top: 10px;"></p>',
+            contents: '<div class="tmDialogForm">' +
+                '<div class="tmDialogFormField"><label for="dialogField1">' + UILANG.m('Meta-key') + '</label><input class="dfs" type="text" maxlength="200" id="dialogField1" placeholder="Subject"></div>' +
+                '<div class="tmDialogFormField"><label for="dialogField2">' + UILANG.m('Meta-value') + '</label><input class="dfs" type="text" id="dialogField2" maxlength="200" placeholder="Mathematics"></div>' +
+            '</div>',
             title: UILANG.m('New meta-tag'),
             width: 400,
             callback: addMetaTagFunc
@@ -6293,9 +13123,108 @@ function metaChanged(deleted, id, currValue, dirty, dataId) {
     });
 }
 
+/**
+ * Inject the custom CSS for the editor's meta type into its iframe <head>.
+ */
+function applyMetaCustomCssToEditor(editor) {
+    if (!editor) return;
+
+    const metaType = editor.metaPageMetaType;
+    if (!metaType || !Object.prototype.hasOwnProperty.call(metaPageCustomCss, metaType)) {
+        return;
+    }
+
+    const css = metaPageCustomCss[metaType] || '';
+
+    try {
+        const doc = editor.getDoc && editor.getDoc();
+        if (!doc) return;
+
+        let styleEl = doc.getElementById('meta-custom-css');
+        if (!styleEl) {
+            styleEl = doc.createElement('style');
+            styleEl.id = 'meta-custom-css';
+            doc.head.appendChild(styleEl);
+        }
+
+        styleEl.textContent = css;
+    } catch (e) {
+        console.warn('applyMetaCustomCssToEditor error:', e);
+    }
+}
+
+/**
+ * Open the "Custom CSS" dialog for the given editor/meta type.
+ * The same CSS is shared across all language instances of that meta page.
+ */
+function openMetaCustomCssDialog(editor) {
+    if (!editor) return;
+
+    const metaType = editor.metaPageMetaType;
+    if (!metaType || !Object.prototype.hasOwnProperty.call(metaPageCustomCss, metaType)) {
+        return;
+    }
+
+    editor.windowManager.open({
+        title: UILANG.m('Custom CSS'),
+        size: 'large',
+        body: {
+            type: 'panel',
+            items: [
+                {
+                    type: 'textarea',
+                    name: 'css',
+                    label: UILANG.m('CSS rules'),
+                    flex: true
+                }
+            ]
+        },
+        initialData: {
+            css: metaPageCustomCss[metaType] || ''
+        },
+        buttons: [
+            {
+                type: 'cancel',
+                text: UILANG.m('cancel')
+            },
+            {
+                type: 'submit',
+                text: UILANG.m('save'),
+                primary: true
+            }
+        ],
+        onSubmit(api) {
+            const data = api.getData();
+            metaPageCustomCss[metaType] = data.css || '';
+
+            // Update all editors that belong to the same meta block (all languages)
+            if (typeof tinymce !== 'undefined' && tinymce.editors && tinymce.editors.length) {
+                tinymce.editors.forEach(function (ed) {
+                    if (ed.metaPageMetaType === metaType) {
+                        applyMetaCustomCssToEditor(ed);
+                    }
+                });
+            }
+
+            api.close();
+        }
+    });
+}
+
+
+
+function isValidHttpUrl(str) {
+    if (typeof str !== 'string') return false;
+    const val = str.trim();
+    if (!val) return false;
+    // Require http/https, at least one dot in host and a 2+ letter TLD
+    const pattern = /^(https?):\/\/([A-Za-z0-9-]+\.)+[A-Za-z]{2,}(\/.*)?$/;
+    return pattern.test(val);
+}
 function ajaxSuccess(res) {
     if ("isSuper" in res) window.isSuper = res.isSuper; // check for superadmin level status
     if ("isAdmin" in res) window.isAdmin = res.isAdmin; // check for admin level status
+    if ("isAE" in res) window.isAE = isAE = res.isAE; // check for elevated admin status
     $('#un_val').html(res.loggedInName);
 
     waitDialog.hide();
@@ -6309,7 +13238,7 @@ function ajaxSuccess(res) {
                 cancel: true,
                 value: 'ok'
             }],
-            contents: '<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.fatalError,
+            contents: formatActionErrorMessage('<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.fatalError),
             title: UILANG.m('Error'),
             icon: "../images/error.png",
             iconWidth: 64,
@@ -6325,8 +13254,8 @@ function ajaxSuccess(res) {
         if (res.action.includes(['moveObjects', 'duplicateObjects'])) {
             gui.library.clearClipboard();
         }
-        // if the error is from fetchTestLibrary, we need to reset the test folder target back to home (1)
-        if (res.action === 'fetchTestLibrary') tLoc.folder = 1;
+        // if the error is from fetchTestLibraryInt, we need to reset the test folder target back to home (1)
+        if (res.action === 'fetchTestLibraryInt') tLoc.folder = 1;
 
         // dismiss the edit permission dialog prior to launching the error msg to show
         if (res.action === "fetchIgPerm") {
@@ -6349,7 +13278,7 @@ function ajaxSuccess(res) {
                     cancel: true,
                     value: 'ok'
                 }],
-                contents: '<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.error,
+                contents: formatActionErrorMessage('<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.error),
                 title: UILANG.m('Error'),
                 icon: "../images/error.png",
                 iconWidth: 64,
@@ -6364,7 +13293,7 @@ function ajaxSuccess(res) {
                     cancel: true,
                     value: 'ok'
                 }],
-                contents: '<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.error,
+                contents: formatActionErrorMessage('<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.error),
                 title: UILANG.m('Error'),
                 icon: "../images/error.png",
                 iconWidth: 64,
@@ -6394,6 +13323,14 @@ function ajaxSuccess(res) {
                                 showBlocked: showBlocked
                             });
                         }
+                    }
+                    if (res.reloadTest && serverData.testLevel && serverData.testLevel.id) {
+                        startAjax('fetchTest', {
+                            dbId: serverData.testLevel.id,
+                            location: loc.folder,
+                            preSelect: true,
+                            defaultSkin: settings['skin']
+                        });
                     }
 
                 }
@@ -6427,6 +13364,12 @@ function ajaxSuccess(res) {
         if (button === 'ok') {
             addVariable(res.locData);
         }
+    }
+
+    if ((res.action === 'plausibilityCheck' || res.action === 'plausibilityFluidCheck') &&
+        typeof res._previewCheckToken !== 'undefined') {
+        handlePreviewPlausibilityResult(res);
+        return;
     }
 
     let stWarnings;
@@ -6474,7 +13417,36 @@ function ajaxSuccess(res) {
             }
             break;
         case 'resetResults':
-            gui.statusBar.setStatus(UILANG.m('Results successfully deleted!'), 3000, '#0A0');
+            if (Number(res.resetAccessible || 0) > 0) {
+                new nxDialog('resetResultsOutcome', {
+                    title: UILANG.m('Results reset'),
+                    type: 'success',
+                    width: 580,
+                    contents: '<div class="tmActionConfirm tmActionConfirm-success">' +
+                        '<div class="tmActionConfirmHeading"><strong>' + UILANG.m('Reset complete') + '</strong></div>' +
+                        '<span>' + (res.resetMode && res.resetMode !== 'all'
+                            ? UILANG.m('All accessible result data matching the selected date criteria was deleted.')
+                            : UILANG.m('All selected accessible result data was deleted.')) + '</span>' +
+                        (res.warning ? '<p class="tmActionConfirmNote">' + escapeHtml(res.warning) + '</p>' : '') +
+                    '</div>',
+                    buttons: [{label: UILANG.m('OK'), value: 'ok', default: true, cancel: true}]
+                });
+            } else {
+                const noResetMessage = res.resetMode && res.resetMode !== 'all'
+                    ? UILANG.m('Nothing was deleted because no accessible results matched your criteria.')
+                    : UILANG.m('No accessible results found to delete.');
+                new nxDialog('resetResultsOutcome', {
+                    title: UILANG.m('No matching results'),
+                    type: 'warning',
+                    width: 580,
+                    contents: '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                        '<div class="tmActionConfirmHeading"><strong>' + UILANG.m('Nothing was deleted') + '</strong></div>' +
+                        '<span>' + noResetMessage + '</span>' +
+                        (res.warning ? '<p class="tmActionConfirmNote">' + escapeHtml(res.warning) + '</p>' : '') +
+                    '</div>',
+                    buttons: [{label: UILANG.m('OK'), value: 'ok', default: true, cancel: true}]
+                });
+            }
             startAjax('fetchLibrary', {
                 location: loc.folder,
                 select: selection[0].id
@@ -6504,15 +13476,17 @@ function ajaxSuccess(res) {
             $('#igPreviewZone').empty();
             igBrowser.disableButton('add');
             igBrowser.disableButton('add2');
-            itemsDisplayHTML = "<h4 class='igPreviewZoneTitle'>" + UILANG.m('Please select what you like to add to the test! Pages defined as stimulus are marked as such.') + "</h4><h4 class='igTableTitle'>" + UILANG.m('Available pages:') + "</h4><br /><table id='itemsDisplayTable'></table><br />";
+            itemsDisplayHTML =
+                "<div class='tmAddPagesPreviewHeader'>" +
+                    "<h4 class='igTableTitle'>" + UILANG.m('Available pages:') + "</h4>" +
+                    "<p class='igPreviewZoneTitle'>" + UILANG.m('Please select what you like to add to the test! Pages defined as stimulus are marked as such.') + "</p>" +
+                "</div>" +
+                "<div class='tmAddPagesPreviewTableShell'><table class='tmAddPagesPreviewTableHead'><colgroup><col class='tmAddPagesPreviewColName'><col class='tmAddPagesPreviewColCode'><col class='tmAddPagesPreviewColPoints'><col class='tmAddPagesPreviewColCheck'></colgroup><thead><tr class='igHeads'><th>" + UILANG.m('Name') + "</th><th>" + UILANG.m('code') + "</th><th>" + UILANG.m('P') + "</th><th></th></tr></thead></table><div class='tmAddPagesPreviewTableWrap'><table id='itemsDisplayTable'><colgroup><col class='tmAddPagesPreviewColName'><col class='tmAddPagesPreviewColCode'><col class='tmAddPagesPreviewColPoints'><col class='tmAddPagesPreviewColCheck'></colgroup><tbody></tbody></table></div></div>";
             $('#igPreviewZone').append(itemsDisplayHTML);
-            let htmlHead = '<tr class="igHeads" style="background-color:#EEE;"><th>' + UILANG.m('Name') + '</th><th>' + UILANG.m('code') + '</th><th>' + UILANG.m('P') + '</th><th></th></tr>';
-            $('#stimuDisplayTable').append(htmlHead);
-            $('#itemsDisplayTable').append(htmlHead);
             $.each(res['data'], function(key, value) {
-                let html = sf("<tr id='itstim__%@' style='border-bottom:1px dotted #ccc;'><td style='width:66%;padding:3px;'>%@</td><td style='width:21%;padding:3px;'>%@</td><td style='width:7%;padding:3px;'>%@</td><td style='width:6%;padding:3px;'><img style='float:left;' src='../inc/filer/images/unchecked_checkbox.png' id='igChk%@' class='unchk' data-id='%@' data-code='%@' data-maxscore='%@' data-name='%@' data-igname='%@' /></td></tr>", value.id, escapeHtml(value.name), escapeHtml(value.itemCode), value.maxScore, value.id, value.id, value.itemCode, value.maxScore, value.name, value.igName);
+                let html = sf("<tr id='itstim__%@'><td>%@</td><td>%@</td><td>%@</td><td><img src='../inc/filer/images/unchecked_checkbox.png' id='igChk%@' class='unchk' data-id='%@' data-code='%@' data-maxscore='%@' data-name='%@' data-igname='%@' /></td></tr>", value.id, escapeHtml(value.name), escapeHtml(value.itemCode), value.maxScore, value.id, value.id, value.itemCode, value.maxScore, value.name, value.igName);
                 //Test Pages
-                $('#itemsDisplayTable').append(html);
+                $('#itemsDisplayTable tbody').append(html);
                 $("#itstim__" + value.id).attr('data-role', 'item');
                 $("#igChk" + value.id).attr('data-role', 'item');
 
@@ -6527,20 +13501,17 @@ function ajaxSuccess(res) {
                             $("#igChk" + value.id + "").removeClass('chk');
                             $("#igChk" + value.id + "").addClass('unchk');
                             $("#itstim__" + value.id).removeClass('itStiChecked');
-                            $("#itstim__" + value.id + ">td").css('background-color', 'transparent');
                             $("#igChk" + value.id + "").attr('src', '.././inc/filer/images/unchecked_checkbox.png');
                         } else {
                             $("#igChk" + value.id + "").addClass('chk');
                             $("#igChk" + value.id + "").removeClass('unchk');
                             $("#itstim__" + value.id).addClass('itStiChecked');
-                            $("#itstim__" + value.id + ">td").css('background-color', '#e6e6e6');
                             $("#igChk" + value.id + "").attr('src', '.././inc/filer/images/checked_checkbox.png');
                         }
                     } else if (e.type === 'dblclick') {
                         $("#igChk" + value.id + "").addClass('chk');
                         $("#igChk" + value.id + "").removeClass('unchk');
                         $("#itstim__" + value.id).addClass('itStiChecked');
-                        $("#itstim__" + value.id + ">td").css('background-color', '#e6e6e6');
                         $("#igChk" + value.id + "").attr('src', '.././inc/filer/images/checked_checkbox.png');
                     }
                     if ($('.itStiChecked').length === 0) {
@@ -6565,8 +13536,8 @@ function ajaxSuccess(res) {
                 });
             });
             if ($("tr[data-role='item']").length === 0) {
-                $('#itemsDisplayTable').empty();
-                $('#itemsDisplayTable').append('<td class ="itemsDisplayTableMissingMessage">' + UILANG.m('This page group has no test pages!') + '</td>');
+                $('#itemsDisplayTable tbody').empty();
+                $('#itemsDisplayTable tbody').append('<tr><td colspan="4" class="itemsDisplayTableMissingMessage">' + UILANG.m('This page group has no test pages!') + '</td></tr>');
             }
             if ($("tr[data-role='item']").length > 0) {
                 igChooserButtons.selectAllItems.enable();
@@ -6579,13 +13550,20 @@ function ajaxSuccess(res) {
             window.permList = res.permList; // used for selective button enabling
             setLibPerms();
             updateLibrary(res.data.list, res.data.path);
-            gui.library.setSelection([{
-                id: res.data.id
-            }]);
             firstRun = true;
-            gui.library.getSelect();
+            if (res.action === 'newTest') {
+                gui.library.setSelection([{
+                    id: res.data.id
+                }], true);
+                gui.library.getSelectDblclick();
+            } else {
+                gui.library.setSelection([{
+                    id: res.data.id
+                }]);
+                gui.library.getSelect();
+            }
             break;
-        case 'fetchTestLibrary':
+        case 'fetchTestLibraryInt':
             tLoc.path = res.data.path;
             linTests = res.data.list;
             updateTestLibrary(res.data.list, res.data.path);
@@ -6610,17 +13588,16 @@ function ajaxSuccess(res) {
             } else {
                 $('#tPreviewZone').empty();
                 $('#tPreviewZone').append(testStructureDisplayHTML);
-                $('#testID').html('<div class="tm_linear">' + UILANG.m('linear test') + '<br />ID: ' + res.data.id + '</div>');
-                $('#testStrucDisplayHTML').append("<tr style='background-color:#ddd;border-bottom:1px solid #bbb;'><th style='width:262px'>" + UILANG.m('Name test page') + "</th><th style='width:102px'>" + UILANG.m('Code') + "</th></tr>");
+                $('#testID').html('<div class="tm_linear"><span>' + UILANG.m('linear test') + '</span><span>ID: ' + res.data.id + '</span></div>');
+                $('.tmMutationPreviewTableHead thead').append("<tr><th>" + UILANG.m('Name test page') + "</th><th>" + UILANG.m('Code') + "</th></tr>");
                 $.each(res.data.structure.items, function(key, value) {
                     let html;
                     if (value.name === 'Invalid test page!') {
-                        //L10Ncheck: UILANG.m('Invalid test page!')
-                        html = sf("<tr style='border-bottom:1px dotted #ccc;'><td style='color:#DD1A00;'>%@</td><td>%@</td></tr>", UILANG.m(value.name), value.code);
+                        html = sf("<tr class='is-invalid'><td>%@</td><td>%@</td></tr>", UILANG.m('Invalid test page!'), value.code);
                     } else {
-                        html = sf("<tr style='border-bottom:1px dotted #ccc;'><td>%@</td><td>%@</td></tr>", UILANG.e(value.name), value.code);
+                        html = sf("<tr><td>%@</td><td>%@</td></tr>", UILANG.e(value.name), value.code);
                     }
-                    $('#testStrucDisplayHTML').append(html);
+                    $('#testStrucDisplayHTML tbody').append(html);
                 })
             }
             break;
@@ -6628,13 +13605,13 @@ function ajaxSuccess(res) {
             if (res.data.list.length > 0) {
                 gui.library2.searchShow(res.data.list, res.data.searchString);
             } else {
-                showMsgNoSrchResults(UILANG.m('no_search_results'), res.data.searchString, gui.library2);
+                showMsgNoSrchResults(UILANG.m('no_search_results'), res.data.searchString, gui.library2, {metaSearch: true});
             }
             break;
         case 'newTestpool':
             gui.statusBar.setStatus(UILANG.m('Testpool saved!'), 3000, '#0A0');
             switchMessage(res.testpools.length);
-            serverData.testLevel.testpools = res.testpools;
+	            serverData.testLevel.testpools = Array.isArray(res.testpools) ? res.testpools : [];
             gui.testpools.setItems(res.testpools);
             gui.testpools.setSelection([res.id]);
             selectionChanged(gui.testpools.getSelection());
@@ -6662,14 +13639,14 @@ function ajaxSuccess(res) {
             let igListC = $('#igListContainer');
 
             if (res.data.structure.items.length === 0) {
-                optC.append('<br />The testpool <strong>"' + res.data.name + '"</strong> ' + UILANG.m('has no test pages assigned. Please use the testpool-editor to add test pages to the testpool!') + '<br />');
+                optC.append('<div class="fluidBlockEmpty">' + UILANG.m('The testpool') + ' <strong>"' + UILANG.e(res.data.name) + '"</strong> ' + UILANG.m('has no test pages assigned. Please use the testpool-editor to add test pages to the testpool!') + '</div>');
                 addFluidBlock.disableButton('add');
             } else {
                 //Create Options
                 addFluidBlock.enableButton('add');
-                optC.append('<h4>' + res.data.structure.items.length + ' ' + UILANG.m('elements found in testpool') + ' "' + res.data.name + '"</h4>');
-                optC.append('<div class="divMain"><div class="dmText">' + UILANG.m('Number of test pages of this testpool to be used?') + '</div><div  class="divSub" id="itemUsageDroplistDiv"</div></div><br />');
-                optC.append('<div class="divMain"><div class="dmText">' + UILANG.m('Use test pages in random order or as defined in the testpool?') + '</div><div class="divSub" id="itemOrderDiv"</div></div><br />');
+                optC.append('<div class="fluidBlockPoolSummary"><strong>' + res.data.structure.items.length + '</strong> ' + UILANG.m('elements found in testpool') + ' <strong>"' + UILANG.e(res.data.name) + '"</strong></div>');
+                optC.append('<div class="fluidBlockOptionRow"><div class="fluidBlockOptionLabel">' + UILANG.m('Number of test pages of this testpool to be used?') + '</div><div class="fluidBlockOptionControl" id="itemUsageDroplistDiv"></div></div>');
+                optC.append('<div class="fluidBlockOptionRow"><div class="fluidBlockOptionLabel">' + UILANG.m('Use test pages in random order or as defined in the testpool?') + '</div><div class="fluidBlockOptionControl" id="itemOrderDiv"></div></div>');
 
                 let poolItemUsageOptions = {
                     onChange: itemUsageChanged,
@@ -6679,6 +13656,7 @@ function ajaxSuccess(res) {
                         label: UILANG.m('Use all') + ' (' + res.data.structure.items.length + ')'
                     }],
                     dataId: 'piu',
+                    theme: 'backend',
                     readOnly: false,
                     width: 185
                 };
@@ -6698,23 +13676,29 @@ function ajaxSuccess(res) {
                         label: UILANG.m('Random')
                     }],
                     dataId: 'pio',
+                    theme: 'backend',
                     readOnly: false,
                     width: 185
                 };
                 let poolItemOrder = new jsDropList('itemOrderDiv', 'itemOrder', poolItemOrderOptions);
                 chosenPool.poolItemOrderValue = 'poolorder';
                 //Create testpool content view
-                igListC.append('<table id="stimuPoolDisplayTable" style="margin-bottom:0px;border:1px solid #ccc;background-color:#fff;padding:3px;width:660px;border:0px;border-spacing:0px;"></table>');
+                igListC.append(
+                    '<div class="fluidBlockPagesHeader">' +
+                        '<div>' + UILANG.m('Test page') + '</div>' +
+                        '<div>' + UILANG.m('Code') + '</div>' +
+                        '<div>' + UILANG.m('Page group') + '</div>' +
+                    '</div>' +
+                    '<div class="fluidBlockPagesBody">' +
+                        '<table id="stimuPoolDisplayTable" class="fluidBlockPagesTable"><colgroup><col class="fluidBlockColPage"><col class="fluidBlockColCode"><col class="fluidBlockColGroup"></colgroup><tbody></tbody></table>' +
+                    '</div>'
+                );
                 let stiPoTable = $('#stimuPoolDisplayTable');
 
-                let htmlHead = '<tr style="background-color:#EEE;border-top:1px solid #ccc;"><th>' + UILANG.m('Test page') + '</th><th>' + UILANG.m('Code') + '</th><th>' + UILANG.m('Page group') + '</th></tr>';
-                stiPoTable.append(htmlHead);
-
                 $.each(res['data']['structure']['items'], function(key, value) {
-                    let html = sf("<tr style='border-bottom:1px dotted #ccc;'><td style='width:40%;padding:3px;'>%@</td><td style='width:30%;padding:3px;'>%@</td><td style='width:30%;padding:3px;'>%@</td></tr>", value.name, value.code, value.itemGroup);
-                    stiPoTable.append(html);
+                    let html = sf('<tr><td>%@</td><td>%@</td><td>%@</td></tr>', UILANG.e(value.name ?? ''), UILANG.e(value.code ?? ''), UILANG.e(value.itemGroup ?? ''));
+                    stiPoTable.find('tbody').append(html);
                 });
-                $('#stimuPoolDisplayTable td').addClass('lowerFontSize');
             }
             break;
         case 'saveTestFolder':
@@ -6735,14 +13719,74 @@ function ajaxSuccess(res) {
             serverData.testLevel = res.data;
             fillDataFields();
             break;
+        case 'saveTestBulk': {
+            // reload current folder first so user immediately sees updates
+            startAjax('fetchLibrary', {
+                location: loc.folder,
+                rebuild: true,
+                showBlocked: showBlocked
+            });
+
+            // Build the same style “Operation completed!” dialog as in addToSelected
+            if ($("#bulkSaveDiv").length === 0) {
+                $('body').append('<div id="bulkSaveDiv" style="display:none;"></div>');
+            }
+            const $boxRoot = $('#bulkSaveDiv').empty();
+            $boxRoot.append('<div id="bulkSaveInfoBox"></div>');
+            const $box = $('#bulkSaveInfoBox');
+
+            $box.append('<h3>' + UILANG.m('Operation completed!') + '</h3>');
+
+            // “Tasks” (succinct change summary from backend)
+            if ((res.changes || []).length > 1) {
+                $box.append('<strong>' + UILANG.m('Tasks:') + '</strong><br />');
+            } else {
+                $box.append('<strong>' + UILANG.m('Task:') + '</strong><br />');
+            }
+            (res.changes || []).forEach(line => $box.append(UILANG.e(line) + '<br />'));
+            $box.append('<br />');
+
+            // Warnings (e.g., skipped IDs, not found, no permission, etc.)
+            if ((res.warnings || []).length > 0) {
+                $boxRoot.append('<br /><div class="add2selError">' +
+                    UILANG.m('Warning:') + ' ' + UILANG.m('The following issues have been detected:') + '</div><br />');
+                (res.warnings || []).forEach(w =>
+                    $boxRoot.append(UILANG.e(w.message || String(w)) + '<hr class="add2selHR" />')
+                );
+            } else {
+                $boxRoot.append('<br /><div class="add2selSuccessDiv">' +
+                    UILANG.m('All tasks completed successfully. No issues found!') + '</div>');
+            }
+            $boxRoot.append('<br />');
+
+            new nxDialog('bulkSaveMsgBox', {
+                buttons: [{ label: UILANG.m('Close'), 'default': true, disabled: false, value: 'close' }],
+                contentId: 'bulkSaveDiv',
+                title: UILANG.m('Bulk edit tests'),
+                width: 700
+            });
+
+            // Short status bar toast too
+            const okCount = res.updated || 0;
+            gui.statusBar.setStatus(
+                UILANG.m('Bulk changes saved for [@count] test(s).').replace('[@count]', String(okCount)),
+                4000, '#0A0'
+            );
+            break;
+        }
+        case 'importLinearStructureFromTemplate':
+        case 'importMutationStructureFromTemplate':
         case 'saveTest':
         case 'saveSkinAssignment':
         case 'saveFluidPoolOrder':
         case 'saveFluidPageUsage':
+        case 'clearTestStructure':
             if (res.startPreview) {
                 /*  if the save routine was automatically triggered by the preview, we need to start the preview after
                     saving is done. In that case no need to do a fetchTest, as the editor is still up to date. */
                 preview_step2();
+            } else if (mode === 'browsing') {
+                refreshTestLibraryForBrowsing();
             } else {
                 startAjax('fetchTest', {
                     dbId: serverData.testLevel.id,
@@ -6754,19 +13798,35 @@ function ajaxSuccess(res) {
             break;
         case 'saveMetaTagsChange':
             serverData.testLevel.metatags = res.meta;
-            correctData();
-            fillDataFields('editTest');
+            serverData.testLevel.editRevision = res.editRevision || serverData.testLevel.editRevision;
+            gui.metaView.setItems(serverData.testLevel.metatags, true);
+            updateMetaTagCounter(metaTbText, Object.keys(serverData.testLevel.metatags).length);
             break;
         case 'newMetaTag':
             serverData.testLevel.metatags = res.meta;
-            correctData();
-            fillDataFields('editTest');
+            serverData.testLevel.editRevision = res.editRevision || serverData.testLevel.editRevision;
+            gui.metaView.setItems(serverData.testLevel.metatags, true);
+            updateMetaTagCounter(metaTbText, Object.keys(serverData.testLevel.metatags).length);
             break;
-        case 'fetchTest':
-            serverData.testLevel = res.data;
+	        case 'fetchTest':
+	            if (mode === 'browsing' && typeof res._requestToken !== 'undefined') {
+	                const responseTestId = res.data && (res.data.dbId || res.data.id);
+	                if (res._requestToken !== pendingTestLevelToken ||
+	                    String(responseTestId) !== String(pendingTestLevelId) ||
+	                    selection.length !== 1 ||
+	                    selection[0].type !== 'test' ||
+	                    String(selection[0].dbId) !== String(responseTestId)) {
+	                    return;
+	                }
+	            }
+	            serverData.testLevel = res.data;
+			serverData.testLevel.editRevision = res.editRevision || null;
             serverData.testLevel.testpools = res.testpools;
             serverData.testLevel.labels = res.labels;
             serverData.testLevel.activityData = res.activityData;
+            serverData.testLevel.activityAccess = res.activityAccess;
+            serverData.testLevel.previewResultStats = res.previewResultStats || null;
+            serverData.testLevel.lastBackendEdit = res.lastBackendEdit || null;
             serverData.testLevel.scoring = res.scoring;
             languageFallbacks = res.languageFallbacks.reduce((acc, item) => {
                 acc[item.langcode] = item.fallback;
@@ -6779,7 +13839,15 @@ function ajaxSuccess(res) {
             }
             if (res.hasOwnProperty('testpools')) switchMessage(res.testpools.length);
             correctData();
-            fillDataFields('editTest');
+            if (mode === 'browsing' && !editOnData) {
+                previewPlausibilityResult = null;
+                previewPlausibilityWarnings = {};
+                renderTestPreview();
+                launchPreviewPlausibilityCheck();
+            } else {
+                fillDataFields('editTest');
+                setPublishedUiState();
+            }
             if (editOnData) {
                 editSelection('dblclick');
             }
@@ -6848,7 +13916,7 @@ function ajaxSuccess(res) {
                     }
                     let aclMsgDataTable = $('#aclMsgTable');
                     $.each(res.acldata, function(key, value) {
-                        aclMsgDataTable.append('<tr style="border-bottom:1px dotted #ccc;"><td style="padding:3px;">' + value.name + '</td></tr>');
+	                        aclMsgDataTable.append('<tr style="border-bottom:1px dotted #ccc;"><td style="padding:3px;">' + tmPreviewEscape(value.name) + '</td></tr>');
                     });
                     $('#aclMsgDataTable td').addClass('lowerFontSize');
                     let aclMsg = {
@@ -6883,6 +13951,39 @@ function ajaxSuccess(res) {
             serverData.testLevel.labels = res.labels;
             listLabels();
             break;
+        case 'importEditorEntries':
+            if (res.entryType === 'labels') {
+                serverData.testLevel.labels = res.labels;
+                listLabels();
+            } else {
+                serverData.testLevel.variables = res.refreshData;
+                varLength = getObjectSize(serverData.testLevel.variables);
+                if (varLength === 1) {
+                    $('#variablesTbText').html(varLength + UILANG.m(' variable for your test found'));
+                } else {
+                    $('#variablesTbText').html(varLength + UILANG.m(' variables for your test found'));
+                }
+                listVariables();
+            }
+            if (res.importedCount > 0) {
+                gui.statusBar.setStatus(res.importedCount + ' ' + UILANG.m(res.importedCount === 1 ? 'entry loaded.' : 'entries loaded.'), 3000, '#157347');
+            }
+            break;
+        case 'importFluidTestpoolsFromTemplate':
+            serverData.testLevel.testpools = res.testpools || [];
+            gui.testpools.setItems(serverData.testLevel.testpools);
+            switchMessage(serverData.testLevel.testpools.length);
+            if (res.id) {
+                currPoolId = res.id;
+                gui.testpools.setSelection([res.id]);
+                selectionChanged(gui.testpools.getSelection());
+            } else {
+                selectionChanged();
+            }
+            if (res.importedCount > 0) {
+                gui.statusBar.setStatus(res.importedCount + ' ' + UILANG.m(res.importedCount === 1 ? 'testpool loaded.' : 'testpools loaded.'), 3000, '#157347');
+            }
+            break;
         case 'saveLocChanges':
         case 'createNewVariable':
         case 'deleteVariable':
@@ -6897,6 +13998,7 @@ function ajaxSuccess(res) {
             break;
         case 'fetchTestsAssigned':
             let poolItems = res.data.structure.items;
+            $('#inactiveMsg').hide();
 
             if (poolItems.length === 1) {
                 $('#poolStructureTbText').html(poolItems.length + UILANG.m(' test page in your testpool'));
@@ -6930,14 +14032,21 @@ function ajaxSuccess(res) {
             if (res.data.list.length > 0) {
                 gui.library.searchShow(res.data.list, res.data.searchString);
             } else {
-                showMsgNoSrchResults(UILANG.m('no_search_results'), res.data.searchString, gui.library);
+                showMsgNoSrchResults(UILANG.m('no_search_results'), res.data.searchString, gui.library, {metaSearch: true});
+            }
+            break;
+        case 'metaSearch':
+            if (res.data.list.length > 0) {
+                gui.library.searchShow(res.data.list, res.data.searchString);
+            } else {
+                showMsgNoSrchResults(UILANG.m('no_search_results'), res.data.searchString, gui.library, {metaSearch: true});
             }
             break;
         case 'igSearch':
             if (res.data.list.length > 0) {
                 gui.library2.searchShow(res.data.list, res.data.searchString);
             } else {
-                showMsgNoSrchResults(UILANG.m('no_search_results'), res.data.searchString, gui.library2);
+                showMsgNoSrchResults(UILANG.m('no_search_results'), res.data.searchString, gui.library2, {metaSearch: true});
             }
             break;
         case 'plausibilityCheck':
@@ -6987,7 +14096,11 @@ function ajaxSuccess(res) {
             }
             // No errors found
             if (!res.missing_items && !res.noItems && !res.langError && !res.noContentError && !res.noActiveLanguage && !res.timerIssue && !res.pnNoContent) {
-                pbCheckHtml.append('<div class="pCheckSuccessDiv"><h3>' + UILANG.m('Plausibility check completed successfully!') + '</h3>' + UILANG.m('No issues found in your test content:') + '<br /><ul class="pCheckUl"><li><img src="../images/ok.png" height="15px;" />&nbsp;' + UILANG.m('All test pages are still in the Content Manager.') + '</li><li><ul class="pCheckUl"><li><img src="../images/ok.png" height="15px;" />&nbsp;' + UILANG.m('All test pages are not empty and have a content.') + '</li><li><ul class="pCheckUl"><li><img src="../images/ok.png" height="15px;" />&nbsp;' + UILANG.m('All test pages are available in the active language(s).') + '</li></ul></div>');
+                pbCheckHtml.append(pCheckSuccessHtml(UILANG.m('No issues found in your test content:'), [
+                    UILANG.m('All test pages are still in the Content Manager.'),
+                    UILANG.m('All test pages are not empty and have a content.'),
+                    UILANG.m('All test pages are available in the active language(s).')
+                ]));
             }
             // No items or stimuli found in the test
             if (res.noItems) {
@@ -7015,8 +14128,10 @@ function ajaxSuccess(res) {
             if (res.noContentError) {
                 pbCheckHtml.append('<p class="pCheckWarning">' + UILANG.m('Warning: These pages have no content!') + '</p><table id="item_nocontent"></table><br />');
                 $('#item_nocontent').append('<tr class="pCheckTableHead"><th class="namecol">' + UILANG.m('Name') + '</th><th class="codecol">' + UILANG.m('Code') + '</th></tr>');
+                $.each(pCheckUniqueRows(res.noContentError, function(v) { return (v.itemCode || v.name || v.hiddenID); }), function(k, v) {
+	                    $('#item_nocontent').append('<tr><td>' + tmPreviewEscape(v.name) + '</td><td>' + tmPreviewEscape(v.itemCode) + '</td></tr>');
+                })
                 $.each(res.noContentError, function(k, v) {
-                    $('#item_nocontent').append('<tr><td>' + v.name + '</td><td>' + v.itemCode + '</td></tr>');
                     stWarnings[v.hiddenID] = {
                         type: 'warning',
                         html: '<strong>' + UILANG.m('Warning') + ':</strong><br />' + UILANG.m('This page has no content!')
@@ -7028,6 +14143,17 @@ function ajaxSuccess(res) {
                 pbCheckHtml.append('<p class="pCheckWarning">' + UILANG.m('Warning: These pages are not available in all languages of your test!') + '</p><table id="item_languageconflict"></table><br />');
                 $('#item_languageconflict').append('<tr class="pCheckTableHead"><th class="langnamecol">' + UILANG.m('Name') + '</th><th class="langlangcol">' + UILANG.m('Missing languages') + '</th><th class="langcodecol">' + UILANG.m('Code') + '</th></tr>');
                 let missLangs = '';
+                $.each(pCheckUniqueRows(res.langError, function(v) { return (v.itemCode || v.name || v.hiddenID) + '|' + pCheckLanguageKey(v.languages); }), function(k, v) {
+                    $.each(v.languages, function(key, value) {
+                        if (missLangs === '') {
+                            missLangs = value;
+                        } else {
+                            missLangs = missLangs + ' / ' + value;
+                        }
+                    });
+	                    $('#item_languageconflict').append('<tr><td>' + tmPreviewEscape(v.name) + '</td><td>' + tmPreviewEscape(missLangs) + '</td><td>' + tmPreviewEscape(v.itemCode) + '</td></tr>');
+                    missLangs = '';
+                })
                 $.each(res.langError, function(k, v) {
                     $.each(v.languages, function(key, value) {
                         if (missLangs === '') {
@@ -7036,7 +14162,6 @@ function ajaxSuccess(res) {
                             missLangs = missLangs + ' / ' + value;
                         }
                     });
-                    $('#item_languageconflict').append('<tr><td>' + v.name + '</td><td>' + missLangs + '</td><td>' + v.itemCode + '</td></tr>');
                     stWarnings[v.hiddenID] = {
                         type: 'warning',
                         html: '<strong>' + UILANG.m('Warning') + ':</strong><br />' + UILANG.m('This page is not available in all languages of your test!') + ' ' + UILANG.m('Missing languages') + ': ' + missLangs
@@ -7048,9 +14173,8 @@ function ajaxSuccess(res) {
             if (res.duplicates) {
                 pbCheckHtml.append('<p class="pCheckWarning">' + UILANG.m('Warning: The same test page has been added multiple times!') + '</p><table id="item_duplicates"></table><br />');
                 $('#item_duplicates').append('<tr class="pCheckTableHead"><th class="langnamecol">' + UILANG.m('Test page') + '</th><th class="langlangcol">' + UILANG.m('Occurrences') + '</th></tr>');
-                let missLangs = '';
-                $.each(res.duplicates, function(k, v) {
-                    $('#item_duplicates').append('<tr><td>' + v.name + '</td><td>' + v.dupeCount + '</td></tr>');
+                $.each(pCheckUniqueRows(res.duplicates, function(v) { return (v.name || v.hiddenID) + '|' + v.dupeCount; }), function(k, v) {
+	                    $('#item_duplicates').append('<tr><td>' + tmPreviewEscape(v.name) + '</td><td>' + tmPreviewEscape(v.dupeCount) + '</td></tr>');
                 })
             }
 
@@ -7086,7 +14210,7 @@ function ajaxSuccess(res) {
                 pbCheckHtml.append('<p class="pCheckWarning">' + UILANG.m('Warning: Labels with missing content!') + '</p><table id="label_errorTable"></table><br />');
                 $('#label_errorTable').append('<tr class="pCheckTableHead"><th class="labelcol">' + UILANG.m('Name') + '</th><th class="labellangcol">' + UILANG.m('Language') + '</th><th class="labelissuecol">' + UILANG.m('Missing content in') + '</th></tr>');
                 $.each(labelErrors, function(k, v) {
-                    $('#label_errorTable').append('<tr><td>' + v.name + '</td><td>' + v.langCode + '</td><td>' + v.issue + '</td></tr>');
+	                    $('#label_errorTable').append('<tr><td>' + tmPreviewEscape(v.name) + '</td><td>' + tmPreviewEscape(v.langCode) + '</td><td>' + tmPreviewEscape(v.issue) + '</td></tr>');
                 })
             }
             if (mode === 'browsing') {
@@ -7175,7 +14299,11 @@ function ajaxSuccess(res) {
             }
             // No errors found
             if (!res.missing_items && !res.noItems && !res.langError && !res.noContentError && !res.noActiveLanguage && !res.timerIssue && !res.deletedPool && !res.itemsAmountError && !res.pnNoContent && !res.duplicates) {
-                pbCheckHtml.append('<div class="pCheckSuccessDiv"><h3>' + UILANG.m('Plausibility check completed successfully!') + '</h3>' + UILANG.m('No issues found in your test content:') + '<br /><ul class="pCheckUl"><li><img src="../images/ok.png" height="15px;" />&nbsp;' + UILANG.m('All test pages are still in the Content Manager.') + '</li><li><ul class="pCheckUl"><li><img src="../images/ok.png" height="15px;" />&nbsp;' + UILANG.m('All test pages are not empty and have a content.') + '</li><li><ul class="pCheckUl"><li><img src="../images/ok.png" height="15px;" />&nbsp;' + UILANG.m('All test pages are available in the active language(s).') + '</li></ul></div>');
+                pbCheckHtml.append(pCheckSuccessHtml(UILANG.m('No issues found in your test content:'), [
+                    UILANG.m('All test pages are still in the Content Manager.'),
+                    UILANG.m('All test pages are not empty and have a content.'),
+                    UILANG.m('All test pages are available in the active language(s).')
+                ]));
             }
             // No items or stimuli found in the test
             if (res.noItems) {
@@ -7189,8 +14317,10 @@ function ajaxSuccess(res) {
             if (res.missing_items) {
                 pbCheckHtml.append('<p class="pCheckWarning">' + UILANG.m('Warning: One or more of your testpools has deleted test pages!') + '</p><table id="item_missing"></table><br />');
                 $('#item_missing').append('<tr class="pCheckTableHead"><th class="namecol">' + UILANG.m('Name') + '</th></tr>');
+                $.each(pCheckUniqueRows(res.missing_items, function(v) { return v.name || v.hiddenID; }), function(k, v) {
+	                    $('#item_missing').append('<tr><td>' + tmPreviewEscape(v.name) + '</td></tr>');
+                })
                 $.each(res.missing_items, function(k, v) {
-                    $('#item_missing').append('<tr><td>' + v.name + '</td></tr>');
                     if (stWarnings[v.hiddenID]) {
                         stWarnings[v.hiddenID]['html'] += '<strong>' + UILANG.m('Warning:') + '</strong><br />' + UILANG.m('The testpool has deleted test pages. Please check the testpool!') + '<br />';
                     } else {
@@ -7217,8 +14347,10 @@ function ajaxSuccess(res) {
             if (res.itemsAmountError) {
                 pbCheckHtml.append('<p class="pCheckWarning">' + UILANG.m('Warning: These testpools have less pages than selected!') + '</p><table id="item_neItems"></table><br />');
                 $('#item_neItems').append('<tr class="pCheckTableHead"><th class="namecol">name</th><th>' + UILANG.m('pages used') + '</th><th>' + UILANG.m('pages total') + '</th></tr>');
+                $.each(pCheckUniqueRows(res.itemsAmountError, function(v) { return (v.name || v.hiddenID) + '|' + v.itemsUsed + '|' + v.itemsTotal; }), function(k, v) {
+	                    $('#item_neItems').append('<tr><td>' + tmPreviewEscape(v.name) + '</td><td>' + tmPreviewEscape(v.itemsUsed) + '</td><td>' + tmPreviewEscape(v.itemsTotal) + '</td></tr>');
+                })
                 $.each(res.itemsAmountError, function(k, v) {
-                    $('#item_neItems').append('<tr><td>' + v.name + '</td><td>' + v.itemsUsed + '</td><td>' + v.itemsTotal + '</td></tr>');
                     if (stWarnings[v.hiddenID]) {
                         stWarnings[v.hiddenID]['html'] += '<strong>' + UILANG.m('Warning') + ':</strong><br />' + UILANG.m('The testpool has less test pages than selected in the fluid block.') + '<br />';
                     } else {
@@ -7233,14 +14365,16 @@ function ajaxSuccess(res) {
             // Testpools found where items have no content
             if (res.noContentError) {
                 pbCheckHtml.append('<p class="pCheckWarning">' + UILANG.m('Warning: These pages have no content!') + '</p><table id="item_nocontent"></table><br />');
-                $.each(res.noContentError, function(k, v) {
+                $.each(pCheckUniqueRows(res.noContentError, function(v) { return v.poolname || v.hiddenID; }), function(k, v) {
                     //Create line with poolname
-                    $('#item_nocontent').append('<tr class="pCheckSubHeadline"><td colspan="2"><strong>Testpool: </strong>' + v.poolname + '</td></tr>');
+	                    $('#item_nocontent').append('<tr class="pCheckSubHeadline"><td colspan="2"><strong>Testpool: </strong>' + tmPreviewEscape(v.poolname) + '</td></tr>');
                     // Create data lines
                     $('#item_nocontent').append('<tr class="pCheckTableHead"><th class="namecol">' + UILANG.m('Name') + '</th><th class="codecol">' + UILANG.m('Code') + '</th></tr>');
-                    $.each(v.data, function(key, value) {
-                        $('#item_nocontent').append('<tr><td>' + value.name + '</td><td>' + value.itemCode + '</td></tr>');
+                    $.each(pCheckUniqueRows(v.data, function(value) { return value.itemCode || value.name; }), function(key, value) {
+	                        $('#item_nocontent').append('<tr><td>' + tmPreviewEscape(value.name) + '</td><td>' + tmPreviewEscape(value.itemCode) + '</td></tr>');
                     });
+                })
+                $.each(res.noContentError, function(k, v) {
                     //Create warning icon
                     if (stWarnings[v.hiddenID]) {
                         stWarnings[v.hiddenID]['html'] += '<strong>' + UILANG.m('Warning') + ':</strong><br />' + UILANG.m('The testpool has pages with no content. Please check the testpool!') + '<br />';
@@ -7257,12 +14391,12 @@ function ajaxSuccess(res) {
             if (res.langError) {
                 let missLangs;
                 pbCheckHtml.append('<p class="pCheckWarning">' + UILANG.m('Warning: These pages are not available in all languages of your test!') + '</p><table id="item_languageconflict"></table><br />');
-                $.each(res.langError, function(k, v) {
+                $.each(pCheckUniqueRows(res.langError, function(v) { return v.poolname || v.hiddenID; }), function(k, v) {
                     //Create line with poolname
-                    $('#item_languageconflict').append('<tr class="pCheckSubHeadline"><td colspan="3"><strong>' + UILANG.m('Testpool') + ': </strong>' + v.poolname + '</td></tr>');
+	                    $('#item_languageconflict').append('<tr class="pCheckSubHeadline"><td colspan="3"><strong>' + UILANG.m('Testpool') + ': </strong>' + tmPreviewEscape(v.poolname) + '</td></tr>');
                     // Create data lines
                     $('#item_languageconflict').append('<tr class="pCheckTableHead"><th class="langnamecol">' + UILANG.m('Name') + '</th><th class="langlangcol">' + UILANG.m('Languages') + '</th><th class="langcodecol">' + UILANG.m('Code') + '</th></tr>');
-                    $.each(v.data, function(key, value) {
+                    $.each(pCheckUniqueRows(v.data, function(value) { return (value.itemCode || value.name) + '|' + pCheckLanguageKey(value.languages); }), function(key, value) {
                         missLangs = '';
                         $.each(value.languages, function(key2, value2) {
                             if (missLangs === '') {
@@ -7271,7 +14405,19 @@ function ajaxSuccess(res) {
                                 missLangs = missLangs + ' / ' + value2;
                             }
                         });
-                        $('#item_languageconflict').append('<tr><td>' + value.name + '</td><td>' + missLangs + '</td><td>' + value.itemCode + '</td></tr>');
+	                        $('#item_languageconflict').append('<tr><td>' + tmPreviewEscape(value.name) + '</td><td>' + tmPreviewEscape(missLangs) + '</td><td>' + tmPreviewEscape(value.itemCode) + '</td></tr>');
+                    });
+                })
+                $.each(res.langError, function(k, v) {
+                    missLangs = '';
+                    $.each(v.data || [], function(key, value) {
+                        $.each(value.languages || [], function(key2, value2) {
+                            if (missLangs === '') {
+                                missLangs = value2;
+                            } else {
+                                missLangs = missLangs + ' / ' + value2;
+                            }
+                        });
                     });
                     //Create warning icon
                     if (stWarnings[v.hiddenID]) {
@@ -7289,13 +14435,17 @@ function ajaxSuccess(res) {
             if (res.duplicates) {
                 pbCheckHtml.append('<p class="pCheckWarning">' + UILANG.m('Warning: There are duplicate test pages in your test pools!') + '</p><table id="item_duplicates"></table><br />');
                 $('#item_duplicates').append('<tr class="pCheckTableHead"><th class="langnamecol">' + UILANG.m('Test pool') + '</th><th class="langnamecol">' + UILANG.m('Test page') + '</th><th class="langlangcol">' + UILANG.m('Occurrences') + '</th></tr>');
+                const renderedDuplicatePages = {};
 
                 // Iterate through each test pool in res.duplicates
                 $.each(res.duplicates, function(key, pool) {
                     // Iterate through the pages within each pool
-                    $.each(pool.pages, function(pageKey, page) {
+                    $.each(pCheckUniqueRows(pool.pages, function(page) { return (pool.poolName || '') + '|' + (page.name || page.hiddenID) + '|' + page.dupeCount; }), function(pageKey, page) {
+                        const duplicateKey = (pool.poolName || '') + '|' + (page.name || page.hiddenID) + '|' + page.dupeCount;
+                        if (renderedDuplicatePages[duplicateKey]) return;
+                        renderedDuplicatePages[duplicateKey] = true;
                         // Append the pool name, page name, and occurrence count to the table
-                        $('#item_duplicates').append('<tr><td>' + pool.poolName + '</td><td>' + page.name + '</td><td>' + page.dupeCount + '</td></tr>');
+	                        $('#item_duplicates').append('<tr><td>' + tmPreviewEscape(pool.poolName) + '</td><td>' + tmPreviewEscape(page.name) + '</td><td>' + tmPreviewEscape(page.dupeCount) + '</td></tr>');
                     });
                 });
             }
@@ -7333,7 +14483,7 @@ function ajaxSuccess(res) {
                 pbCheckHtml.append('<p class="pCheckWarning">' + UILANG.m('Warning: Labels with missing content!') + '</p><table id="label_errorTable"></table><br />');
                 $('#label_errorTable').append('<tr class="pCheckTableHead"><th class="labelcol">' + UILANG.m('Name') + '</th><th class="labellangcol">' + UILANG.m('Language') + '</th><th class="labelissuecol">' + UILANG.m('Missing content in') + '</th></tr>');
                 $.each(labelErrors, function(k, v) {
-                    $('#label_errorTable').append('<tr><td>' + v.name + '</td><td>' + v.langCode + '</td><td>' + v.issue + '</td></tr>');
+	                    $('#label_errorTable').append('<tr><td>' + tmPreviewEscape(v.name) + '</td><td>' + tmPreviewEscape(v.langCode) + '</td><td>' + tmPreviewEscape(v.issue) + '</td></tr>');
                 })
             }
 
@@ -7588,4 +14738,33 @@ function ajaxSuccess(res) {
         default:
             break;
     }
+    // Shield TinyMCE dialogs (Codeview, Link-Dialog, etc.) from global shortcuts like nxDialog's Enter/Escape handling
+    (function () {
+        // helper: check if event target is inside a TinyMCE dialog/aux container
+        function isInTinyMceDialog(target) {
+            if (!target || !target.closest) return false;
+            return !!(target.closest('.tox-tinymce-aux') || target.closest('.tox-dialog'));
+        }
+
+        // Capture keydown *before* it reaches document-level handlers (like nxDialog)
+        document.addEventListener('keydown', function (e) {
+            if (!isInTinyMceDialog(e.target)) return;
+
+            // In TinyMCE-Dialogs Enter/Escape sollen nicht bis zu nxDialog hochbubblen
+            if (e.key === 'Enter' || e.keyCode === 13 || e.key === 'Escape' || e.keyCode === 27) {
+                e.stopPropagation();
+                // NICHT preventDefault(), damit TinyMCE selbst Enter/Escape weiterhin verarbeiten kann
+            }
+        }, true); // <- capture phase!
+
+        // Gleiches für keyup, damit nxDialog-Keyup-Handler auch nichts mehr bekommen
+        document.addEventListener('keyup', function (e) {
+            if (!isInTinyMceDialog(e.target)) return;
+
+            if (e.key === 'Enter' || e.keyCode === 13 || e.key === 'Escape' || e.keyCode === 27) {
+                e.stopPropagation();
+            }
+        }, true);
+    })();
+
 }

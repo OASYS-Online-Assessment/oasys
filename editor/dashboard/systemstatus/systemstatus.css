@@ -1,0 +1,355 @@
+/* ===== System status widget (sysz) ===== */
+.sysz-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    color: #2a2f35;
+    font-size: 13px;
+    padding: 4px;
+    overflow: hidden;   /* no inner scrolling */
+    min-height: 0;
+}
+
+/* === Fixed 4×2 grid, first tile spans two cols === */
+.sysz-grid {
+    display: grid;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0; /* prevent fractional overflow */
+}
+
+.sysz-grid--fixed {
+    grid-template-columns: repeat(4, minmax(0, 1fr));  /* always 4 columns */
+    grid-auto-flow: row;
+    grid-auto-rows: auto;                              /* rows defined by card height */
+    grid-template-areas:
+        "ver db log sc"
+        "sto sto bak set";
+    overflow: hidden;
+}
+
+/* area mapping */
+.sysz-area-ver { grid-area: ver; }
+.sysz-area-db  { grid-area: db;  }
+.sysz-area-log { grid-area: log; }
+.sysz-area-sc  { grid-area: sc;  }
+.sysz-area-sto { grid-area: sto; }
+.sysz-area-bak { grid-area: bak; }
+.sysz-area-set { grid-area: set; }
+
+/* Ensure the 'sto' tile spans two columns and keeps full width children */
+.sysz-area-sto { grid-column: span 2; align-items: stretch; }
+
+/* === Cards (tiles) — total outer height exactly 136px; title pinned at top === */
+.sysz-card {
+    box-sizing: border-box;       /* include padding + border in height */
+    height: 136px;
+    min-height: 136px;
+    max-height: 136px;
+    background: #F8FAFC;
+    border: 1px solid #e6edf5;
+    border-radius: 12px;
+    padding: 12px 10px;           /* top padding defines title Y-position */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;  /* title sticks to top line */
+    gap: 8px;
+    box-shadow: 0 1px 2px rgba(13, 18, 28, 0.03);
+    min-width: 0;                 /* allow grid to shrink cleanly */
+    overflow: hidden;             /* prevent vertical spill */
+}
+.sysz-card--tight { padding: 10px 10px; }
+
+/* header (title row occupies a fixed slot across all tiles) */
+.sysz-title {
+    width: 100%;
+    margin: 0;
+    text-align: center;
+    line-height: 22px;            /* fixed line box for consistent top row */
+    min-height: 22px;
+    letter-spacing: .02em;
+    color: #0f2139;
+    font-weight:700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sysz-title .sysz-ic { margin-right: 6px; font-size: 16px; }
+
+/* main count pill */
+.sysz-pill {
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    min-width: 48px; padding: 6px 14px;
+    line-height: 20px; border-radius: 9999px;
+    background: #e9f5f3;
+    border: 1px solid #cde7e3;
+    color: #0d5b51;
+    font-weight: 600;
+    text-decoration: none;
+    user-select: none;
+    outline: none;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+a.sysz-pill:hover { filter: brightness(.98); text-decoration: none; }
+.sysz-pill.ok     { background: #d6f0e2; color: #0f5a2f; border-color: #8fd9b3; }
+.sysz-pill.warn   { background: #fff3d6; color: #7a4d00; border-color: #f1da9f; }
+.sysz-pill.danger { background: #ffe7e7; color: #8a1f1f; border-color: #f3b6b6; }
+
+.sysz-sub {
+    font-size: 12px; color: #5a6b7c; text-align: center;
+    max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* chips row (Backups card) */
+.sysz-chipRow {
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+    max-width: 100%;
+}
+.sysz-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; line-height: 18px; border-radius: 10px;
+    background: #f0f3ff; border: 1px solid #d7defa; color: #29366b;
+    text-decoration: none; font-weight: 700; font-size: 12px;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sysz-chip:hover { filter: brightness(.98); text-decoration: none; }
+
+/* small inline icon */
+.sysz-ic { margin-right: 6px; }
+
+/* muted text */
+.sysz-muted { color: #7b8b99; }
+
+/* generic dialog styles */
+.sysz-dialogWrap { max-height: 66vh; overflow: auto; }
+.sysz-dialogTbl  {
+    width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed;
+    display: flex; flex-direction: column; min-height: 0; max-height: 58vh;
+}
+.sysz-dialogTbl thead { display: table; width: 100%; table-layout: fixed; flex: 0 0 auto; }
+.sysz-dialogTbl tbody { display: block; overflow: auto; min-height: 0; flex: 1 1 auto; }
+.sysz-dialogTbl tbody tr { display: table; width: 100%; table-layout: fixed; }
+.sysz-dialogTbl thead th {
+    background: #eef3fb; border-bottom: 1px solid #e1e8f5;
+    text-align: left; padding: 6px; color: #15243f; font-weight: 700;
+}
+.sysz-dialogTbl tbody td {
+    border-bottom: 1px solid #f0f0f0; padding: 6px; vertical-align: middle;
+}
+.sysz-dialogTbl .sysz-num { text-align: right; font-variant-numeric: tabular-nums; }
+.sysz-dialogWrap .enc-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: #e9f8ef;
+    border: 1px solid #8ad0a7;
+    color: #166534;
+    white-space: nowrap;
+}
+.sysz-dialogWrap .enc-icon { position: relative; top: 0; }
+
+/* version info block */
+.sysz-vbox { display: flex; flex-direction: column; gap: 6px; }
+
+.sysz-vbox.oasysInfoCont {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 620px;
+    overflow-y: auto;
+    color: #26394a;
+    font-size: 14px;
+}
+
+.sysz-vbox .oasysInfoSummary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.sysz-vbox .oasysInfoMetric {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border: 1px solid #d8e3ed;
+    border-radius: 7px;
+    background: #f8fafc;
+}
+
+.sysz-vbox .oasysInfoMetric span {
+    color: #526277;
+    font-weight: 700;
+}
+
+.sysz-vbox .oasysInfoMetric strong {
+    color: #43586d;
+    font-weight: 700;
+    text-align: right;
+}
+
+.sysz-vbox .oasysInfoNotes {
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border: 1px solid #cbd9e6;
+    border-radius: 8px;
+    background: #fff;
+    line-height: 1.35;
+}
+
+.sysz-info ul {
+    margin: 8px 0 0 20px;
+    padding: 0;
+}
+
+.sysz-info ul li {
+    margin: 3px 0;
+    list-style-type: disc;
+}
+
+/* ===== System check details ===== */
+.sysz-scTbl { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+.sysz-scTbl thead th {
+    background: #eef3fb; border-bottom: 1px solid #e1e8f5; text-align: left; padding: 6px;
+}
+.sysz-scTbl tbody td {
+    border-bottom: 1px solid #f2f2f2; padding: 6px; vertical-align: top;
+}
+.sysz-categoryRow th {
+    padding: 8px 6px 5px;
+    background: #f8fafc;
+    border-top: 1px solid #dfe7f3;
+    border-bottom: 1px solid #e7edf6;
+    color: #213653;
+    font-size: 11px;
+    letter-spacing: 0;
+    text-align: left;
+    text-transform: uppercase;
+}
+.sysz-icoCell { width: 48px; text-align: center; }
+.sysz-statusIcon {
+    display: inline-block; min-width: 34px; line-height: 16px; padding: 1px 4px;
+    border-radius: 3px; background: #e9f8ef; color: #166534; font-size: 10px; font-weight: 700;
+}
+.sysz-cellKey { width: 34%; font-weight: 600; color: #0f2139; overflow-wrap: anywhere; }
+.sysz-cellKeyMeta { margin-top: 5px; color: #52657c; font-size: 11px; font-weight: 400; line-height: 1.35; white-space: pre-line; }
+.sysz-cellReq { width: 24%; color: #385076; }
+.sysz-foundBlock { color: #243244; }
+.sysz-failMsg {
+    margin-top: 4px; padding: 6px; border-radius: 6px;
+    background: #fff3f3; border: 1px solid #f1c0c0; color: #7b1d1d;
+}
+.sysz-scTbl tr.is-warn td { background: #fffaf0; }
+.sysz-scTbl tr.is-fail td { background: #fff7f7; }
+.sysz-scTbl tr.is-warn .sysz-statusIcon { background: #fff3cd; color: #8a5b00; }
+.sysz-scTbl tr.is-fail .sysz-statusIcon { background: #fee2e2; color: #991b1b; }
+
+/* ===== Storage (stacked) ===== */
+.sysz-bar--stack {
+    display: flex; height: 18px; border-radius: 9999px;
+    background: #eef2f7; border: 1px solid #e2e8f0; overflow: hidden;
+}
+.sysz-seg { height: 100%; }
+.sysz-seg:first-child { border-top-left-radius: 9999px; border-bottom-left-radius: 9999px; }
+.sysz-seg:last-child  { border-top-right-radius: 9999px; border-bottom-right-radius: 9999px; }
+.sysz-seg.is-used  { background: #fbbf24; }
+.sysz-seg.is-free  { background: #4ade80; }
+.sysz-seg.is-other { background: #cbd7eb; border-left: 1px solid #b3c2e3; }
+
+.sysz-legend {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+    gap: 10px 12px; margin-top: 6px; width: 100%;
+    font-size: 11.5px; color: #415165; font-weight: 700; text-align: center;
+}
+.sysz-legend-group {
+    display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: center;
+}
+.sysz-legend-item {
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; text-align: center;
+}
+.sysz-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05); }
+.sysz-swatch.sw-used  { background: #fbbf24; }
+.sysz-swatch.sw-other { background: #cbd7eb; border: 1px solid #b3c2e3; }
+.sysz-swatch.sw-free  { background: #4ade80; }
+
+/* ===== Upgrade notice (superadmin only) ===== */
+.sysz-card--upgrade,
+.sysz-card--upg {
+    background: #FEF2F2;
+    border-color: #FCA5A5;
+    box-shadow: 0 1px 2px rgba(13,18,28,0.05), inset 0 0 0 2px rgba(252,165,165,0.25);
+}
+.sysz-card--upgrade .sysz-title,
+.sysz-card--upg .sysz-title { color: #7F1D1D; }
+.sysz-upgLink { font-weight: 700; color: #991B1B; text-decoration: none; }
+.sysz-upgLink:hover { color: #7F1D1D; text-decoration: underline; }
+
+/* ===== Logged-in double pill ===== */
+.sysz-loginsRow { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+/* Ensure the stacked bar spans the full card width inside the storage tile */
+.sysz-area-sto .sysz-bar--stack { width: 100%; }
+
+
+/* Compact two-column system check details */
+.sysz-scColumns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+.sysz-scColumn {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+.sysz-scGroup {
+    overflow: hidden;
+    border: 0;
+    border-radius: 6px;
+    background: #fff;
+    outline: 1px solid #d8e3ed;
+    outline-offset: -1px;
+}
+.sysz-scGroupTitle {
+    margin: 0;
+    padding: 7px 9px;
+    background: #227DAA;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+.sysz-scGroup .sysz-scTbl thead th {
+    background: #4A87A8;
+    border-bottom: 1px solid #227DAA;
+    color: #fff;
+    padding: 5px 6px;
+    font-size: 11px;
+    font-weight: 700;
+}
+.sysz-scGroup .sysz-scTbl tbody td {
+    padding: 5px 6px;
+}
+.sysz-scGroup .sysz-cellReq {
+    width: 24%;
+}
+@media (max-width: 900px) {
+    .sysz-scColumns {
+        grid-template-columns: 1fr;
+    }
+}

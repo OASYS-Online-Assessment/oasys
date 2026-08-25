@@ -3,10 +3,14 @@
 
 <head>
 	<?php
+	// Prevent new logins when .stopfile is generated from a K8s pod termination signal.
+	require_once __DIR__ . '/inc/php/stopCheck.php';
+	
 	# ------------------------------------------------------------ #
 	# Validation and redirection of account password reset request #
 	# ------------------------------------------------------------ #
-	require_once("inc/php/authkeygen.php");
+    require_once __DIR__ . '/inc/php/initBackend.php';
+    require_once("inc/php/authkeygen.php");
 	?>
 
 	<meta http-equiv="Content-Type" content="text/html;charset=utf-8">
@@ -37,7 +41,12 @@
 	<script id='forceLang'>
 		"use strict";
 		<?php
-		$forceLang = isset($_GET['forceLang']) ? $_GET['forceLang'] : null;
+		$forceLang = $_GET['forceLang'] ?? null;
+		if (!is_string($forceLang) || !preg_match('/^[A-Z]{2}$/', $forceLang)) {
+			$forceLang = 'EN';
+		}
+		// escape for safe single-quoted JS string interpolation
+		$forceLang = addslashes($forceLang);
 		echo "sessionStorage.setItem('forceLang','$forceLang');";
 		?>
 	</script>

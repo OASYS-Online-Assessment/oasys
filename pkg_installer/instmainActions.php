@@ -11,6 +11,7 @@
 */
 
 register_shutdown_function('exit_handler');
+require_once __DIR__ . '/actionAllowlist.php';
 
 echo "<div style='font-family: monospace;'>";
 
@@ -32,6 +33,11 @@ if ($action === "resetPkg") {
 }
 
 // do the requested action
+if (!oasysActionIsAllowed(__FILE__, $action)) {
+    http_response_code(400);
+    echo "<span style='color: red;'>Unknown or unsupported action.</span><br>";
+    exit;
+}
 $action($dataVar);
 
 echo "</div>";

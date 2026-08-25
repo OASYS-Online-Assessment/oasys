@@ -1,0 +1,239 @@
+/* ============================================
+   Boot gate (hide frame until ready)
+   ============================================ */
+body[data-dash-booting="1"] #dashScrollWrap {
+    visibility: hidden; /* prevents FOUC but keeps layout reserved */
+}
+
+#dashBootMask {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2147483647;
+    background: #BBBBBB; /* requested background */
+    color: #666;
+    font: 500 22px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+#dashBootMask .bootInner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;                    /* space between logo, spinner, text */
+    text-align: center;
+    padding: 16px 20px;
+}
+
+#dashBootMask .bootLogo {
+    max-width: min(260px, 60vw);
+    max-height: 120px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    margin-bottom:20px;
+}
+
+#dashBootMask .spinner {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 3px solid #ddd;
+    border-top-color: #444;
+    animation: dashSpin 0.9s linear infinite;
+    margin: 0; /* centered in vertical stack */
+}
+@keyframes dashSpin { to { transform: rotate(360deg); } }
+
+#dashBootMask .bootText {
+    font-weight: 600;
+    letter-spacing: .2px;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    #dashBootMask .spinner { animation: none; }
+}
+
+/* ============================================
+   Dashboard layout variables & wrappers
+   ============================================ */
+
+#dashScrollWrap {
+    /* Scrollbars appear only when needed */
+    overflow-x: auto;
+    overflow-y: auto;
+
+    --framePad: 8px;
+    padding: var(--framePad);
+    box-sizing: border-box;
+
+    /* grid layout variables (JS may update) */
+    --gridGap: 10px;
+    --colMin: 200px;
+}
+
+#dashboardWidgets {
+    /* outer breathing room to avoid scrollbar overlap */
+    padding: var(--gridGap);
+    box-sizing: border-box;
+}
+
+/* ============================================
+   Sections and rows (ADMIN + USER)
+   ============================================ */
+
+.dash-section {
+    margin-bottom: var(--gridGap);
+}
+.dash-section:last-child { margin-bottom: 0; }
+
+.dash-section-body {}
+
+/* Each row is a grid; JS sets the column count per row and the fixed row height */
+.user-scope .dash-row,
+.admin-scope .dash-row {
+    display: grid;
+    gap: var(--gridGap);
+    align-items: stretch; /* widgets fill the fixed row height */
+}
+
+/* Space between rows */
+.dash-section-body > .dash-row {
+    margin-bottom: var(--gridGap);
+}
+.dash-section-body > .dash-row:last-child { margin-bottom: 0; }
+
+/* ============================================
+   Widget cards
+   ============================================ */
+.jsDashWidget {
+    margin: 0;
+    border-radius: 8px;
+    border: 2px solid lightgray;
+    background-color: white;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+
+    /* The row controls vertical space; widgets fill it */
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+
+    /* No internal scroll from the card layer; widgets handle their own content */
+    overflow: hidden;
+
+    box-shadow: 4px 1px 12px rgba(0,0,0,.20);
+    min-width: 0; /* allow shrink within grid cell */
+}
+
+/* ============================================
+   Widget header / chrome
+   ============================================ */
+.jsDashWidgetTitle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+    width: 100%;
+    padding: 2px 0;
+    background-color: #e1e1e1;
+    border-bottom: 2px solid #d3d3d3;
+    line-height: 1;
+}
+
+.admin-scope .jsDashWidgetTitle {
+    background: #ffbf9e;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+/* Right-aligned ADMIN label */
+.admin-scope .jsDashWidgetTitle::after {
+    content: "ADMIN";
+    margin-left: auto;
+    padding-right: 15px;
+    font-size: 12px;
+    color: #B24712;
+    letter-spacing: .4px;
+    opacity: .9;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.jsDashWidgetIcon { width: 16px; height: 16px; flex: 0 0 auto; }
+.jsDashWidgetTitleText { font-size: .9em; font-weight: 600; line-height: 1; }
+
+/* ============================================
+   Widget content area
+   ============================================ */
+.jsDashWidgetContentBox {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden; /* widget internals decide on their own scrolling */
+    height: auto;
+}
+
+/* ============================================
+   Admin/User scope toggle (header)
+   ============================================ */
+
+#headerButtonsContainer {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.scope-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #cfcfcf;
+    border-radius: 999px;
+    background: #fff;
+    overflow: hidden;                /* clip inner corners */
+    font-size: 12px;
+    line-height: 1;
+    height: 26px;
+    min-width: 100px;
+    box-shadow: 0 0 2px rgba(0,0,0,0.15);
+}
+
+.scope-toggle .scope-btn {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-weight: 600;
+    color: #333;
+    height: 100%;                    /* fill the pill vertically */
+    box-sizing: border-box;
+}
+
+/* round the edges so the blue fills to the pill edge */
+.scope-toggle .scope-btn:first-child {
+    border-top-left-radius: 999px;
+    border-bottom-left-radius: 999px;
+}
+.scope-toggle .scope-btn:last-child {
+    border-top-right-radius: 999px;
+    border-bottom-right-radius: 999px;
+}
+
+/* active state: solid blue all the way to the rounded edge */
+.scope-toggle .scope-btn.active {
+    background: #227DAA;
+    color: #fff;
+}
+
+/* ============================================
+   Responsive niceties
+   ============================================ */
+@media (max-width: 1280px) { #dashScrollWrap { --gridGap: 8px; } }
+@media (max-width: 1024px) { #dashScrollWrap { --gridGap: 6px; } }

@@ -5,6 +5,14 @@
 // debug_enable('skin');
 // debug_enable('scripting');
 
+let debug = {};
+
+/* debugging – comment out in production */
+	// debug.test = {};
+	// debug.test.variables = {};
+	// debug.test.variables['course'] = {global: true, text: {'*': 'Potion making'}};
+/*****************************************/
+
 function debug_enable(module) {
 	debugModules[module] = true;
 }

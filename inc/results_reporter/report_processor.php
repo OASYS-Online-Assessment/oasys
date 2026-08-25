@@ -68,4 +68,13 @@ if (!empty($loginsData)) {
 }
 
 $TBS->Show(OPENTBS_STRING); // instead of generating a file, we generate the binary to send back through AJAX
-$returnData['reportBinary'] = base64_encode($TBS->Source); // assign binary data to BASE64 encoded string for AJAX JSON return
+$extension = $fmt === 'excel' ? 'xlsx' : 'ods';
+$mime = $fmt === 'excel'
+    ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    : 'application/vnd.oasis.opendocument.spreadsheet';
+$returnData['reportToken'] = resultsExportStage(
+    $TBS->Source,
+    resultsExportFilename($returnData, $extension),
+    $mime
+);
+unset($returnData['csvHeaders'], $returnData['csvRows']);

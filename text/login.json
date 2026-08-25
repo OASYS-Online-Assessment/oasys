@@ -5,6 +5,18 @@
 	"FR": "Le login et mot de passe que vous avez entré ne sont pas valides.",
 	"LU": "De Login an d'Passwuert, déi agetippt goufen, sinn net valid."
   },
+  "ldapError": {
+	"EN": "The LDAP login service is currently unavailable. Please try again later or contact an administrator.",
+	"DE": "Der LDAP-Anmeldedienst ist derzeit nicht verfügbar. Bitte versuchen Sie es später erneut oder wenden Sie sich an einen Administrator.",
+	"FR": "Le service de connexion LDAP est actuellement indisponible. Veuillez réessayer plus tard ou contacter un administrateur.",
+	"LU": "Den LDAP-Login-Déngscht ass de Moment net disponibel. Probéiert wgl. méi spéit nach eng Kéier oder kontaktéiert en Administrateur."
+  },
+  "loginTemporarilyLocked": {
+	"EN": "Too many unsuccessful login attempts were detected. The login is temporarily locked for {lockMinutes} minutes.",
+	"DE": "Zu viele erfolglose Login-Versuche wurden festgestellt. Das Login ist vorübergehend für {lockMinutes} Minuten gesperrt.",
+	"FR": "Trop de tentatives de connexion infructueuses ont été détectées. Le login est temporairement bloqué pour {lockMinutes} minutes.",
+	"LU": "Zevill falsch Login Versich goufen detektéiert. Dëse Login ass temporär fir {lockMinutes} Minutten gespaart."
+  },
   "invalidTestData": {
 	"EN": "The login and password you entered are valid, however no test has been linked to these credentials.",
 	"DE": "Die von Ihnen eingegebenen Anmeldedaten und das Passwort sind zwar gültig, aber es wurde kein Test mit diesen Daten verknüpft.",

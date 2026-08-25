@@ -1068,7 +1068,11 @@ function loader_getManifest(mode) {
             break;
         case 'login':
             if (landingPagePath === '') {
-                manifest.push({type: 'switchMode', mode: mode});
+                manifest.push({
+                    type: 'switchMode',
+                    mode: mode,
+                    customLandingPage: typeof (customLandingPage) === 'object' && customLandingPage !== null
+                });
                 manifest.push({
                     type: 'shortcut', shortcut: 'CR', onTrigger: 'login_returnPressed', unload: true, options: {
                         preventDefault: false,
@@ -1135,6 +1139,9 @@ function loader_getManifest(mode) {
             });
             break;
         case 'score':
+            manifest.push({type: 'switchMode', mode: mode});
+            break;
+        case 'finish':
             manifest.push({type: 'switchMode', mode: mode});
             break;
         case 'error':

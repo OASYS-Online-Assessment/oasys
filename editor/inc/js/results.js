@@ -13,6 +13,252 @@
 window.interactionClasses = {};
 window.interactionConfigs = {};
 
+class ResultsTestList {
+    constructor(container, callback) {
+        this.$container = $(container);
+        this.callback = callback;
+        this.items = [];
+        this.itemMap = new Map();
+        this.selectedId = null;
+        this.renderShell();
+    }
+
+    escape(value) {
+        return $('<div>').text(value == null ? '' : String(value)).html();
+    }
+
+    highlight(value, term) {
+        const text = value == null ? '' : String(value);
+        const needle = String(term || '').trim();
+        if (needle === '') return this.escape(text);
+        const regex = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        let html = '';
+        let lastIndex = 0;
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            html += this.escape(text.slice(lastIndex, match.index));
+            html += `<span class="filerSearchMatch">${this.escape(match[0])}</span>`;
+            lastIndex = match.index + match[0].length;
+        }
+        return html + this.escape(text.slice(lastIndex));
+    }
+
+    renderShell() {
+        this.$container.empty().append(/* html */`
+            <div class="resultsTestBrowser">
+                <div class="resultsTestFilter">
+                    <span class="resultsTestFilterHeading">
+                        <label for="resultsTestFilterInput">${UILANG.m('Filter available results')}</label>
+                        <span id="resultsTestListHelp" class="resultsTestListHelp"></span>
+                    </span>
+                    <input id="resultsTestFilterInput" type="search" autocomplete="off"
+                           placeholder="${this.escape(UILANG.m('Filter by test name, ID, path or test taker'))}">
+                </div>
+                <div class="resultsTestRows" role="listbox" aria-label="${this.escape(UILANG.m('Available results'))}"></div>
+            </div>`);
+        new OasysHelp('resultsTestListHelp', {
+            size: '16px',
+            maxWidth: '430px',
+            linkDecoration: 'none',
+            title: UILANG.m('Why these tests are shown'),
+            htmlContent: OasysHelp.layout({
+                lead: UILANG.m('This list shows all tests for which you have at least read access to one associated test taker. Since visibility is based on test-taker access, you may see test names and folder paths that you cannot access in the Tests Manager.')
+            })
+        });
+        this.$filter = this.$container.find('.resultsTestFilter input');
+        this.$rows = this.$container.find('.resultsTestRows');
+        this.$filter.on('input.resultsList', () => this.renderRows(this.$filter.val()));
+        this.$rows.on('keydown.resultsList', '.resultsTestRow', event => {
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            this.moveSelection(event.key === 'ArrowUp' ? -1 : 1);
+        });
+    }
+
+    setItems(items) {
+        this.items = Array.isArray(items) ? items.slice() : [];
+        this.itemMap = new Map(this.items.map(item => [String(item.id), item]));
+        if (this.selectedId !== null && !this.itemMap.has(this.selectedId)) this.selectedId = null;
+        this.renderRows(this.$filter.val());
+    }
+
+    renderRows(filterValue = '') {
+        const filter = String(filterValue || '').trim().toLocaleLowerCase();
+        const visible = this.items.filter(item =>
+            filter === '' || String(item.filterText || item.label || '').toLocaleLowerCase().includes(filter)
+        );
+
+        this.$rows.empty();
+        if (visible.length === 0) {
+            this.$rows.append(`<div class="resultsTestEmpty">${this.escape(UILANG.m('No accessible test results match this filter.'))}</div>`);
+            return;
+        }
+
+        visible.forEach(item => {
+            const selected = String(item.id) === this.selectedId;
+            const type = String(item.testStructure?.type || item.testType || 'linear').toLowerCase();
+            const typeClass = {
+                linear: 'is-linear',
+                fluid: 'is-fluid',
+                mutation: 'is-mutation'
+            }[type] || 'is-linear';
+            const $row = $(/* html */`
+                <div class="resultsTestRow${selected ? ' is-selected' : ''}" role="option"
+                     aria-selected="${selected}" tabindex="${selected ? '0' : '-1'}"
+                     data-id="${this.escape(item.id)}">
+                    <span class="resultsTestType ${typeClass}" role="img"
+                          aria-label="${this.escape(type + ' ' + UILANG.m('test'))}"></span>
+                    <span class="resultsTestText">
+                        <strong>${this.escape(item.label)}</strong>
+                        <span>${this.escape(item.path)} · ID ${this.escape(item.dbId)}</span>
+                    </span>
+                    <span class="resultsTestAccess">
+                        <span title="${this.escape(UILANG.m('Accessible test takers'))}"><strong>${this.escape(item.accessibleTestTakers)}</strong> ${this.escape(UILANG.m('accessible'))}</span>
+                        <span title="${this.escape(UILANG.m('Writable test takers'))}"><strong>${this.escape(item.writableTestTakers)}</strong> ${this.escape(UILANG.m('writable'))}</span>
+                    </span>
+                </div>`);
+
+            $row.on('click.resultsList', () => this.selectItem(item));
+            this.$rows.append($row);
+        });
+    }
+
+    selectItem(item) {
+        if (!item) return;
+        this.selectedId = String(item.id);
+        this.renderRows(this.$filter.val());
+        const $selected = this.$rows.find('.resultsTestRow').filter((_, row) =>
+            String($(row).data('id')) === this.selectedId
+        );
+        $selected.attr('tabindex', '0').trigger('focus');
+        this.callback('getSelect', [item]);
+    }
+
+    setSelection(selectionData) {
+        const id = selectionData?.[0]?.id;
+        if (id == null) return;
+        this.selectItem(this.itemMap.get(String(id)));
+    }
+
+    keyDown() {
+        this.moveSelection(1);
+    }
+
+    keyUp() {
+        this.moveSelection(-1);
+    }
+
+    moveSelection(direction) {
+        const visibleIds = this.$rows.find('.resultsTestRow').map((_, row) => String($(row).data('id'))).get();
+        if (visibleIds.length === 0) return;
+        let index = visibleIds.indexOf(this.selectedId);
+        index = index < 0 ? (direction > 0 ? 0 : visibleIds.length - 1) : Math.max(0, Math.min(visibleIds.length - 1, index + direction));
+        this.selectItem(this.itemMap.get(visibleIds[index]));
+    }
+
+    openSearch(preFill = '') {
+        const inputId = 'resultsTestSearchInput';
+        const tabsId = 'resultsTestSearchTabs';
+        const keyId = 'resultsMetaKeyInput';
+        const valueId = 'resultsMetaValueInput';
+        const valueWrapId = 'resultsMetaValueWrap';
+        const exactId = 'resultsMetaExactInput';
+        const singleId = 'resultsMetaSingleOnlyInput';
+        const searchDialog = new nxDialog('resultsTestSearchDialog', {
+            buttons: [
+                {label: UILANG.m('cancel'), cancel: true, value: 'cancel'},
+                {label: UILANG.m('search'), default: true, value: 'search'}
+            ],
+            datafields: [],
+            mandatory: [],
+            focus: inputId,
+            contents: `<div id="${tabsId}" class="filerSearchDialog filerSearchTabs">
+                <ul><li><a href="#resultsSearchRegular">${this.escape(UILANG.m('Regular'))}</a></li><li><a href="#resultsSearchMeta">${this.escape(UILANG.m('Meta tags'))}</a></li></ul>
+                <div id="resultsSearchRegular" class="filerSearchPanel"><label for="${inputId}">${this.escape(UILANG.m('Search for:'))}</label><input type="text" id="${inputId}" value="${this.escape(preFill)}"></div>
+                <div id="resultsSearchMeta">
+                    <div class="filerSearchGrid"><div><label for="${keyId}">${this.escape(UILANG.m('Tag/key'))}</label><input type="text" id="${keyId}"></div>
+                    <div id="${valueWrapId}"><label for="${valueId}">${this.escape(UILANG.m('Value'))}</label><input type="text" id="${valueId}"></div></div>
+                    <div class="filerSearchChecks"><label><input type="checkbox" id="${exactId}"> ${this.escape(UILANG.m('Exact match'))}</label>
+                    <label><input type="checkbox" id="${singleId}"> ${this.escape(UILANG.m('Single tags only'))}</label></div>
+                </div>
+            </div>`,
+            title: UILANG.m('search'),
+            width: 470,
+            callback: button => {
+                if (button !== 'search') return;
+                if ($('#' + tabsId).tabs('option', 'active') === 1) {
+                    const singleOnly = $('#' + singleId).is(':checked');
+                    const metaSearch = {
+                        key: $.trim($('#' + keyId).val() || ''),
+                        value: singleOnly ? '' : $.trim($('#' + valueId).val() || ''),
+                        exact: $('#' + exactId).is(':checked'),
+                        singleOnly: singleOnly
+                    };
+                    if (metaSearch.key !== '' || metaSearch.value !== '' || metaSearch.singleOnly) {
+                        this.callback('onMetaSearchRequest', metaSearch);
+                    }
+                    return;
+                }
+                const searchTerm = $.trim($('#' + inputId).val() || '');
+                if (searchTerm !== '') this.callback('onSearchRequest', searchTerm);
+            }
+        });
+        $('#' + tabsId).tabs();
+        const toggleMetaValue = () => {
+            const singleOnly = $('#' + singleId).is(':checked');
+            $('#' + valueWrapId).toggle(!singleOnly);
+            $('#' + tabsId).find('.filerSearchGrid').toggleClass('is-single-only', singleOnly);
+        };
+        $('#' + singleId).on('change', toggleMetaValue);
+        toggleMetaValue();
+        $('#' + inputId + ', #' + keyId + ', #' + valueId).on('keydown.resultsSearch', event => {
+            if (event.key !== 'Enter' || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            if ($.trim($(event.currentTarget).val() || '') !== '') searchDialog.dismiss('search');
+        });
+    }
+
+    searchShow(results, searchTerm) {
+        const rows = (Array.isArray(results) ? results : []).map(item => {
+            const type = String(item.testStructure?.type || item.testType || 'linear').toLowerCase();
+            const typeClass = {
+                linear: 'is-linear',
+                fluid: 'is-fluid',
+                mutation: 'is-mutation'
+            }[type] || 'is-linear';
+            return /* html */`
+                <button type="button" class="resultsSearchHit" data-id="${this.escape(item.id)}">
+                    <span class="resultsTestType ${typeClass}" role="img"
+                          aria-label="${this.escape(type + ' ' + UILANG.m('test'))}"></span>
+                    <span class="resultsSearchHitText">
+                        <strong>${this.highlight(item.label, searchTerm)}</strong>
+                        <span class="filerSearchPath">${this.escape(UILANG.m('Path:'))} ${this.highlight(item.path, searchTerm)}</span>
+                        <span class="resultsSearchId">${this.escape(UILANG.m('ID: '))}${this.highlight(item.dbId, searchTerm)}</span>
+                        ${item.subresult ? `<span class="resultsSearchSubresult"><strong>${this.escape(UILANG.m(item.subresult))}</strong>${this.highlight(item.subresultvalue, searchTerm)}</span>` : ''}
+                        <small>${this.escape(item.accessibleTestTakers)} ${this.escape(UILANG.m('accessible'))} · ${this.escape(item.writableTestTakers)} ${this.escape(UILANG.m('writable'))}</small>
+                    </span>
+                    <span class="mediaIndicator resultsSearchType">[${this.escape(type)}]</span>
+                </button>`;
+        }).join('');
+        const summary = results.length > 0
+            ? `<div class="filerSearchSummary"><strong>${this.escape(results.length)} ${this.escape(UILANG.m('result(s) for your search:'))} ${this.escape(searchTerm)}</strong><span>${this.escape(UILANG.m('Click element to open it!'))}</span></div>`
+            : `<div class="filerSearchSummary"><strong>${this.escape(UILANG.m('No results for your search:'))} ${this.escape(searchTerm)}</strong></div>`;
+        new nxDialog('resultsSearchResults', {
+            buttons: [{label: UILANG.m('close'), cancel: true, default: true, value: 'close'}],
+            contents: `${summary}<div class="resultsSearchHits">${rows}</div>`,
+            title: UILANG.m('Search results'),
+            width: 650
+        });
+        $('#resultsSearchResults').on('click.resultsList', '.resultsSearchHit', event => {
+            const item = this.itemMap.get(String($(event.currentTarget).data('id')));
+            window.nxDialogManager?.instances?.resultsSearchResults?.dismiss();
+            this.selectItem(item);
+        });
+    }
+}
+
 $(function() { onReady() });
 
 //prepare local storage variables if undefined
@@ -46,6 +292,10 @@ const serverData = {
 };
 //details of the selection in the library
 let selection = [];
+let pendingResultTestId = null;
+let pendingResultToken = null;
+let pendingResultRequest = null;
+let ajaxRequestToken = 0;
 //Starting point for the file manager
 let loc = {
     folder: 1,
@@ -63,6 +313,7 @@ let statusBarDefault = "";
 /* corrections vars */
 let testView = []; // holder for standard test view buttons2
 let reportView = []; // holder for report builder view buttons2
+let journeyView = []; // holder for test journey view buttons2
 let msMainView = []; // holder for manual scoring main view buttons2
 let msDetailView = []; // holder for manual scoring main view buttons2
 let ms_lastTabView = null;
@@ -74,6 +325,42 @@ let tpl_pagePos = 0;
 let pg_left = {};
 let fluidOrMut = false;
 let il_set = false; // if the item list window in scoring value is manually set/changed
+let manualScoringSummaryToken = 0;
+let manualScoringLeaseTimer = null;
+let manualScoringLeaseTestId = null;
+
+function msLeaseWarningHtml(lease) {
+    if (!lease || lease.owned === true || !lease.owner) return '';
+    return /* html */`
+        <div class="msLeaseWarning" role="alert">
+            <strong>${UILANG.m('Manual scoring is locked')}</strong>
+            <span>${UILANG.m('Manual scoring for this test is currently being performed by')} <b>${journeyEsc(lease.owner)}</b>. ${UILANG.m('Please wait until that user has finished. You can view the scoring data, but you cannot change scores, comments, or reset scoring.')}</span>
+        </div>`;
+}
+
+function msStartLeaseHeartbeat(testId, lease) {
+    if (manualScoringLeaseTimer !== null) clearInterval(manualScoringLeaseTimer);
+    manualScoringLeaseTimer = null;
+    manualScoringLeaseTestId = Number(testId);
+    if (!lease || lease.owned !== true) return;
+
+    manualScoringLeaseTimer = setInterval(async function() {
+        const response = await results_startAjax('refreshManualScoringLease', { testId: manualScoringLeaseTestId }, false);
+        if (response.error || response.manualScoringLease?.owned !== true) {
+            clearInterval(manualScoringLeaseTimer);
+            manualScoringLeaseTimer = null;
+            ms_build_scoreTypeScreen({ testId: manualScoringLeaseTestId });
+        }
+    }, 30000);
+}
+
+function msReleaseLease() {
+    if (manualScoringLeaseTimer !== null) clearInterval(manualScoringLeaseTimer);
+    manualScoringLeaseTimer = null;
+    const testId = manualScoringLeaseTestId;
+    manualScoringLeaseTestId = null;
+    if (testId !== null) results_startAjax('releaseManualScoringLease', { testId: testId }, false);
+}
 
 /* plotting vars */
 let report_config = []; // master object holding report configuration
@@ -86,8 +373,33 @@ let fromLoad = false; // whether chart building is from saved entry
 let layoutData = []; // live (and updated) plot data used for saving updated layout info.
 let loadLD = []; // temp var used when loading chart layout data from saved entry
 let lastLoaded = ""; // label name of the last loaded chart (for prepopulating the 'save' field)
+let currentReport = null; // immutable saved-report identity and access metadata
 let unsavedState = false;
 let showInfoState = false;
+let reportDateRange = {start: null, end: null};
+
+function updateReportSaveButtons(hasContent = savePlot.length > 0) {
+    if (!buttons.savePlot || !buttons.savePlotAs) return;
+    if (!hasContent) {
+        if (buttons.newReport) buttons.newReport.disable();
+        buttons.savePlot.disable();
+        buttons.savePlotAs.disable();
+        return;
+    }
+    if (buttons.newReport) buttons.newReport.enable();
+    buttons.savePlotAs.enable();
+    if (unsavedState && (!currentReport || currentReport.isOwner)) buttons.savePlot.enable();
+    else buttons.savePlot.disable();
+}
+
+/* test journey vars */
+let journeyState = {
+    summary: null,
+    selectedPasswordId: null,
+    detail: null,
+    filter: ''
+};
+let journeyDetailRequestToken = 0;
 
 /* external editor init and config */
 let externalEditorSettings = {};
@@ -131,6 +443,8 @@ function openExternalEditor(editorSettings, init = false) {
 }
 
 function getExternalQuestion() {
+    if (typeof externalEditorSettings.question !== 'undefined') return externalEditorSettings.question;
+    if (typeof scoring === 'undefined' || !scoring.pageId || !scoring.itemName) return '';
     return cmQ[scoring.pageId][scoring.str2hex(scoring.itemName)] ?? '';
 }
 
@@ -230,6 +544,60 @@ function onReady() {
         disabled: false
     });
 
+    buttons.closeJourney = new jsButton2($('header'), 'bCloseJourney', {
+        label: UILANG.m('Close Journey'),
+        icon: '../images/toolbarIcons/ic_tb_back.png',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: closeTestJourney,
+        disabled: false
+    });
+
+    insertVerticalDivider('header', 'vd_journeyView');
+
+    buttons.refreshJourney = new jsButton2($('header'), 'bRefreshJourney', {
+        label: UILANG.m('Refresh'),
+        icon: '../images/toolbarIcons/ic_tb_refresh.png',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: refreshTestJourney,
+        disabled: false
+    });
+
+    insertVerticalDivider('header', 'vd_reportView');
+
+    buttons.reportDateRange = new jsButton2($('header'), 'bReportDateRange', {
+        label: UILANG.m('Data range'),
+        icon: '../images/toolbarIcons/ic_tb_selectTestDate.png',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: () => openReportDateRange(),
+        disabled: false
+    });
+
+    buttons.refreshReport = new jsButton2($('header'), 'bRefreshReport', {
+        label: UILANG.m('Refresh data'),
+        icon: '../images/toolbarIcons/ic_tb_refresh.png',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: refreshReportData,
+        disabled: false
+    });
+
+    buttons.descriptiveStatistics = new jsButton2($('header'), 'bDescriptiveStatistics', {
+        label: UILANG.m('Descriptive Statistics'),
+        icon: '../images/toolbarIcons/ic_tb_statistics.svg',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: openDescriptiveStatistics,
+        disabled: false
+    });
+
     insertVerticalDivider('header', 'vd_reportView');
 
     // single plot add button
@@ -276,11 +644,31 @@ function onReady() {
         disabled: false
     });
 
+    buttons.addDateRangeBlock = new jsButton2($('header'), 'bAddDateRangeBlock', {
+        label: UILANG.m('Add Date Range'),
+        icon: '../images/toolbarIcons/ic_tb_selectTestDate.png',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: dateRangeBlockStart,
+        disabled: false
+    });
+
     insertVerticalDivider('header', 'vd_reportView');
+
+    buttons.newReport = new jsButton2($('header'), 'bNewReport', {
+        label: UILANG.m('New Report'),
+        icon: '../images/toolbarIcons/ic_tb_reportBuilder.png',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: newReport,
+        disabled: true
+    });
 
     // plot save button
     buttons.savePlot = new jsButton2($('header'), 'bsavePlot', {
-        label: UILANG.m('Save Report'),
+        label: UILANG.m('Save'),
         icon: '../images/toolbarIcons/ic_tb_saveButton.png',
         iconWidth: 48,
         width: 80,
@@ -289,9 +677,19 @@ function onReady() {
         disabled: true
     });
 
+    buttons.savePlotAs = new jsButton2($('header'), 'bsavePlotAs', {
+        label: UILANG.m('Save As'),
+        icon: '../images/toolbarIcons/ic_tb_saveButton.png',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: saveChartAs,
+        disabled: true
+    });
+
     // plot load button
     buttons.loadPlot = new jsButton2($('header'), 'bloadPlot', {
-        label: UILANG.m('Load/Remove Report'),
+        label: UILANG.m('Load/Manage'),
         icon: '../images/toolbarIcons/ic_tb_openReport.png',
         iconWidth: 48,
         width: 80,
@@ -366,6 +764,26 @@ function onReady() {
         disabled: true
     });
 
+    buttons.testJourney = new jsButton2($('header'), 'bTestJourney', {
+        label: UILANG.m('Test Journey'),
+        icon: '../images/toolbarIcons/ic_tb_activityTracker.png',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: openTestJourney,
+        disabled: true
+    });
+
+    buttons.manualScoring = new jsButton2($('header'), 'bManualScoring', {
+        label: UILANG.m('Manual Scoring'),
+        icon: '../images/toolbarIcons/ic_tb_pencilTip.png',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: () => ms_build_scoreTypeScreen({ testId: serverData['id'] }),
+        disabled: true
+    });
+
     // close manual scoring list section
     buttons.closeMSmain = new jsButton2($('header'), 'bCloseMSmain', {
         label: UILANG.m('Close scoring'),
@@ -378,6 +796,17 @@ function onReady() {
     });
 
     insertVerticalDivider('header', 'vd_ms1');
+
+    // close manual scoring list section
+    buttons.resetFullTest = new jsButton2($('header'), 'bResetFT', {
+        label: UILANG.m("Reset All Scores"),
+        icon: '../images/toolbarIcons/ic_tb_reset_results.png',
+        iconWidth: 48,
+        width: 80,
+        height: 100,
+        callback: resetFullTestResults,
+        disabled: false
+    });
 
     // close manual scoring detail section
     buttons.closeMSdetail = new jsButton2($('header'), 'bCloseMSdetail', {
@@ -436,26 +865,31 @@ function onReady() {
     function kbPopup() {
         new nxDialog('kbHelperDiag', {
             contents: /* html */ `
-                <h2 style="text-align: center;">${UILANG.m("Keyboard &amp; Mouse Shortcut Guide")}</h2>
-                <hr>
-                <table id="ms_kbhTable">
-                    <tr><td colspan="2" class='ms_kbh_sect'>${UILANG.m("Test/Test Taker Navigation")}</td></tr>
-                    <tr><td>Up Arrow</td><td>${UILANG.m("Move to next item in question/test taker list.")}</td></tr>
-                    <tr><td>Down Arrow</td><td>${UILANG.m("Move to previous item in question/test taker list.")}</td></tr>
-                    <tr><td>ALT+N</td><td>${UILANG.m("Move to next entry.")}</td></tr>
-                    <tr><td>ALT+P</td><td>${UILANG.m("Move to previous entry.")}</td></tr>
-                    <!-- <tr><td>Mouse Wheel Up/Down</td><td>${UILANG.m("Move up/down in question/test taker list when pointer is on<br>list or scoring area.")}</td></tr> -->
-                    <tr><td colspan="2" class='ms_kbh_sect'>${UILANG.m("Comments")}</tr>
-                    <tr><td>ALT+C</td><td>${UILANG.m("Focus on comment field.")}</td></tr>
-                    <tr><td>ALT+S</td><td>${UILANG.m("Save comment (when comment field has text).")}</td></tr>
-                    <tr><td colspan="2" class='ms_kbh_sect'>${UILANG.m("Scoring")}</td></tr>
-                    <tr><td>1, 2, 3, etc.</td><td>${UILANG.m("Assign <em>n</em> points (decimals are allowed in increments of 0.5).")}</td></tr>
-                    <tr><td>Right Arrow</td><td>${UILANG.m("Increment score value by 0.5")}</td></tr>
-                    <tr><td>Left Arrow</td><td>${UILANG.m("Decrement score value by 0.5")}</td></tr>
-                    <tr><td colspan="2" class='ms_kbh_sect'>${UILANG.m("Test Page Navigation")}</td></tr>
-                    <tr><td>Shift + Left Arrow</td><td>${UILANG.m("Navigate leftward amongst items within a multi-question test page.")}</td></tr>
-                    <tr><td>Shift + Right Arrow</td><td>${UILANG.m("Navigate rightward amongst items within a multi-question test page.")}</td></tr>
-                </table>
+                <div class="msShortcutDialog">
+                    <div class="msShortcutGroup">
+                        <h3>${UILANG.m("Test/Test Taker Navigation")}</h3>
+                        <div class="msShortcutRow"><kbd>Up Arrow</kbd><span>${UILANG.m("Move to next item in question/test taker list.")}</span></div>
+                        <div class="msShortcutRow"><kbd>Down Arrow</kbd><span>${UILANG.m("Move to previous item in question/test taker list.")}</span></div>
+                        <div class="msShortcutRow"><kbd>ALT+N</kbd><span>${UILANG.m("Move to next entry.")}</span></div>
+                        <div class="msShortcutRow"><kbd>ALT+P</kbd><span>${UILANG.m("Move to previous entry.")}</span></div>
+                    </div>
+                    <div class="msShortcutGroup">
+                        <h3>${UILANG.m("Comments")}</h3>
+                        <div class="msShortcutRow"><kbd>ALT+C</kbd><span>${UILANG.m("Focus on comment field.")}</span></div>
+                        <div class="msShortcutRow"><kbd>ALT+S</kbd><span>${UILANG.m("Save comment (when comment field has text).")}</span></div>
+                    </div>
+                    <div class="msShortcutGroup">
+                        <h3>${UILANG.m("Scoring")}</h3>
+                        <div class="msShortcutRow"><kbd>1, 2, 3</kbd><span>${UILANG.m("Assign <em>n</em> points (decimals are allowed in increments of 0.5).")}</span></div>
+                        <div class="msShortcutRow"><kbd>Right Arrow</kbd><span>${UILANG.m("Increment score value by 0.5")}</span></div>
+                        <div class="msShortcutRow"><kbd>Left Arrow</kbd><span>${UILANG.m("Decrement score value by 0.5")}</span></div>
+                    </div>
+                    <div class="msShortcutGroup">
+                        <h3>${UILANG.m("Test Page Navigation")}</h3>
+                        <div class="msShortcutRow"><kbd>Shift + Left Arrow</kbd><span>${UILANG.m("Navigate leftward amongst items within a multi-question test page.")}</span></div>
+                        <div class="msShortcutRow"><kbd>Shift + Right Arrow</kbd><span>${UILANG.m("Navigate rightward amongst items within a multi-question test page.")}</span></div>
+                    </div>
+                </div>
             `,
             width: 650,
             title: UILANG.m("Keyboard Help"),
@@ -467,16 +901,19 @@ function onReady() {
         });
     }
 
-    testView = [buttons.searchFiler, buttons.exportAnswers, buttons.exportScore, buttons.exportTiming, buttons.reportBuilder];
-    reportView = [buttons.closeRptBld, buttons.addSinglePlot, buttons.addMultiPlot, buttons.genRpt, buttons.savePlot, buttons.loadPlot, buttons.addCustomText, buttons.pbAdd];
-    msMainView = [buttons.closeMSmain];
+    testView = [buttons.searchFiler, buttons.exportAnswers, buttons.exportScore, buttons.exportTiming, buttons.reportBuilder, buttons.testJourney, buttons.manualScoring];
+    reportView = [buttons.closeRptBld, buttons.reportDateRange, buttons.refreshReport, buttons.descriptiveStatistics, buttons.addSinglePlot, buttons.addMultiPlot, buttons.genRpt, buttons.newReport, buttons.savePlot, buttons.savePlotAs, buttons.loadPlot, buttons.addCustomText, buttons.pbAdd, buttons.addDateRangeBlock];
+    journeyView = [buttons.closeJourney, buttons.refreshJourney];
+    msMainView = [buttons.closeMSmain, buttons.resetFullTest];
     msDetailView = [buttons.closeMSdetail, buttons.nextTT, buttons.prevTT];
 
     reportView.forEach(b => { b.hide(); });
+    journeyView.forEach(b => { b.hide(); });
     msMainView.forEach(b => { b.hide(); });
     msDetailView.forEach(b => { b.hide(); });
 
     $('[id^="vd_reportView"]').hide();
+    $('[id^="vd_journeyView"]').hide();
     $('[id^="vd_ms"]').hide();
 
     gui.s1 = createFlexSection('UI', 'sect001', 450, 450); // tests
@@ -485,6 +922,8 @@ function onReady() {
     gui.s4 = createFlexSection('UI', 'sect004', 450, 450, 1); // report plot preview
     gui.s5 = createFlexSection('UI', 'sect005', 450, 450, 1); // test score summary overview (main screen)
     gui.s6 = createFlexSection('UI', 'sect006', 450, 450, 1); // scoring selection screen
+    gui.s7 = createFlexSection('UI', 'sect007', 360, 360); // test journey test taker list
+    gui.s8 = createFlexSection('UI', 'sect008', 650, 650, 1); // test journey detail
 
     ms_panels.left_section = createFlexSection('UI', 'ms_left_section', 450, 450, 0); // question detail left pane
     ms_panels.right_section = createFlexSection('UI', 'ms_right_section', 450, 450, 1); // question detail right pane
@@ -497,50 +936,10 @@ function onReady() {
         noPadding: true
     });
 
-    /* eye icon toggle for blocked items */
-
-    $('#title_testList').append( /* html */ `<img data-val=0 id="bv_toggle" src="../images/flexSectionToolBar/ic_flex_locked_shown.png" alt=""/>`);
-
-    $('#bv_toggle').on("click", function() {
-        if ($(this).data("val") === 0) {
-            showBlocked = true;
-            $(this).data("val", 1);
-            this.src = "../images/flexSectionToolBar/ic_flex_locked_hidden.png";
-        } else {
-            showBlocked = false;
-            $(this).data("val", 0);
-            this.src = "../images/flexSectionToolBar/ic_flex_locked_shown.png";
-        }
-
-        results_startAjax('fetchLibrary', {
-            location: loc.folder,
-            showBlocked: showBlocked
-        });
-    });
-
-    let vbttdur = (settings.disableAnimations) ? 0 : 250;
-
-    $('#bv_toggle').prop('title', UILANG.m("Toggle blocked item visibility"));
-    $('#bv_toggle').tooltip({
-        track: true,
-        classes: {
-            "ui-tooltip-content": "uitt-upgrader"
-        },
-        show: {
-            effect: "fadeIn",
-            duration: vbttdur
-        },
-        hide: {
-            effect: "fadeOut",
-            duration: vbttdur
-        }
-    });
-
     gui.boxes.overview = createFlexBox(gui.s2, 'overview', {
         title: UILANG.m('Overview'),
         minHeight: 480,
-        flex: 1,
-        panelHeight: 30
+        flex: 1
     });
 
     gui.boxes.report = createFlexBox(gui.s3, 'report', {
@@ -560,6 +959,20 @@ function onReady() {
         title: UILANG.m('Test Taker Score List')
     });
 
+    gui.boxes.journeyList = createFlexBox(gui.s7, 'journeyList', {
+        title: UILANG.m('Test Journey'),
+        minHeight: 480,
+        flex: 1,
+        panelHeight: 30
+    });
+
+    gui.boxes.journeyDetail = createFlexBox(gui.s8, 'journeyDetail', {
+        title: UILANG.m('Journey Detail'),
+        minHeight: 480,
+        flex: 1,
+        panelHeight: 30
+    });
+
     /* define question detail left panel flexbox */
     ms_panels.left_section.box = createFlexBox(ms_panels.left_section, 'questionListBox', {
         title: UILANG.m('Question/Answer List'),
@@ -576,7 +989,6 @@ function onReady() {
 
     /* configure sectional inner elements */
     gui.boxes.overview.getInnerBox().append('<div id="resultsOverviewList"></div>');
-    gui.boxes.overview.getPanel().append('<div id="resultsOverviewHeader"></div>');
     gui.s2.fadeOut(0);
     // rpt builder + plot preview section
     gui.boxes.report.getInnerBox().append('<div id="reportOverviewList"></div>');
@@ -588,6 +1000,13 @@ function onReady() {
     gui.boxes.mscore_main.getInnerBox().append('<div id="scoremainOverviewList"></div>');
     gui.boxes.mscore_main.getPanel().append('<div id="scoremainOverviewHeader"></div>');
     gui.s6.fadeOut(0);
+    // test journey section
+    gui.boxes.journeyList.getInnerBox().append('<div class="journeyListLayout"><div id="journeyListFilter"></div><div id="journeyTakerList"></div></div>');
+    gui.boxes.journeyList.getPanel().append('<div id="journeyListHeader"></div>');
+    gui.boxes.journeyDetail.getInnerBox().append('<div id="journeyDetailView"></div>');
+    gui.boxes.journeyDetail.getPanel().append('<div id="journeyDetailHeader"></div>');
+    gui.s7.fadeOut(0);
+    gui.s8.fadeOut(0);
     // manual scoring detail section
     /* define inner DIVs inside respective flexbox containers */
     ms_panels.right_section.box.getInnerBox().append("<div id='ms_page'></div>");
@@ -596,20 +1015,7 @@ function onReady() {
     ms_panels.right_section.fadeOut(0);
 
 
-    //File Manager
-    const fileOpPermissions = {
-        copyFolders: false,
-        copyItems: false,
-        copyMultiple: false,
-        cutFolders: false,
-        cutItems: false,
-        cutMultiple: false
-    };
-    breadcrumbs = [{
-        id: 1,
-        name: "Home"
-    }];
-    gui.library = new fileMgr("#testList", "_idSuffix", [], breadcrumbs, fileOpPermissions, false, libraryEvent, 'all', true);
+    gui.library = new ResultsTestList("#testList", libraryEvent);
 
     preSelect = Number(preSelect);
     preType = Number(preType);
@@ -635,24 +1041,35 @@ function mayAcceptKeyStrokes() {
 
 function libraryEvent(type, data) {
     switch (type) {
-        case 'clear':
-            if (curFFlist !== null) paintBlocked(curFFlist);
-            break;
         case 'getSelect':
         case 'getSelectKeys':
             if (data.length > 0) {
                 selection = data;
-                if (data[0]['type'] !== 'folder') {
-                    serverData.testname = data[0]['name'];
-                    results_startAjax('fetchTestResultOverview', {
-                        selectedTest: data[0]['dbId'],
-                        location: loc.folder
-                    });
+	                if (data[0]['type'] !== 'folder') {
+                    manualScoringSummaryToken++;
+                    buttons.manualScoring.disable();
+	                    serverData.testname = data[0]['name'];
+	                    pendingResultTestId = data[0]['dbId'];
+	                    pendingResultToken = ++ajaxRequestToken;
+	                    if (pendingResultRequest && pendingResultRequest.readyState !== 4 && typeof pendingResultRequest.abort === 'function') {
+	                        pendingResultRequest.abort();
+	                    }
+	                    pendingResultRequest = results_startAjax('fetchTestResultOverview', {
+	                        selectedTest: data[0]['dbId'],
+	                        // The results browser is a flat, virtual list. Supplying its
+	                        // virtual root as a real test-folder location would trigger
+	                        // the legacy filer "test moved" check.
+	                        location: false,
+	                        _requestToken: pendingResultToken
+	                    });
                 } else {
+                    manualScoringSummaryToken++;
                     buttons.exportAnswers.disable();
                     buttons.exportTiming.disable();
                     buttons.exportScore.disable();
                     buttons.reportBuilder.disable();
+                    buttons.testJourney.disable();
+                    buttons.manualScoring.disable();
                     gui.s2.fadeOut(0);
                     gui.s5.fadeOut(0);
 
@@ -660,10 +1077,13 @@ function libraryEvent(type, data) {
             }
             break;
         case 'onNavigate':
+            manualScoringSummaryToken++;
             buttons.exportAnswers.disable();
             buttons.exportTiming.disable();
             buttons.exportScore.disable();
             buttons.reportBuilder.disable();
+            buttons.testJourney.disable();
+            buttons.manualScoring.disable();
             oldLoc = cloneObj(loc);
             loc.folder = data.dbId;
 
@@ -687,10 +1107,13 @@ function libraryEvent(type, data) {
 
             break;
         case 'onBreadcrumbNavigate':
+            manualScoringSummaryToken++;
             buttons.exportAnswers.disable();
             buttons.exportTiming.disable();
             buttons.exportScore.disable();
             buttons.reportBuilder.disable();
+            buttons.testJourney.disable();
+            buttons.manualScoring.disable();
             oldLoc = cloneObj(loc);
             loc.folder = data;
             results_startAjax('fetchLibrary', {
@@ -705,6 +1128,9 @@ function libraryEvent(type, data) {
             results_startAjax('search', {
                 searchString: data
             });
+            break;
+        case 'onMetaSearchRequest':
+            results_startAjax('search', {...data, searchMode: 'meta'});
             break;
         case 'onSearchItemClick':
             oldLoc = cloneObj(loc);
@@ -726,15 +1152,18 @@ function libraryEvent(type, data) {
 }
 
 function clickSearch() {
-    gui.library.filerSearch();
+    gui.library.openSearch();
 }
 
 function editSelection() {
     if (selection[0].type === "folder") {
+        manualScoringSummaryToken++;
         buttons.exportAnswers.disable();
         buttons.exportTiming.disable();
         buttons.exportScore.disable();
         buttons.reportBuilder.disable();
+        buttons.testJourney.disable();
+        buttons.manualScoring.disable();
         oldLoc = cloneObj(loc);
         loc.folder = selection[0].dbId;
         results_startAjax('fetchLibrary', {
@@ -939,6 +1368,7 @@ function exportAnswers(expAnsOpts, button) {
 
         /* File type selection section */
         const dlFmt = insertDropdown($('#optItems'), 'dlType', UILANG.m('Download Format'), {
+            theme: 'backend',
             elements: [{
                 label: UILANG.m('Comma Separated (.csv)'),
                 value: "csv"
@@ -964,6 +1394,7 @@ function exportAnswers(expAnsOpts, button) {
 
         /* Delimiter value selection (for CSV only) */
         const delimSel = insertDropdown($('#optItems'), 'delim', UILANG.m('Delimiter Value (CSV)'), {
+            theme: 'backend',
             elements: [{
                 label: UILANG.m('Comma (,)'),
                 value: ","
@@ -1055,11 +1486,11 @@ function exportBehaviour_timing(expAnsOpts, button) {
                 'cancel': true,
                 value: 'cancel'
             },
-                {
-                    label: UILANG.m('Download Report'),
-                    'default': true,
-                    value: 'dl'
-                }
+            {
+                label: UILANG.m('Download Report'),
+                'default': true,
+                value: 'dl'
+            }
             ],
             title: UILANG.m('Download time spent'),
             width: 600,
@@ -1219,18 +1650,19 @@ function exportBehaviour_timing(expAnsOpts, button) {
 
         /* File type selection section */
         const dlFmt = insertDropdown($('#optItems'), 'dlType', UILANG.m('Download Format'), {
+            theme: 'backend',
             elements: [{
                 label: UILANG.m('Comma Separated (.csv)'),
                 value: "csv"
             },
-                {
-                    label: UILANG.m('MS-Excel (.xlsx)'),
-                    value: "excel"
-                },
-                {
-                    label: UILANG.m('Open/Libre office (.ods)'),
-                    value: "openoffice"
-                }
+            {
+                label: UILANG.m('MS-Excel (.xlsx)'),
+                value: "excel"
+            },
+            {
+                label: UILANG.m('Open/Libre office (.ods)'),
+                value: "openoffice"
+            }
             ],
             onChange: fmtOptChanged,
             width: "250px",
@@ -1244,18 +1676,19 @@ function exportBehaviour_timing(expAnsOpts, button) {
 
         /* Delimiter value selection (for CSV only) */
         const delimSel = insertDropdown($('#optItems'), 'delim', UILANG.m('Delimiter Value (CSV)'), {
+            theme: 'backend',
             elements: [{
                 label: UILANG.m('Comma (,)'),
                 value: ","
             },
-                {
-                    label: UILANG.m('Semicolon (;)'),
-                    value: ";"
-                },
-                {
-                    label: UILANG.m('Tab (    )'),
-                    value: "%09"
-                }
+            {
+                label: UILANG.m('Semicolon (;)'),
+                value: ";"
+            },
+            {
+                label: UILANG.m('Tab (    )'),
+                value: "%09"
+            }
             ],
             onChange: delimOptChanged,
             width: "250px",
@@ -1315,14 +1748,25 @@ function exportBehaviour_timing(expAnsOpts, button) {
     }
 }
 
-function reportBuilder() {
-    results_startAjax('fetchReportData', {
-        testId: serverData['id']
-    });
+async function reportBuilder() {
+    let reportResponse;
+    currentReport = null;
+    lastLoaded = "";
+    ca_w_set = false;
+    chartAreaWidth = null;
+    reportDateRange = {start: null, end: null};
+    try {
+        reportResponse = await results_startAjax('fetchReportData', reportDataRequest());
+    } catch (error) {
+        console.error(error);
+        return;
+    }
+    if (reportResponse.error || !reportResponse.data) return;
+    report_data = reportResponse.data;
 
     // disable up/down keys when in report builder mode
-    kbHandler.registerShortcut('up', "");
-    kbHandler.registerShortcut('down', "");
+    kbHandler.registerShortcut('up', () => journeyNavigateSelection(-1));
+    kbHandler.registerShortcut('down', () => journeyNavigateSelection(1));
 
     // hide test view elements
     hideMenu();
@@ -1337,14 +1781,14 @@ function reportBuilder() {
     reportView.forEach(e => { e.show() });
 
     // start off with save plot button disabled in case it's coming back from close/reopen of report builder
-    buttons.savePlot.disable();
+    updateReportSaveButtons(false);
 
     // hide test view button dividers; show report builder dividers
     $('[id^="vd_test"]').hide();
     $('[id^="vd_reportView"]').show();
 
     // update flexbox title with specific test info
-    $('#title_reportBox').html(UILANG.m("REPORT BUILDER FOR TEST ID:") + "  <strong>" + serverData.id + " (" + serverData.testname + ")" + "</strong>");
+    $('#title_reportBox').html(UILANG.m("REPORT BUILDER FOR TEST ID:") + "  <strong>" + journeyEsc(serverData.id) + " (" + journeyEsc(serverData.testname) + ")</strong>");
 
 
 
@@ -1354,12 +1798,18 @@ function reportBuilder() {
 
     /* Report block title */
     gui.boxes.report.rb_title = insertSubSection(gui.boxes.report.getInnerBox(), 'rb_title');
-    gui.boxes.report.rb_title.append(`<div class='aoheader_linear'><em>${serverData.testname}</em> ${UILANG.m("Report Blocks")}</div>`);
+    gui.boxes.report.rb_title.append(`
+        <div class="rbActiveDateRange">
+            <span>${UILANG.m("Active date range")}</span>
+            <strong id="rbActiveDateRangeValue">${journeyEsc(reportDateRangeLabel())}</strong>
+        </div>
+    `);
+    gui.boxes.report.rb_title.append(`<div class='aoheader_linear'><em>${journeyEsc(serverData.testname)}</em> ${UILANG.m("Report Blocks")}</div>`);
 
     /* Report block data */
     gui.boxes.report.rb_data = insertSubSection(gui.boxes.report.getInnerBox(), 'rb_data', UILANG.m('Report Configuration and Layout'));
 
-    window.rb_table = new jsSortableTable('rb_data', 'rb_table', {
+    window.rb_table = new JsSortableTable('rb_data', 'rb_table', {
         cssStylesCells: {
             height: "25px"
         },
@@ -1382,7 +1832,7 @@ function reportBuilder() {
         consecutiveNumbers: true,
         hideDeleteLinks: true,
         actionButton: true,
-        actionButtonSize: "30px",
+        actionButtonSize: "26px",
         actionButtonImageActive: "../../../images/flexSectionToolBar/ic_flex_tb_delete.png",
         actionButtonImageInactive: "../../../images/flexSectionToolBar/ic_flex_tb_delete.png",
         onChange: function(deleted, _table_id, newOrder) {
@@ -1407,6 +1857,7 @@ function reportBuilder() {
                 delete (report_config[delIDX]);
 
                 unsavedState = true; // since a modification has been made to the table
+                updateReportSaveButtons(true);
 
                 // hide report block area when empty and completely reset config holding vars and remove unsavedState flag
                 if ($('.data-rows_rb_table').length === 0) {
@@ -1417,7 +1868,7 @@ function reportBuilder() {
                     buttons.genRpt.disable();
 
                     // disable save chart layout button
-                    buttons.savePlot.disable();
+                    updateReportSaveButtons(false);
 
                     // remove unsaved state
                     unsavedState = false;
@@ -1450,6 +1901,7 @@ function reportBuilder() {
                     savePlot = newSP.filter(e => e.length !== 0);
                     layoutData = newLD.filter(e => e.length !== 0);
                     unsavedState = true;
+                    updateReportSaveButtons(true);
                 }
 
                 // chart reordering in UI
@@ -1482,8 +1934,17 @@ function reportBuilder() {
                     icon: "../images/warning.png",
                     iconWidth: 64,
                     buttons: [{ label: UILANG.m("Cancel"), value: "cancel", 'cancel': true, 'default': true }, { label: UILANG.m("Yes"), value: "yes" }],
-                    contents: /* html */ `<p>${UILANG.m("Are you sure you want to delete the following report block? This action is irreversible!")}</p>
-                    <p style="font-weight: bold; font-style: italic">${delDesc}</p>`,
+                    contents: /* html */ `
+                        <div class="rbDialog">
+                            <div class="rbDialogMessage rbDialogMessage-warning rbDialogMessage-noIcon">
+                                <div class="rbDialogMessageText">
+                                    <strong>${UILANG.m("Delete report block")}</strong>
+                                    <span>${UILANG.m("Are you sure you want to delete the following report block? This action is irreversible!")}</span>
+                                </div>
+                            </div>
+                            <div class="rbDialogTile rbDeleteTarget">${delDesc}</div>
+                        </div>
+                    `,
                     callback: function(btnVal) {
                         if (btnVal === "yes") {
 
@@ -1505,6 +1966,7 @@ function reportBuilder() {
                             delete (report_config[delIDX]);
 
                             unsavedState = true; // since a modification has been made to the table
+                            updateReportSaveButtons(true);
 
                             // hide report block area when empty and completely reset config holding vars and remove unsavedState flag
                             if ($('.data-rows_rb_table').length === 0) {
@@ -1515,7 +1977,7 @@ function reportBuilder() {
                                 buttons.genRpt.disable();
 
                                 // disable save chart layout button
-                                buttons.savePlot.disable();
+                                updateReportSaveButtons(false);
 
                                 // remove unsaved state
                                 unsavedState = false;
@@ -1531,15 +1993,15 @@ function reportBuilder() {
 
                 /* REPORT BLOCK CONFIGURATION OPENING ROUTINE */
 
-                let pt_str = $(`.sTableClickable[data-tdid=${tblIdx}]`).siblings(`[data-fielddesc='plotType']`).html();
-                let pd_str = $(`.sTableClickable[data-tdid=${tblIdx}]`).siblings(`[data-fielddesc='plotType']`).next().html();
+                let pt_str = $(`.sTableClickable[data-tdid=${tblIdx}]`).siblings(`[data-fielddesc='plotType']`).text();
+                let pd_str = $(`.sTableClickable[data-tdid=${tblIdx}]`).siblings(`[data-fielddesc='plotType']`).next().text();
 
                 if (pt_str.startsWith("single")) {
                     let fName = {
-                        fieldName: $(`.sTableClickable[data-tdid=${tblIdx}]`).html(),
-                        desc: report_data.items[$(`.sTableClickable[data-tdid=${tblIdx}]`).html()],
-                        fullTxt: report_data.items[$(`.sTableClickable[data-tdid=${tblIdx}]`).html()],
-                        xcat: report_data.xcat[$(`.sTableClickable[data-tdid=${tblIdx}]`).html()]
+                        fieldName: $(`.sTableClickable[data-tdid=${tblIdx}]`).text(),
+                        desc: report_data.items[$(`.sTableClickable[data-tdid=${tblIdx}]`).text()],
+                        fullTxt: report_data.items[$(`.sTableClickable[data-tdid=${tblIdx}]`).text()],
+                        xcat: report_data.xcat[$(`.sTableClickable[data-tdid=${tblIdx}]`).text()]
                     };
 
                     if (pd_str.split("_")[0].startsWith("CTXT")) {
@@ -1550,6 +2012,8 @@ function reportBuilder() {
 
                     } else if (pd_str.split("_")[0].startsWith("PBR")) {
                         alert(UILANG.m("Page breaks are not updatable."));
+                    } else if (pd_str.split("_")[0].startsWith("DTR")) {
+                        alert(UILANG.m("This block always reflects the active report date range."));
                     }
                     else {
                         singlePlotConf(fName, true, report_data, tblIdx, true);
@@ -1567,26 +2031,29 @@ function reportBuilder() {
     gui.boxes.report.rb_title.hide();
     gui.boxes.report.rb_data.hide();
 
-    gui.boxes.report.getInnerBox().prepend("<div id='dsvl_container' style='display: block; width: 100%; padding-bottom: 20px;'></div>");
+    gui.boxes.plotPreview.pp = insertSubSection(gui.boxes.plotPreview.getInnerBox(), 'chartArea', `<span><strong>${journeyEsc(serverData.testname)}</strong> ${UILANG.m('PDF preview')}</span>`);
+    statusBarDefault = `<strong>${UILANG.m('test results')}</strong>: <span id="sb_submsg">${journeyEsc(serverData.testname)}</span>`;
+}
 
-    /* descriptive stats dialog init */
-    new nxButton($("#dsvl_container"), "ds_view_launch", {
-        label: UILANG.m("Descriptive Statistics"),
-        value: "ok",
-        callback: function() {
-            new nxDialog("ds_view", {
-                buttons: [{
-                    label: UILANG.m("Download in CSV"),
-                    value: "dl"
-                }, {
-                    label: UILANG.m("Close"),
-                    value: "close",
-                    'default': true,
-                    'cancel': true
-                }],
-                title: UILANG.m("Descriptive Statistics"),
-                width: 1152,
-                contents: /* html */ `
+function openDescriptiveStatistics() {
+    new nxDialog("ds_view", {
+        buttons: [{
+            label: UILANG.m("Download in CSV"),
+            value: "dl"
+        }, {
+            label: UILANG.m("Close"),
+            value: "close",
+            'default': true,
+            'cancel': true
+        }],
+        title: UILANG.m("Descriptive Statistics"),
+        width: 1152,
+        contents: /* html */ `
+            <div class="rbDialog rbStatsDialog">
+                <div class="rbDialogTile rbStatsIntro">
+                    <strong>${UILANG.m("Descriptive Statistics")}</strong>
+                    <span>${UILANG.m("Summary values for the reportable items in this test.")}</span>
+                </div>
                 <div id="stats_table_container">
                     <table id='stats_table'>
                         <tr id='st_header'>
@@ -1594,90 +2061,120 @@ function reportBuilder() {
                         </tr>
                     </table>
                 </div>
-                `,
-                callback: function(action) {
-                    if (action === "dl") dlStats();
-                }
-            });
-
-            build_an_table(); // call to table builder
+            </div>
+        `,
+        callback: function(action) {
+            if (action === "dl") downloadDescriptiveStatistics();
         }
     });
 
-    gui.boxes.plotPreview.pp = insertSubSection(gui.boxes.plotPreview.getInnerBox(), 'chartArea', `<span><strong>${serverData.testname}</strong> ${UILANG.m('PDF preview')}</span>`);
-    statusBarDefault = `<strong>${UILANG.m('test results')}</strong>: <span id="sb_submsg">${serverData.testname}</span>`;
+    build_an_table();
+}
 
-    function dlStats() {
+function downloadDescriptiveStatistics() {
+    const data = [];
+    const rows = document.querySelectorAll("#stats_table tr");
 
-        let data = [];
-        let rows = document.querySelectorAll("#stats_table tr");
-
-        for (let i = 0; i < rows.length; i++) {
-            let row = [], cols = rows[i].querySelectorAll("td, th");
-
-            for (let j = 0; j < cols.length; j++) {
-                row.push('"' + cols[j].innerText + '"'); // this allows for commas inside CSV cell element
-            }
-
-            data.push(row.join(","));
+    for (let i = 0; i < rows.length; i++) {
+        const row = [];
+        const cols = rows[i].querySelectorAll("td, th");
+        for (let j = 0; j < cols.length; j++) {
+            const csvValue = cols[j].innerText.replaceAll('"', '""');
+            row.push('"' + csvValue + '"');
         }
-
-        let almostFinal = data.join("\n");
-
-        let finalText = "\uFEFF" + almostFinal; // convert final text to Unicode UTF-8 standard since we're using extended chars in the table
-
-        const a = window.document.createElement('a');
-        a.href = window.URL.createObjectURL(new Blob([finalText], { type: 'text/csv;charset=utf-8' }));
-        a.download = `desc_stats_.csv`;
-
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        data.push(row.join(","));
     }
+
+    const finalText = "\uFEFF" + data.join("\n");
+    const anchor = window.document.createElement('a');
+    const objectUrl = window.URL.createObjectURL(new Blob([finalText], {type: 'text/csv;charset=utf-8'}));
+    anchor.href = objectUrl;
+    anchor.download = `desc_stats_${serverData.id}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(objectUrl);
 }
 
-async function checkUnsaved(onExit) {
-
-    /* check if build chart is unsaved prior to closing */
-
-    let cStr = onExit ? UILANG.m("Unsaved changes detected! If this page is left, all changes will be lost. Do you wish to exit?") : UILANG.m("Unsaved changes detected! If a new report is loaded, all changes will be lost. Do you wish to continue?");
-
-    return new nxDialog('unsavedConf', {
-        title: UILANG.m("Confirm Unsaved Changes"),
-        contents: cStr,
-        returnPromise: true,
-        dataFormat: "object",
-        buttons: [{
-            value: true,
-            label: UILANG.m("Yes")
-        }, {
-            value: false,
-            label: UILANG.m("No"),
-            'default': true
-        }]
+async function openTestJourney() {
+    const response = await results_startAjax('fetchTestJourneySummary', {
+        testId: serverData['id']
     });
+
+    if (response.error) return;
+    journeyState.summary = response.data;
+    journeyState.detail = null;
+    journeyState.selectedPasswordId = null;
+    journeyState.filter = '';
+
+    kbHandler.registerShortcut('up', "");
+    kbHandler.registerShortcut('down', "");
+
+    hideMenu();
+    hideSection(gui.s1, [gui.s1]);
+    hideSection(gui.s2, [gui.s2]);
+    hideSection(gui.s5, [gui.s5]);
+    showSection(gui.s7, [gui.s7]);
+    showSection(gui.s8, [gui.s8]);
+
+    testView.forEach(e => { e.hide(); });
+    journeyView.forEach(e => { e.show(); });
+    $('[id^="vd_test"]').hide();
+    $('[id^="vd_journeyView"]').show();
+
+    gui.boxes.journeyList.setTitle(`${UILANG.m('TEST JOURNEY')} <span class='ms_title_emph'>${journeyEsc(response.data.test.name)}</span> (${response.data.test.id})`);
+    gui.boxes.journeyDetail.setTitle(UILANG.m('Journey Detail'));
+    gui.statusBar.setStatus(`<strong>${UILANG.m('test results')}</strong>: <span id="sb_submsg">${UILANG.m('test journey')} - ${journeyEsc(response.data.test.name)}</span>`, false, "black");
+
+    renderJourneyList();
+    const first = response.data.testTakers?.[0];
+    if (first) journeySelectPassword(first.passwordId);
+    else $('#journeyDetailView').html(`<div class="journeyEmpty">${UILANG.m('No accessible test taker activity found.')}</div>`);
 }
 
-async function closeRptBld() {
+async function refreshTestJourney() {
+    const selectedPasswordId = journeyState.selectedPasswordId;
+    const filter = journeyState.filter;
+    $('#journeyDetailView').html(`<div class="journeyLoading">${UILANG.m('please wait')}</div>`);
 
-    if (unsavedState) {
-        let confExit = await checkUnsaved(true);
-        if (!confExit.button) return;
+    const response = await results_startAjax('fetchTestJourneySummary', {
+        testId: serverData['id']
+    });
+    if (response.error) {
+        if (journeyState.detail) renderJourneyDetail(journeyState.detail);
+        else $('#journeyDetailView').html(`<div class="journeyEmpty">${UILANG.m('Unable to refresh the test journey.')}</div>`);
+        return;
     }
 
-    unsavedState = false;
+    journeyState.summary = response.data;
+    journeyState.detail = null;
+    journeyState.filter = filter;
+    const selectedStillExists = (response.data.testTakers || []).some((tt) => String(tt.passwordId) === String(selectedPasswordId));
+    const nextPasswordId = selectedStillExists ? selectedPasswordId : response.data.testTakers?.[0]?.passwordId;
+    journeyState.selectedPasswordId = nextPasswordId || null;
 
-    /* Reset all required elements to baseline for next report build request */
-    report_config = [];
-    savePlot = [];
-    fromLoad = false;
-    layoutData = [];
-    loadLD = [];
-    lastLoaded = "";
+    renderJourneyList();
+    if (nextPasswordId) {
+        await journeySelectPassword(nextPasswordId);
+    } else {
+        $('#journeyDetailView').html(`<div class="journeyEmpty">${UILANG.m('No accessible test taker activity found.')}</div>`);
+    }
+}
 
-    $('#chartArea').remove();
+function closeTestJourney() {
+    journeyDetailRequestToken++;
+    journeyState = {
+        summary: null,
+        selectedPasswordId: null,
+        detail: null,
+        filter: ''
+    };
 
-    // re-enable up/down keys when in standard mode
+    $('#journeyTakerList, #journeyListFilter').empty();
+    $('#journeyDetailView').empty();
+    $('#journeyListHeader').empty();
+    $('#journeyDetailHeader').empty();
+
     kbHandler.registerShortcut('up', cursorUp);
     kbHandler.registerShortcut('down', cursorDown);
     kbHandler.registerShortcut('BACKSPACE');
@@ -1687,357 +2184,140 @@ async function closeRptBld() {
         preventDefault: false
     });
 
-    $('#rb_title').remove();
-    $('#rb_data').remove();
-    $('#an_data').remove();
-    $('#an_title').remove();
-    $('#dsvl_container').remove();
-
-    // switch back to standard test results view
     showMenu();
-    hideSection(gui.s3, [gui.s3]);
-    hideSection(gui.s4, [gui.s4]);
+    hideSection(gui.s7, [gui.s7]);
+    hideSection(gui.s8, [gui.s8]);
     showSection(gui.s1, [gui.s1]);
     showSection(gui.s2, [gui.s2]);
     showSection(gui.s5, [gui.s5]);
 
-    // flip back jsbutton2 config
-    testView.forEach(element => { element.show(); });
-    reportView.forEach(element => { element.hide() });
-
-    // reset pdf generate to disabled mode
-    buttons.genRpt.disable();
-
-    // re-show test view button dividers; hide report view dividers
+    journeyView.forEach(e => { e.hide(); });
+    testView.forEach(e => { e.show(); });
+    $('[id^="vd_journeyView"]').hide();
     $('[id^="vd_test"]').show();
-    $('[id^="vd_reportView"]').hide();
+    gui.statusBar.setStatus(statusBarDefault);
 }
 
-async function exportScore(expScrOpts, button) {
+function renderJourneyList() {
+    const list = $('#journeyTakerList');
+    const data = journeyState.summary || {};
+    const testTakers = data.testTakers || [];
 
-    let mscheck = await results_startAjax("hasMSleft", { testId: serverData['id'] });
-    let hasMsLeft = mscheck.hasMSleft;
-    let setExpOpts; // internal holder for options being set
-
-    /* when scoring items are still open */
-    if (typeof button === 'undefined' && hasMsLeft) {
-        let contOp;
-        contOp = await new nxDialog('hasmsDiag', {
-            title: UILANG.m("Scoring Items Remaining Warning"),
-            returnPromise: true,
-            contents: /* html */ `
-            <p style="font-weight: bold">${UILANG.m("WARNING!")}</p>
-            <p>${UILANG.m("This test contains question items which have not yet been scored. This report should not be used for any final determinations. You may continue or cancel this operation.")}</p>
-            `,
-            buttons: [{
-                value: 'c',
-                label: UILANG.m("Cancel"),
-                'default': true,
-                'cancel': true
-            }, {
-                value: 'ok',
-                label: UILANG.m("Continue"),
-                'cancel': true
-            }]
-        });
-
-        if (contOp.button === 'c') return;
-    }
-    if (!button) {
-        setExpOpts = {
-            // scoringModel: '',
-            fmt: '',
-            detail: localStorage.getItem("expDetail"),
-            delim: localStorage.getItem("expDelim"),
-            sd: "",
-            ed: ""
-        };
-
-        const dialogData = {
-            buttons: [{
-                label: UILANG.m('Cancel'),
-                'cancel': true,
-                value: 'cancel'
-            },
-            {
-                label: UILANG.m('Download Scoring'),
-                'default': true,
-                value: 'dl',
-            }
-            ],
-            title: UILANG.m('Download Scoring Results'),
-            width: 600,
-            contents: /* html */ `
-				<div>
-					<div style='display: block; padding-bottom: 10px; border-bottom: 1px solid #ccc'>
-						<strong>${UILANG.m("Export Options:")}</strong>
-					</div>
-
-					<div id="optItems" style="padding-top: 10px;"></div>
-
-				</div>
-				`,
-            callback: exportScore
-        };
-
-        const scrDiag = new nxDialog('scoringDlDialog', dialogData, [setExpOpts]);
-
-        /* Date filtering section */
-
-        // start date input init
-        insertTextfield($('#optItems'), "s_date_start", UILANG.m("Set Start Date (optional)"));
-        $('#s_date_start').prop("placeholder", UILANG.m("DD-MM-YYYY starting date"));
-
-        $('#s_date_start').datepicker({
-            dateFormat: 'dd-mm-yy',
-            showOn: "focus",
-            maxDate: 0,
-            onSelect: function(dt) {
-                setExpOpts.sd = dt;
-            },
-            onClose: function() {
-                if (isValidDate($('#s_date_start').val()) === true) {
-                    $('#s_date_end').datepicker("option", "minDate", this.value);
-                } else {
-                    $('#s_date_end').datepicker("option", "minDate", null);
-                }
-            }
-        });
-
-        // handler for manual entry
-        $('#s_date_start').on("input", function() {
-            if (isValidDate(this.value) === true) {
-                let sdParts = this.value.split("-");
-                let sDate = new Date(sdParts[2], sdParts[1] - 1, sdParts[0]);
-
-                let edParts = $("#s_date_end").val().split("-");
-                let eDate = new Date(edParts[2], edParts[1] - 1, edParts[0]);
-
-                let tDate = new Date(); // get today's date for comparison
-
-                if (sDate > eDate || sDate > tDate) {
-                    dateErrMsg(UILANG.m("Start Date must be older than End Date (when specified), and not beyond the current date."));
-                    this.value = "";
-                    $('#s_date_end').datepicker("option", "minDate", null);
-                    scrDiag.enableButton("dl");
-                    $(this).css("background-color", "initial");
-                    $(this).css("color", "#000");
-                } else {
-                    scrDiag.enableButton("dl");
-                    $(this).css("background-color", "initial");
-                    $(this).css("color", "#000");
-                }
-            } else if (isValidDate(this.value) === false) {
-                if (this.value !== "") {
-                    $(this).css("background-color", "#d66f74");
-                    $(this).css("color", "white");
-                    scrDiag.disableButton("dl");
-                } else { // this means date value field is blank
-                    scrDiag.enableButton("dl");
-                    $(this).css("background-color", "initial");
-                    $(this).css("color", "#000");
-                }
-            }
-            setExpOpts.sd = this.value;
-        });
-
-        // end date input init
-        insertTextfield($('#optItems'), "s_date_end", UILANG.m("Set End Date (optional)"));
-
-        $('#s_date_end').datepicker({
-            dateFormat: 'dd-mm-yy',
-            showOn: "focus",
-            maxDate: 0,
-            onSelect: function(dt) {
-                setExpOpts.ed = dt;
-            },
-            onClose: function() {
-                if (isValidDate(this.value) === true) {
-                    $('#s_date_start').datepicker("option", "maxDate", this.value);
-                } else {
-                    $('#s_date_start').datepicker("option", "maxDate", 0);
-                }
-            }
-        });
-
-        // handler for manual entry
-        $('#s_date_end').on("input", function() {
-            if (isValidDate(this.value) === true) {
-                let sdParts = $("#s_date_start").val().split("-");
-                let sDate = new Date(sdParts[2], sdParts[1] - 1, sdParts[0]);
-
-                let edParts = this.value.split("-");
-                let eDate = new Date(edParts[2], edParts[1] - 1, edParts[0]);
-
-                let tDate = new Date(); // get today's date for comparison
-
-                if (eDate < sDate || eDate > tDate) {
-
-                    dateErrMsg(UILANG.m("End Date must be newer than Start Date, and not beyond the current date."));
-                    this.value = "";
-                    $('#s_date_start').datepicker("option", "maxDate", 0);
-                    scrDiag.enableButton("dl");
-                    $(this).css("background-color", "initial");
-                    $(this).css("color", "#000");
-                } else {
-                    scrDiag.enableButton("dl");
-                    $(this).css("background-color", "initial");
-                    $(this).css("color", "#000");
-                }
-            } else if (isValidDate(this.value) === false) {
-                if (this.value !== "") {
-                    $(this).css("background-color", "#d66f74");
-                    $(this).css("color", "white");
-                    scrDiag.disableButton("dl");
-                } else { // this means date value field is blank
-                    scrDiag.enableButton("dl");
-                    $(this).css("background-color", "initial");
-                    $(this).css("color", "#000");
-                }
-            }
-
-            setExpOpts.ed = this.value;
-        });
-
-        $('#s_date_end').prop("placeholder", UILANG.m("DD-MM-YYYY ending date"));
-
-        // add hr between date and rest of the options
-        $('#s_date_end').parent().parent().parent().append('<hr>');
-
-        // make font nicer
-        $('[id^="s_date_"]').css('font-size', 'smaller');
-
-        // blur handler for date fields
-        $("#s_date_start, #s_date_end").on("blur", function() {
-            if (isValidDate(this.value) === false) {
-                this.value = "";
-                $(this).css("background-color", "initial");
-                $(this).css("color", "#000");
-                scrDiag.enableButton("dl");
-            }
-        });
-
-        /* init file type dropdown option list */
-        const dlDetails = insertDropdown($('#optItems'), 'dlDetails', UILANG.m('Level of detail'), {
-            elements: [{
-                label: UILANG.m('Score for each item'),
-                value: "all"
-            },
-            {
-                label: UILANG.m('Total score only'),
-                value: "total"
-            }
-            ],
-            onChange: detailOptChanged,
-            width: "250px",
-            cssCollapsed: {
-                'text-align': 'left'
-            },
-            cssExpanded: {
-                'text-align': 'left'
-            },
-        });
-
-        const dlFmt = insertDropdown($('#optItems'), 'dlType', UILANG.m('Download Format'), {
-            elements: [{
-                label: UILANG.m('Comma Separated (.csv)'),
-                value: "csv"
-            },
-            {
-                label: UILANG.m('MS-Excel (.xlsx)'),
-                value: "excel"
-            },
-            {
-                label: UILANG.m('Open/Libre office (.ods)'),
-                value: "openoffice"
-            }
-            ],
-            onChange: fmtOptChanged,
-            width: "250px",
-            cssCollapsed: {
-                'text-align': 'left'
-            },
-            cssExpanded: {
-                'text-align': 'left'
-            },
-        });
-
-        /* Delimiter value selection (for CSV only) */
-        const delimSel = insertDropdown($('#optItems'), 'delim', UILANG.m('Delimiter Value (CSV)'), {
-            elements: [{
-                label: UILANG.m('Comma (,)'),
-                value: ","
-            },
-            {
-                label: UILANG.m('Semicolon (;)'),
-                value: ";"
-            },
-            {
-                label: UILANG.m('Tab (    )'),
-                value: "%09"
-            }
-            ],
-            onChange: delimOptChanged,
-            width: "250px",
-            cssCollapsed: {
-                'text-align': 'left'
-            },
-            cssExpanded: {
-                'text-align': 'left'
-            },
-        });
-
-        dlDetails.reset(localStorage.getItem('expDetail'));
-        dlFmt.reset(localStorage.getItem('expFmt'));
-        fmtOptChanged(null, localStorage.getItem('expFmt'));
-        delimSel.reset(localStorage.getItem('expDelim'));
-
-        // right-align all of our option row property cells
-        $('.jsInterfaceRowPropertyCell').css('text-align', 'right');
+    if (testTakers.length === 0) {
+		$('#journeyListFilter').empty();
+        list.html(`<div class="journeyEmpty">${UILANG.m('No accessible test takers found.')}</div>`);
+        return;
     }
 
-    function fmtOptChanged(sender, value) {
-        setExpOpts.fmt = value;
-
-        // save/remember option
-        localStorage.setItem("expFmt", value);
-
-        // show/hide logic for delimier selection option
-        (value !== "csv") ? $('.jsInterfaceRow').last().hide() : $('.jsInterfaceRow').last().show(); // this assumes that the delimiter option will always be the last row
-    }
-
-    function delimOptChanged(sender, value) {
-        setExpOpts.delim = value;
-
-        // save/remember option
-        localStorage.setItem("expDelim", value);
-    }
-
-    function detailOptChanged(sender, value) {
-        setExpOpts.detail = value;
-
-        // save/remember option
-        localStorage.setItem("expDetail", value);
-    }
-
-    // Send request on dl button
-    if (button === 'dl') {
-
-        await results_startAjax('fetchDetailedTestScore', {
-            selectedTest: serverData['id'],
-            // scoringModel: scoringModel,
-            detail: expScrOpts.detail,
-            format: expScrOpts.fmt,
-            delimiter: expScrOpts.delim,
-            startDate: expScrOpts.sd,
-            endDate: expScrOpts.ed
-        });
-    }
+	$('#journeyListFilter').html(/* html */`
+        <div class="journeyFilterWrap">
+            <input id="journeyFilter" type="search" value="${journeyEsc(journeyState.filter)}" placeholder="${UILANG.m('Filter test takers, passwords, labels')}" />
+        </div>
+    `);
+	list.html('<div class="journeyTakerStack"></div>');
+    $('#journeyFilter').off('input').on('input', function() {
+        journeyState.filter = this.value;
+        renderJourneyTakerRows();
+    });
+    renderJourneyTakerRows();
 }
 
-/* date picker helper functions */
+function renderJourneyTakerRows() {
+    const header = $('#journeyListHeader');
+    const data = journeyState.summary || {};
+    const testTakers = data.testTakers || [];
+    const access = data.test?.access || {};
+    const filteredTakers = journeyFilteredTestTakers();
+    const rows = filteredTakers.map((tt) => {
+        const selected = String(journeyState.selectedPasswordId) === String(tt.passwordId) ? ' is-selected' : '';
+        const runPassword = journeyRunPasswordLabel(tt);
+        const runType = journeyRunTypeInfo(tt);
+        return /* html */`
+            <button type="button" class="journeyTaker${selected}" data-password="${journeyEsc(tt.passwordId)}">
+                <span class="journeyTakerMain">
+                    <span class="journeyTakerTitle">
+                        <img class="journeyTakerTypeIcon" src="${journeyEsc(runType.icon)}" alt="">
+                        <strong>${journeyEsc(journeyPrimaryLoginName(tt))}</strong>
+                    </span>
+                    <em>
+                        <span class="journeyTakerLogin">${journeyEsc(tt.loginTemplate === 'cloned'
+                            ? `${UILANG.m('Dataset')} ${tt.loginName}`
+                            : tt.loginName)}</span>
+                        ${runPassword ? `<span class="journeyTakerRun">${journeyEsc(runPassword)}${journeyIsStudentLogin(tt) ? ` <i>(${journeyEsc(UILANG.m('Label'))})</i>` : ''}</span>` : ''}
+                    </em>
+                </span>
+                <span class="journeyTakerStats">
+                    <span class="journeyStatusBadge ${journeyStatusClass(tt.status)}">${journeyEsc(journeyLocalizedStatus(tt.status))}</span>
+                    <span>${journeyEsc(journeyPercent(tt.progress))}</span>
+                    <span>${Number(tt.eventCount || 0)} ${UILANG.m('events')}</span>
+                </span>
+            </button>
+        `;
+    }).join('');
 
-// date validity checker function
+    header.html(`<span>${filteredTakers.length} ${UILANG.m('visible')} / ${access.total ?? testTakers.length} ${UILANG.m('recorded')}</span>`);
+    $('#journeyTakerList .journeyTakerStack').html(rows || `<div class="journeyEmpty">${UILANG.m('No matching test takers found.')}</div>`);
+    $('.journeyTaker').off('click').on('click', function() {
+        journeySelectPassword($(this).data('password'));
+    });
+}
+
+function journeyFilteredTestTakers() {
+    const testTakers = journeyState.summary?.testTakers || [];
+    const filter = String(journeyState.filter || '').trim().toLowerCase();
+    return filter === '' ? testTakers : testTakers.filter((tt) => {
+        const haystack = [
+            tt.loginName,
+            tt.displayName,
+            tt.passwordTag,
+            tt.passwordName,
+            tt.passwordLabel,
+            tt.loginType,
+            tt.loginTemplate,
+            tt.parentTemplateName,
+            tt.parentTemplateDisplayName,
+            tt.status,
+            journeyLocalizedStatus(tt.status),
+            tt.passwordId,
+            tt.loginId,
+            journeyPercent(tt.progress)
+        ].join(' ').toLowerCase();
+        return haystack.includes(filter);
+    });
+}
+
+function journeyNavigateSelection(direction) {
+    const testTakers = journeyFilteredTestTakers();
+    if (testTakers.length === 0) return;
+    const currentIndex = testTakers.findIndex((tt) => String(tt.passwordId) === String(journeyState.selectedPasswordId));
+    const nextIndex = currentIndex < 0
+        ? (direction < 0 ? testTakers.length - 1 : 0)
+        : Math.max(0, Math.min(testTakers.length - 1, currentIndex + direction));
+    const next = testTakers[nextIndex];
+    if (next && String(next.passwordId) !== String(journeyState.selectedPasswordId)) journeySelectPassword(next.passwordId);
+}
+
+async function journeySelectPassword(passwordId) {
+    journeyState.selectedPasswordId = Number(passwordId);
+    const requestToken = ++journeyDetailRequestToken;
+    renderJourneyList();
+    $('#journeyDetailView').html(`<div class="journeyLoading">${UILANG.m('please wait')}</div>`);
+
+    const response = await results_startAjax('fetchTestJourneyDetail', {
+        testId: serverData['id'],
+        passwordId: Number(passwordId)
+    });
+    if (requestToken !== journeyDetailRequestToken || String(journeyState.selectedPasswordId) !== String(passwordId)) return;
+    if (response.error) {
+        journeyState.detail = null;
+        $('#journeyDetailView').html(`<div class="journeyEmpty">${UILANG.m('Unable to load journey detail for this test taker.')}</div>`);
+        return;
+    }
+
+    journeyState.detail = response.data;
+    renderJourneyDetail(response.data);
+}
+
 function isValidDate(dval) {
     if (dval.length <= 9) return false;
     if (dval === "") return null;
@@ -2064,11 +2344,11 @@ function dateErrMsg(msg) {
 
 //Filemanager Navigation
 function cursorUp() {
-    gui.library.filerKeyUp();
+    gui.library.keyUp();
 }
 
 function cursorDown() {
-    gui.library.filerKeyDown();
+    gui.library.keyDown();
 }
 
 function updateLibrary(list, path) {
@@ -2109,7 +2389,7 @@ function showMsgNoSrchResults(msg, searchTerm, component, button) {
         new nxDialog('nsrMessage', dialogData, arguments);
 
     } else {
-        if (button === 'new') component.filerSearch(searchTerm);
+        if (button === 'new') component.openSearch(searchTerm);
 
     }
 }
@@ -2328,12 +2608,14 @@ function dl_prompt(binaryData, mimeSTR, fileName) {
     });
 
     a.style.display = 'none';
-    a.href = URL.createObjectURL(blobObj);
+    const objectUrl = URL.createObjectURL(blobObj);
+    a.href = objectUrl;
     a.download = fileName;
     a.target = "_blank";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }
 
 /**
@@ -2355,12 +2637,94 @@ function dc(obj) {
     return JSON.parse(JSON.stringify(obj));
 }
 
+function reportSafeHtml(value) {
+    const template = document.createElement('template');
+    template.innerHTML = String(value ?? '');
+    const allowedTags = new Set(['DIV', 'SPAN', 'P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'S', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'LI', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD', 'BLOCKQUOTE', 'HR']);
+
+    for (const element of Array.from(template.content.querySelectorAll('*')).reverse()) {
+        if (!allowedTags.has(element.tagName)) {
+            element.replaceWith(document.createTextNode(element.textContent ?? ''));
+            continue;
+        }
+        for (const attribute of Array.from(element.attributes)) {
+            const name = attribute.name.toLowerCase();
+            const styleIsSafe = name === 'style' && !/url\s*\(|expression\s*\(|@import/i.test(attribute.value);
+            if (!['class', 'data-id'].includes(name) && !styleIsSafe) element.removeAttribute(attribute.name);
+        }
+    }
+    return template.innerHTML;
+}
+
+function reportLocalizedLongDate(value) {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return '';
+    const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+    try {
+        const locale = {
+            DE: 'de-DE',
+            FR: 'fr-FR',
+            LU: 'lb-LU',
+            EN: 'en-GB'
+        }[String(settings.interfaceLanguage || '').toUpperCase()] || navigator.language;
+        return new Intl.DateTimeFormat(locale, {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'UTC'
+        }).format(date);
+    } catch (_error) {
+        return reportIsoDateToEu(value);
+    }
+}
+
+function reportDateRangeBlockContent(range = reportDateRange) {
+    let value;
+    if (!range?.start && !range?.end) {
+        value = UILANG.m('All available data');
+    } else if (range.start && range.end) {
+        value = `${reportLocalizedLongDate(range.start)} – ${reportLocalizedLongDate(range.end)}`;
+    } else if (range.start) {
+        value = `${UILANG.m('From')} ${reportLocalizedLongDate(range.start)}`;
+    } else {
+        value = `${UILANG.m('Until')} ${reportLocalizedLongDate(range.end)}`;
+    }
+    return reportSafeHtml(`
+        <div class="rbDateRangeReportBlock">
+            <span>${UILANG.m('Data included in this report')}</span>
+            <strong>${journeyEsc(value)}</strong>
+        </div>
+    `);
+}
+
+function refreshDateRangeReportBlocks() {
+    for (const plot of savePlot) {
+        if (!Array.isArray(plot) || !String(plot[1]?.fieldName || '').startsWith('DTR_')) continue;
+        const content = reportDateRangeBlockContent();
+        const title = UILANG.m('Report data range');
+        const rptIdx = Number(plot[4]);
+        plot[0].ft_title = title;
+        plot[0].rawText = content;
+        plot[1].desc = title;
+        if (report_config[rptIdx]) {
+            const key = Object.keys(report_config[rptIdx])[0];
+            if (key && report_config[rptIdx][key]) {
+                report_config[rptIdx][key].ft_title = title;
+                report_config[rptIdx][key].rawText = content;
+            }
+        }
+        $(`#otc_${rptIdx} .ot_header`).text(title);
+        $(`#otc_${rptIdx} .ot_content`).html(content);
+    }
+}
+
 function freetextBuilder(button, dataObj, pbIns = false) {
     if (button === "ok") {
         if ((typeof dataObj.pbIns !== "undefined") && dataObj.pbIns) pbIns = true;
-        let ct = dataObj.freetext ?? "";
-        let t_ct = dataObj.ft_title ?? "";
-        let updateMode = (pbIns) ? false : dataObj.updateMode === true; // this is not a mistake -- var comes over as string "false" from nxDialog handling of an intended boolean
+        const dateRangeIns = dataObj.dateRangeIns === true;
+        let ct = reportSafeHtml(dataObj.freetext ?? "");
+        let t_ct = String(dataObj.ft_title ?? "");
+        let updateMode = (pbIns || dateRangeIns) ? false : dataObj.updateMode === true; // this is not a mistake -- var comes over as string "false" from nxDialog handling of an intended boolean
         let e_rptIdx = parseInt(dataObj.e_rptIdx);
         let kval = dataObj.kval;
         let fromLoad = dataObj.fromLoad ?? false;
@@ -2376,10 +2740,10 @@ function freetextBuilder(button, dataObj, pbIns = false) {
         }
 
         /* enable 'save chart' option */
-        buttons.savePlot.enable();
+        updateReportSaveButtons(true);
         chartAreaInitCheck(rptIdx);
 
-        let pdStub = (pbIns) ? "PBR_" : "CTXT_";
+        let pdStub = pbIns ? "PBR_" : (dateRangeIns ? "DTR_" : "CTXT_");
 
         fInfo = fromLoad ? savePlot.filter(e => e[4] === rptIdx)[0][1] : { desc: t_ct, fieldName: `${pdStub}${rptIdx}` };
 
@@ -2407,7 +2771,7 @@ function freetextBuilder(button, dataObj, pbIns = false) {
 
             let ot_container = $( /* html */ `#otc_${e_rptIdx}`);
             ot_container.empty();
-            ot_container.append( /* html */ `<h2 class="ot_header">${fInfo.desc}</h2>`);
+            ot_container.append( /* html */ `<h2 class="ot_header">${journeyEsc(fInfo.desc)}</h2>`);
             $(`#otc_${e_rptIdx}`).append(/* html */ `<div class="ot_content">${newTxtVal}</div>`);
 
             ot_container.width(chartAreaWidth);
@@ -2415,10 +2779,11 @@ function freetextBuilder(button, dataObj, pbIns = false) {
         } else {
             report_config[rptIdx] = ({
                 [fInfo.fieldName]: {
-                    [pbIns ? "pb_opt" : "ct_opt"]: true,
+                    [pbIns ? "pb_opt" : (dateRangeIns ? "dr_opt" : "ct_opt")]: true,
                     ft_title: t_ct,
                     rawText: ct,
-                    pbIns: pbIns
+                    pbIns: pbIns,
+                    dateRangeIns: dateRangeIns
                 }
             });
 
@@ -2432,8 +2797,8 @@ function freetextBuilder(button, dataObj, pbIns = false) {
             $(`#OA_chart_${rptIdx}`).append( /* html */ `<div class="ot_container" id="otc_${rptIdx}"></div>`);
             let ot_container = $( /* html */ `#otc_${rptIdx}`);
 
-            if (!pbIns) ot_container.append( /* html */ `<h2 class="ot_header">${fInfo.desc}</h2>`);
-            (pbIns) ? $(`#otc_${rptIdx}`).append(/* html */ `<div data-id="##OARPT_PAGE_BREAK##" class="chart_pb">--${UILANG.m("PAGE BREAK")}--</div>`) : $(`#otc_${rptIdx}`).append(/* html */ `<div class="ot_content">${ct}</div>`);
+            if (!pbIns && !dateRangeIns) ot_container.append( /* html */ `<h2 class="ot_header">${journeyEsc(fInfo.desc)}</h2>`);
+            (pbIns) ? $(`#otc_${rptIdx}`).append(/* html */ `<div data-id="##OARPT_PAGE_BREAK##" class="chart_pb">--PAGE BREAK--</div>`) : $(`#otc_${rptIdx}`).append(/* html */ `<div class="ot_content">${ct}</div>`);
 
             ot_container.width(chartAreaWidth);
 
@@ -2446,19 +2811,567 @@ function freetextBuilder(button, dataObj, pbIns = false) {
     }
 }
 
+function reportConfigurationPayload(plots = savePlot) {
+    const normalizedPlots = [];
+    for (const plot of Array.isArray(plots) ? plots : []) {
+        if (!Array.isArray(plot)) continue;
+        const rptIdx = Number.parseInt(plot[4], 10);
+        if (!Number.isInteger(rptIdx) || rptIdx < 0) continue;
+
+        if (plot[0] && typeof plot[0] === 'object' && Object.prototype.hasOwnProperty.call(plot[0], 'rawText')) {
+            const fieldName = String(plot[1]?.fieldName || ('CTXT_' + rptIdx));
+            normalizedPlots.push({
+                kind: fieldName.startsWith('PBR_') ? 'pageBreak' : (fieldName.startsWith('DTR_') ? 'dateRange' : 'text'),
+                rptIdx,
+                fieldName,
+                title: String(plot[0].ft_title || ''),
+                html: reportSafeHtml(plot[0].rawText || ''),
+                config: dc(plot[5] || {})
+            });
+            continue;
+        }
+
+        if (plot[3] === 'single') {
+            const fieldName = String(plot[1]?.fieldName || '');
+            if (!fieldName) continue;
+            normalizedPlots.push({
+                kind: 'single',
+                rptIdx,
+                fieldName,
+                config: dc(plot[5] || {})
+            });
+            continue;
+        }
+
+        if (plot[3] === 'multi') {
+            let fields = [];
+            if (Array.isArray(plot[5])) fields = plot[5].filter(field => typeof field === 'string');
+            if (fields.length === 0 && plot[0] && typeof plot[0] === 'object') {
+                fields = Object.keys(plot[0]).filter(field => field !== 'cfg');
+            }
+            if (fields.length === 0) continue;
+            normalizedPlots.push({
+                kind: 'multi',
+                rptIdx,
+                fields: Array.from(new Set(fields)),
+                config: dc(plot[6] || plot[0]?.cfg || {})
+            });
+        }
+    }
+    return {
+        formatVersion: 2,
+        plots: normalizedPlots,
+        presentation: reportPresentationPayload(layoutData),
+        dateRange: dc(reportDateRange)
+    };
+}
+
+function reportDataRequest(range = reportDateRange) {
+    return {
+        testId: serverData.id,
+        startDate: range?.start || '',
+        endDate: range?.end || ''
+    };
+}
+
+function reportDateRangeLabel(range = reportDateRange) {
+    if (!range?.start && !range?.end) return UILANG.m('All available data');
+    const start = reportIsoDateToEu(range.start);
+    const end = reportIsoDateToEu(range.end);
+    if (start && end) return `${start} – ${end}`;
+    if (start) return `${UILANG.m('From')} ${start}`;
+    return `${UILANG.m('Until')} ${end}`;
+}
+
+function updateReportDateRangeIndicator() {
+    $('#rbActiveDateRangeValue').text(reportDateRangeLabel());
+}
+
+function reportIsoDateToEu(value) {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return match ? `${match[3]}.${match[2]}.${match[1]}` : '';
+}
+
+function reportEuDateToIso(value) {
+    const input = String(value || '').trim();
+    if (input === '') return null;
+    try {
+        const parsed = $.datepicker.parseDate('dd.mm.yy', input);
+        return $.datepicker.formatDate('yy-mm-dd', parsed);
+    } catch (_error) {
+        return false;
+    }
+}
+
+function openReportDateRange(initialRange = reportDateRange) {
+    const dialogRange = {
+        start: initialRange?.start || null,
+        end: initialRange?.end || null
+    };
+    const rangeDialog = new nxDialog('reportDateRangeDialog', {
+        title: UILANG.m('Report data range'),
+        datafields: ['reportRangeAll', 'reportRangeStart', 'reportRangeEnd'],
+        dataFormat: 'object',
+        contents: /* html */ `
+            <div class="rbDialog rbDateRangeDialog">
+                <div class="rbDialogTile rbDialogIntro">
+                    <strong>${UILANG.m('Data used in this report')}</strong>
+                    <span>${UILANG.m('Use all result data available to your account, or restrict the report to answers saved within a date range.')}</span>
+                </div>
+                <label class="rbDialogCheckRow" for="reportRangeAll">
+                    <input id="reportRangeAll" type="checkbox" ${!dialogRange.start && !dialogRange.end ? 'checked' : ''}>
+                    <span>${UILANG.m('All available data')}</span>
+                </label>
+                <div class="rbDateRangeFields">
+                    <label>
+                        <span>${UILANG.m('Start date')}</span>
+                        <input id="reportRangeStart" type="text" value="${journeyEsc(reportIsoDateToEu(dialogRange.start))}" placeholder="${UILANG.m('DD.MM.YYYY')}" autocomplete="off">
+                    </label>
+                    <label>
+                        <span>${UILANG.m('End date')}</span>
+                        <input id="reportRangeEnd" type="text" value="${journeyEsc(reportIsoDateToEu(dialogRange.end))}" placeholder="${UILANG.m('DD.MM.YYYY')}" autocomplete="off">
+                    </label>
+                </div>
+                <div class="rbDateRangeCurrent">${UILANG.m('Current selection')}: <strong>${journeyEsc(reportDateRangeLabel(dialogRange))}</strong></div>
+                <div class="rbDateRangeAvailability"></div>
+            </div>
+        `,
+        buttons: [
+            {value: 'cancel', label: UILANG.m('Cancel'), 'cancel': true},
+            {value: 'apply', label: UILANG.m('Apply'), 'default': true}
+        ],
+        callback: async function(button) {
+            if (button !== 'apply') return;
+            const previousRange = dc(reportDateRange);
+            const previousUnsavedState = unsavedState;
+            const useAll = $('#reportRangeAll').is(':checked');
+            const nextRange = useAll
+                ? {start: null, end: null}
+                : {
+                    start: reportEuDateToIso($('#reportRangeStart').val()),
+                    end: reportEuDateToIso($('#reportRangeEnd').val())
+                };
+            if (!useAll && !nextRange.start && !nextRange.end) {
+                nextRange.start = null;
+                nextRange.end = null;
+            }
+            if (nextRange.start && nextRange.end && nextRange.start > nextRange.end) {
+                new nxDialog('reportDateRangeInvalid', {
+                    title: UILANG.m('Invalid date range'),
+                    contents: UILANG.m('The start date must not be later than the end date.'),
+                    buttons: [{value: 'ok', label: UILANG.m('Ok'), 'default': true, 'cancel': true}]
+                });
+                return;
+            }
+            const changed = nextRange.start !== reportDateRange.start || nextRange.end !== reportDateRange.end;
+            if (!changed) return;
+            reportDateRange = nextRange;
+            updateReportDateRangeIndicator();
+            refreshDateRangeReportBlocks();
+            unsavedState = true;
+            updateReportSaveButtons(true);
+            const refreshResult = await refreshReportData({deferError: true});
+            if (!refreshResult.success) {
+                reportDateRange = previousRange;
+                updateReportDateRangeIndicator();
+                refreshDateRangeReportBlocks();
+                unsavedState = previousUnsavedState;
+                new nxDialog('reportDateRangeNoData', {
+                    title: UILANG.m('No data in selected range'),
+                    contents: /* html */ `
+                        <div class="rbDialog">
+                            <div class="rbDialogMessage rbDialogMessage-warning rbDialogMessage-noIcon">
+                                <div class="rbDialogMessageText">
+                                    <strong>${UILANG.m('Choose another date range')}</strong>
+                                    <span>${journeyEsc(refreshResult.error || UILANG.m('No report data is available for the selected date range.'))}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `,
+                    buttons: [{value: 'ok', label: UILANG.m('Ok'), 'default': true, 'cancel': true}],
+                    callback: () => openReportDateRange(nextRange)
+                });
+            }
+        }
+    });
+
+    const updateRangeFields = () => {
+        const disabled = $('#reportRangeAll').is(':checked');
+        $('#reportRangeStart, #reportRangeEnd').prop('disabled', disabled);
+        $('.rbDateRangeFields').toggleClass('is-disabled', disabled);
+    };
+    const availableDates = new Set(Array.isArray(report_data.availableDates) ? report_data.availableDates : []);
+    const selectedRangeHasData = () => {
+        if ($('#reportRangeAll').is(':checked')) return availableDates.size > 0;
+        const start = reportEuDateToIso($('#reportRangeStart').val());
+        const end = reportEuDateToIso($('#reportRangeEnd').val());
+        if (start === false || end === false) return false;
+        if (start && end && start > end) return false;
+        return Array.from(availableDates).some(date => (!start || date >= start) && (!end || date <= end));
+    };
+    const updateApplyState = () => {
+        const hasData = selectedRangeHasData();
+        if (hasData) rangeDialog.enableButton('apply');
+        else rangeDialog.disableButton('apply');
+        $('.rbDateRangeAvailability')
+            .toggleClass('is-empty', !hasData)
+            .text(hasData ? '' : UILANG.m('No accessible report data is available in this date range.'));
+    };
+    const markReportDataDate = date => {
+        const dateKey = $.datepicker.formatDate('yy-mm-dd', date);
+        const hasData = availableDates.has(dateKey);
+        return [true, hasData ? 'rbDateHasData' : '', hasData ? UILANG.m('Report data available') : ''];
+    };
+    $('#reportRangeStart').datepicker({
+        dateFormat: 'dd.mm.yy',
+        maxDate: reportIsoDateToEu(dialogRange.end) || null,
+        beforeShowDay: markReportDataDate,
+        onSelect: function(value) {
+            $('#reportRangeEnd').datepicker('option', 'minDate', value || null);
+            updateApplyState();
+        }
+    });
+    $('#reportRangeEnd').datepicker({
+        dateFormat: 'dd.mm.yy',
+        minDate: reportIsoDateToEu(dialogRange.start) || null,
+        beforeShowDay: markReportDataDate,
+        onSelect: function(value) {
+            $('#reportRangeStart').datepicker('option', 'maxDate', value || null);
+            updateApplyState();
+        }
+    });
+    $('#reportRangeAll').on('change', function() {
+        updateRangeFields();
+        updateApplyState();
+    });
+    $('#reportRangeStart, #reportRangeEnd').on('input change', updateApplyState);
+    updateRangeFields();
+    updateApplyState();
+}
+
+function reportPresentationPayload(layouts) {
+    return (Array.isArray(layouts) ? layouts : []).map(layout => ({
+        rptIdx: Number.parseInt(layout?.rptIdx, 10),
+        pc: Number.isInteger(Number.parseInt(layout?.pc, 10)) ? Number.parseInt(layout.pc, 10) : null,
+        title: String(layout?.title?.text || ''),
+        subtitle: String(layout?.title?.subtitle?.text || ''),
+        xTitle: String(layout?.xaxis?.title?.text || ''),
+        yTitle: String(layout?.yaxis?.title?.text || '')
+    })).filter(entry => Number.isInteger(entry.rptIdx) && entry.rptIdx >= 0);
+}
+
+function reportBuildMultiData(fields, config, currentData) {
+    const data = {cfg: dc(config || {})};
+    for (const field of fields) {
+        if (!Object.prototype.hasOwnProperty.call(currentData.items || {}, field)) continue;
+        data[field] = {
+            item: currentData.items[field],
+            xcat: dc((currentData.xcat || {})[field] || []),
+            core: {}
+        };
+        for (const stat of Object.keys(currentData.core || {})) {
+            if (currentData.core[stat] && Object.prototype.hasOwnProperty.call(currentData.core[stat], field)) {
+                data[field].core[stat] = dc(currentData.core[stat][field]);
+            }
+        }
+        if (Array.isArray(data.cfg.revdKeys) && data.cfg.revdKeys.includes(field)) {
+            data[field].xcat.reverse();
+        }
+    }
+    return data;
+}
+
+function reportHydrateConfiguration(configuration, currentData) {
+    const hydrated = [];
+    const missingFields = [];
+    const plots = configuration && configuration.formatVersion === 2 && Array.isArray(configuration.plots)
+        ? configuration.plots
+        : [];
+
+    for (const descriptor of plots) {
+        const rptIdx = Number.parseInt(descriptor.rptIdx, 10);
+        if (!Number.isInteger(rptIdx) || rptIdx < 0) continue;
+
+        if (descriptor.kind === 'text' || descriptor.kind === 'pageBreak' || descriptor.kind === 'dateRange') {
+            const prefix = descriptor.kind === 'pageBreak' ? 'PBR_' : (descriptor.kind === 'dateRange' ? 'DTR_' : 'CTXT_');
+            const fieldName = String(descriptor.fieldName || (prefix + rptIdx));
+            const isDateRange = descriptor.kind === 'dateRange';
+            hydrated.push([
+                {
+                    ft_title: isDateRange ? UILANG.m('Report data range') : String(descriptor.title || ''),
+                    rawText: isDateRange ? reportDateRangeBlockContent() : reportSafeHtml(descriptor.html || '')
+                },
+                {desc: isDateRange ? UILANG.m('Report data range') : String(descriptor.title || ''), fieldName},
+                true,
+                'single',
+                rptIdx,
+                dc(descriptor.config || {}),
+                null
+            ]);
+            continue;
+        }
+
+        if (descriptor.kind === 'single') {
+            const fieldName = String(descriptor.fieldName || '');
+            if (!Object.prototype.hasOwnProperty.call(currentData.items || {}, fieldName)) {
+                missingFields.push(fieldName);
+                continue;
+            }
+            hydrated.push([
+                currentData,
+                {
+                    fieldName,
+                    desc: currentData.items[fieldName],
+                    fullTxt: currentData.items[fieldName],
+                    xcat: dc((currentData.xcat || {})[fieldName] || [])
+                },
+                true,
+                'single',
+                rptIdx,
+                dc(descriptor.config || {}),
+                null
+            ]);
+            continue;
+        }
+
+        if (descriptor.kind === 'multi') {
+            const requestedFields = Array.isArray(descriptor.fields) ? descriptor.fields.map(String) : [];
+            const availableFields = requestedFields.filter(field => Object.prototype.hasOwnProperty.call(currentData.items || {}, field));
+            missingFields.push(...requestedFields.filter(field => !availableFields.includes(field)));
+            if (availableFields.length === 0) continue;
+            const config = dc(descriptor.config || {});
+            const multiData = reportBuildMultiData(availableFields, config, currentData);
+            const reportConfig = availableFields.slice();
+            reportConfig.cfg = config;
+            hydrated.push([multiData, null, null, 'multi', rptIdx, reportConfig, config]);
+        }
+    }
+
+    return {
+        plots: hydrated,
+        missingFields: Array.from(new Set(missingFields.filter(Boolean)))
+    };
+}
+
+function reportShowMissingFields(fields) {
+    if (!Array.isArray(fields) || fields.length === 0) return;
+    new nxDialog('reportMissingFields', {
+        title: UILANG.m('Report updated'),
+        contents: /* html */ `
+            <div class="rbDialog">
+                <div class="rbDialogMessage rbDialogMessage-warning">
+                    <div class="rbDialogMessageIcon">!</div>
+                    <div class="rbDialogMessageText">
+                        <strong>${UILANG.m('Some report fields are unavailable')}</strong>
+                        <span>${UILANG.m('They contain no data accessible to your account, or are no longer part of this test. The remaining report blocks were refreshed.')}</span>
+                    </div>
+                </div>
+                <div class="rbDialogTile">${fields.map(field => `<div>${journeyEsc(field)}</div>`).join('')}</div>
+            </div>
+        `,
+        buttons: [{value: 'ok', label: UILANG.m('Ok'), 'default': true, 'cancel': true}]
+    });
+}
+
+async function reportWaitForPlots(plots) {
+    const expectedIds = [];
+    for (const plot of Array.isArray(plots) ? plots : []) {
+        if (!Array.isArray(plot) || !['single', 'multi'].includes(plot[3])) continue;
+        const rptIdx = Number.parseInt(plot[4], 10);
+        if (!Number.isInteger(rptIdx)) continue;
+        if (plot[3] === 'multi' && Array.isArray(plot[5])) {
+            plot[5].forEach((_field, index) => expectedIds.push(`OA_chart_${rptIdx}_${index + 1}`));
+        } else {
+            expectedIds.push(`OA_chart_${rptIdx}`);
+        }
+    }
+    if (expectedIds.length === 0) return;
+
+    await new Promise(resolve => {
+        let attempts = 0;
+        const check = () => {
+            const ready = expectedIds.every(id => {
+                const element = document.getElementById(id);
+                return element && element._fullLayout;
+            });
+            if (ready || attempts++ >= 100) {
+                resolve();
+                return;
+            }
+            window.requestAnimationFrame(check);
+        };
+        check();
+    });
+}
+
+async function reportRenderConfiguration(configuration, currentData, markUnsaved = false) {
+    const hydrated = reportHydrateConfiguration(configuration, currentData);
+    ca_w_set = false;
+    chartAreaWidth = null;
+    report_config = [];
+    $('#chartArea').empty();
+    rb_table.clearElements();
+    layoutData = [];
+    savePlot = hydrated.plots;
+
+    for (let i = 0; i < savePlot.length; i++) {
+        const plotElem = savePlot[i];
+        const isFT = plotElem[0] && typeof plotElem[0] === 'object' && 'rawText' in plotElem[0];
+
+        if (isFT) {
+            fromLoad = true;
+            freetextBuilder('ok', {
+                freetext: plotElem[0].rawText,
+                ft_title: plotElem[0].ft_title,
+                updateMode: false,
+                e_rptIdx: i,
+                kval: '',
+                fromLoad: true,
+                rptIdx: plotElem[4],
+                pbIns: plotElem[1].fieldName.startsWith('PBR'),
+                dateRangeIns: plotElem[1].fieldName.startsWith('DTR')
+            });
+            plotElem[2] = false;
+        } else {
+            // Data-derived annotations and shapes must always be rebuilt from
+            // the current viewer's permitted result set.
+            fromLoad = false;
+        }
+
+        if (plotElem[3] === 'multi') {
+            plotElem[5].cfg = plotElem[6];
+            plotElem[0].cfg = plotElem[6];
+        }
+        report_config[plotElem[4]] = plotElem[5];
+
+        await buildChart(plotElem[0], plotElem[1], plotElem[2], plotElem[3], plotElem[4]);
+    }
+
+    await reportWaitForPlots(savePlot);
+    const presentation = Array.isArray(configuration.presentation) ? configuration.presentation : [];
+    for (const entry of presentation) {
+        const suffix = Number.isInteger(entry.pc) && entry.pc > 0 ? '_' + entry.pc : '';
+        const chartId = 'OA_chart_' + entry.rptIdx + suffix;
+        const chartElement = document.getElementById(chartId);
+        if (!chartElement || !chartElement._fullLayout) continue;
+        const update = {};
+        if (entry.title) update['title.text'] = entry.title;
+        if (entry.subtitle) update['title.subtitle.text'] = entry.subtitle;
+        if (entry.xTitle) update['xaxis.title.text'] = entry.xTitle;
+        if (entry.yTitle) update['yaxis.title.text'] = entry.yTitle;
+        if (Object.keys(update).length > 0) await Plotly.relayout(chartId, update);
+    }
+
+    report_data = currentData;
+    unsavedState = markUnsaved;
+    fromLoad = false;
+    loadLD = [];
+    reportShowMissingFields(hydrated.missingFields);
+    return hydrated;
+}
+
+async function refreshReportData(options = {}) {
+    const configuration = reportConfigurationPayload();
+    const configurationWasUnsaved = unsavedState;
+    buttons.refreshReport.disable();
+    try {
+        const response = await results_startAjax(
+            'fetchReportData',
+            reportDataRequest(),
+            true,
+            {suppressGlobalError: true, suppressActionError: true}
+        );
+        if (response.error || !response.data) {
+            const error = response.error || UILANG.m('The report data could not be refreshed.');
+            if (!options.deferError) {
+                new nxDialog('refreshReportError', {
+                    title: UILANG.m('Error'),
+                    contents: error,
+                    buttons: [{value: 'ok', label: UILANG.m('Ok'), 'default': true, 'cancel': true}]
+                });
+            }
+            return {success: false, error};
+        }
+
+        if (configuration.plots.length > 0) {
+            await reportRenderConfiguration(configuration, response.data, configurationWasUnsaved);
+            updateReportSaveButtons(true);
+        } else {
+            report_data = response.data;
+        }
+        if (Object.values(report_data.items || {}).length < 2) buttons.addMultiPlot.disable();
+        else buttons.addMultiPlot.enable();
+        return {success: true, error: null};
+    } catch (error) {
+        console.error(error);
+        const message = UILANG.m('The report data could not be refreshed.');
+        if (!options.deferError) {
+            new nxDialog('refreshReportError', {
+                title: UILANG.m('Error'),
+                contents: message,
+                buttons: [{value: 'ok', label: UILANG.m('Ok'), 'default': true, 'cancel': true}]
+            });
+        }
+        return {success: false, error: message};
+    } finally {
+        buttons.refreshReport.enable();
+    }
+}
+
+async function newReport() {
+    if (unsavedState) {
+        const confirmation = await checkUnsaved(false);
+        if (!confirmation.button) return;
+    }
+
+    const dataResponse = await results_startAjax('fetchReportData', reportDataRequest({start: null, end: null}));
+    if (dataResponse.error || !dataResponse.data) return;
+
+    report_config = [];
+    savePlot = [];
+    layoutData = [];
+    loadLD = [];
+    fromLoad = false;
+    currentReport = null;
+    lastLoaded = "";
+    reportDateRange = {start: null, end: null};
+    report_data = dataResponse.data;
+    ca_w_set = false;
+    chartAreaWidth = null;
+    unsavedState = false;
+
+    $('#chartArea').empty();
+    if (window.rb_table) rb_table.clearElements();
+    gui.boxes.report.rb_title.hide();
+    gui.boxes.report.rb_data.hide();
+    buttons.genRpt.disable();
+    if (Object.values(report_data.items || {}).length < 2) buttons.addMultiPlot.disable();
+    else buttons.addMultiPlot.enable();
+    updateReportSaveButtons(false);
+    updateReportDateRangeIndicator();
+}
+
 /* load chart layout */
 async function loadChart() {
 
+    let cList = [];
+    let selectedReportId = null;
     let scloaddiag = new nxDialog('scloaddiag_id', {
-        title: UILANG.m("Load Report Configuration"),
+        title: UILANG.m("Load and Manage Reports"),
         dataFormat: "object",
-        width: 600,
-        datafields: ['cListSel'],
+        width: 780,
         contents: /* html */ `
-            <p>
-                <div>${UILANG.m("Select report to load")}</div>
-                <div><select size="5" id="cListSel"></div>
-            </p>
+            <div class="rbDialog rbLoadReportDialog">
+                <div class="rbReportTable" role="table" aria-label="${UILANG.m("Saved reports")}">
+                    <div class="rbReportTableHead" role="row">
+                        <span role="columnheader">${UILANG.m("Report")}</span>
+                        <span role="columnheader">${UILANG.m("Owner")}</span>
+                        <span role="columnheader">${UILANG.m("Access")}</span>
+                        <span role="columnheader">${UILANG.m("Date range")}</span>
+                    </div>
+                    <div id="rbReportRows" class="rbReportTableBody"></div>
+                </div>
+            </div>
         `,
         buttons: [{
             value: 'delete',
@@ -2470,22 +3383,13 @@ async function loadChart() {
             'cancel': true
         }, {
             value: 'ok',
-            label: UILANG.m("Ok"),
+            label: UILANG.m("Load"),
             'default': true,
             disabled: true
         }],
         callback: function(button) {
-
-            let theId = null;
-            let theName = null;
-
-            for (const optData of $('#cListSel')[0].options) {
-                if (optData.selected) {
-                    theId = optData.id;
-                    theName = optData.label;
-                }
-            }
-            dochartLoad(button, theId, theName);
+            const report = cList.find(entry => Number(entry.id) === Number(selectedReportId));
+            dochartLoad(button, selectedReportId, report?.title || null);
         }
 
     });
@@ -2497,90 +3401,164 @@ async function loadChart() {
 
             case "delete":
 
-                results_startAjax('delChart', { id: theId }).then((res) => {
-                    if (!res.error) loadChart();
+                results_startAjax('delChart', { id: theId, testId: serverData.id }).then((res) => {
+                    if (!res.error) {
+                        if (currentReport && Number(currentReport.id) === Number(theId)) {
+                            currentReport = null;
+                            lastLoaded = "";
+                            unsavedState = true;
+                            updateReportSaveButtons(true);
+                        }
+                        loadChart();
+                    }
                 });
 
                 break;
 
             case "ok":
 
+                if (theId === null) {
+                    return;
+                }
+
                 if (unsavedState) {
                     let confExit = await checkUnsaved(false);
                     if (!confExit.button) return;
                 }
 
-                unsavedState = false;
-
-                waitDialog.updateMessage(UILANG.m("Rendering report"));
-                waitDialog.show();
-                report_config = [];
-                $('#chartArea').empty();
-                rb_table.clearElements();
-
-                results_startAjax('loadChart', { id: theId }).then(async (res) => {
-
-                    layoutData = [];
-                    savePlot = res.data;
-
-                    let im = 0; // counter for mixed single/multi layout loading
-
-                    for (let i = 0; i < savePlot.length; i++) {
-                        fromLoad = true;
-                        const plotElem = savePlot[i];
-                        let isFT = "rawText" in plotElem[0];
-
-                        /* redirect to custom text builder and skip the rest */
-                        if (isFT) {
-                            freetextBuilder("ok", {
-                                freetext: plotElem[0].rawText,
-                                ft_title: plotElem[0].ft_title,
-                                updateMode: false,
-                                e_rptIdx: i,
-                                kval: "",
-                                fromLoad: true,
-                                rptIdx: plotElem[4],
-                                pbIns: (plotElem[1].fieldName.startsWith("PBR"))
-                            });
-                            plotElem[2] = false;
-                        }
-
-                        // special multichart config handler
-                        if (plotElem[3] === "multi") {
-                            plotElem[5].cfg = plotElem[6];
-                            plotElem[0].cfg = plotElem[6];
-                        }
-
-                        report_config[plotElem[4]] = plotElem[5];
-
-                        // reload saved customizations which would have gone into the 'layout' object key while accounting for single/multi, and layout object counter tracking
-                        if (plotElem[3] === "multi" && plotElem[6].m_type !== "pl") {
-                            let layoutMulti = [];
-
-                            for (let j = 0; j < plotElem[5].length; j++) {
-                                layoutMulti.push(res.layoutData[im + j]);
-                            }
-
-                            im += plotElem[5].length;
-                            loadLD = layoutMulti;
-                        } else {
-                            loadLD = res.layoutData.filter(e => (e.rptIdx === plotElem[4]));
-                            loadLD = loadLD[0];
-
-                            im++;
-                        }
-
-                        await buildChart(plotElem[0], plotElem[1], plotElem[2], plotElem[3], plotElem[4]);
+                let loadWatchdog = null;
+                const clearLoadWait = () => {
+                    if (loadWatchdog !== null) {
+                        clearTimeout(loadWatchdog);
+                        loadWatchdog = null;
                     }
-
                     waitDialog.hide();
                     waitDialog.updateMessage(UILANG.m("please wait"));
                     fromLoad = false;
+                    loadLD = [];
+                };
+                const showLoadError = (message) => {
+                    new nxDialog('loadReportError', {
+                        title: UILANG.m("Error"),
+                        contents: /* html */ `
+                            <div class="rbDialog">
+                                <div class="rbDialogMessage rbDialogMessage-warning">
+                                    <div class="rbDialogMessageIcon">!</div>
+                                    <div class="rbDialogMessageText">
+                                        <strong>${UILANG.m("Report could not be loaded")}</strong>
+                                        <span>${message}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `,
+                        buttons: [{
+                            value: 'ok',
+                            label: UILANG.m("Ok"),
+                            'default': true,
+                            'cancel': true
+                        }]
+                    });
+                };
+
+                waitDialog.updateMessage(UILANG.m("Rendering report"));
+                waitDialog.show();
+                const loadAbortController = new AbortController();
+                loadWatchdog = setTimeout(() => {
+                    if (!loadAbortController.signal.aborted) {
+                        loadAbortController.abort();
+                    }
+                    clearLoadWait();
+                    showLoadError(UILANG.m("Loading this report took too long and was stopped."));
+                }, 30000);
+                try {
+                    const requestBody = new URLSearchParams({
+                        action: 'loadChart',
+                        data: JSON.stringify({ id: theId, testId: serverData.id })
+                    });
+                    const response = await fetch('resultsActions.php', {
+                        body: requestBody.toString(),
+                        cache: 'no-store',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        method: 'POST',
+                        signal: loadAbortController.signal
+                    });
+
+                    const rawResponse = await response.text();
+
+                    if (!response.ok) {
+                        showLoadError(UILANG.m("The report configuration could not be loaded from the server."));
+                        return;
+                    }
+
+                    let res;
+                    try {
+                        res = JSON.parse(rawResponse);
+                    } catch (parseError) {
+                        console.error(parseError);
+                        showLoadError(UILANG.m("The server returned an invalid report response."));
+                        return;
+                    }
+
+                    if ("isSuper" in res) window.isSuper = res.isSuper;
+                    if ("isAdmin" in res) window.isAdmin = res.isAdmin;
+                    if ("isAE" in res) window.isAE = res.isAE;
+                    $('#un_val').html(res.loggedInName);
+
+                    if (res.fatalError) {
+                        showLoadError(res.fatalError);
+                        return;
+                    }
+
+                    if (res.error !== false) {
+                        showLoadError(res.error || UILANG.m("The saved report configuration could not be loaded."));
+                        return;
+                    }
+
+                    if (!res.data || res.data.formatVersion !== 2 || !Array.isArray(res.data.plots) || !Array.isArray(res.layoutData)) {
+                        showLoadError(UILANG.m("The saved report configuration is invalid."));
+                        return;
+                    }
+
+                    reportDateRange = {
+                        start: res.data.dateRange?.start || null,
+                        end: res.data.dateRange?.end || null
+                    };
+                    const currentResponse = await results_startAjax(
+                        'fetchReportData',
+                        reportDataRequest(),
+                        false,
+                        {suppressGlobalError: true, suppressActionError: true}
+                    );
+                    if (currentResponse.error || !currentResponse.data) {
+                        showLoadError(currentResponse.error || UILANG.m("Current report data could not be loaded."));
+                        return;
+                    }
+
+                    await reportRenderConfiguration(res.data, currentResponse.data, false);
+                    updateReportDateRangeIndicator();
 
                     lastLoaded = theName;
-                });
-
-                loadLD = [];
+                    currentReport = {
+                        id: Number(theId),
+                        title: theName,
+                        ownerId: Number(res.report?.ownerId),
+                        visibility: Number(res.report?.visibility) === 1 ? 1 : 0,
+                        isOwner: res.report?.isOwner === true
+                    };
+                    unsavedState = false;
+                    updateReportSaveButtons(true);
+                } catch (e) {
+                    if (e.name !== "AbortError") {
+                        console.error(e);
+                        showLoadError(UILANG.m("The saved report configuration could not be rendered."));
+                    }
+                } finally {
+                    clearLoadWait();
+                }
 
                 break;
         }
@@ -2589,50 +3567,159 @@ async function loadChart() {
     let res = await results_startAjax('getChartList', {
         testId: serverData.id
     });
-    let cList = res.chartList;
+    if (res.error || !Array.isArray(res.chartList)) return;
+    cList = res.chartList;
 
-    for (const i of cList) {
-        $('#cListSel').append($('<option>', { 'id': i.id }).text(i.title));
-    }
-
-    $('#cListSel').on("input", function() {
-        scloaddiag.enableButton("delete");
-    });
-
-    // doubleClick loads selected chart
-    $('#cListSel').on("dblclick", () => {
-        if ($('#cListSel')[0].selectedOptions.length === 0) return;
-
-        let theId = null;
-        let theName = null;
-
-        for (const optData of $('#cListSel')[0].options) {
-            if (optData.selected) {
-                theId = optData.id;
-                theName = optData.label;
-            }
+    const renderReportRows = () => {
+        if (cList.length === 0) {
+            $('#rbReportRows').html(`<div class="rbReportTableEmpty">${UILANG.m("No saved reports are available for this test.")}</div>`);
+            return;
         }
-        dochartLoad("ok", theId, theName);
+        $('#rbReportRows').html(cList.map(report => {
+            const owner = Number(report.isOwner) === 1 ? UILANG.m("You") : (report.ownerName || UILANG.m("Unknown user"));
+            const isShared = Number(report.visibility) === 1;
+            const access = isShared ? UILANG.m("Shared") : UILANG.m("Private");
+            const selected = Number(report.id) === Number(selectedReportId) ? ' rbReportRow-selected' : '';
+            const accessControl = Number(report.isOwner) === 1
+                ? `<select class="rbReportAccessSelect rbReportAccess-${isShared ? 'shared' : 'private'}"
+                           data-report-id="${Number(report.id)}"
+                           aria-label="${UILANG.m("Report access")}">
+                       <option value="0"${isShared ? '' : ' selected'}>${UILANG.m("Private")}</option>
+                       <option value="1"${isShared ? ' selected' : ''}>${UILANG.m("Shared")}</option>
+                   </select>`
+                : `<span class="rbReportAccess rbReportAccess-readonly rbReportAccess-${isShared ? 'shared' : 'private'}">${access}</span>`;
+            return `
+                <div class="rbReportRow${selected}" role="row" tabindex="0" data-report-id="${Number(report.id)}">
+                    <strong role="cell">${journeyEsc(report.title)}</strong>
+                    <span role="cell">${journeyEsc(owner)}</span>
+                    <span role="cell">${accessControl}</span>
+                    <span role="cell">${journeyEsc(reportDateRangeLabel(report.dateRange))}</span>
+                </div>
+            `;
+        }).join(''));
+    };
 
+    const selectReport = reportId => {
+        selectedReportId = Number(reportId);
+        const report = cList.find(entry => Number(entry.id) === selectedReportId);
+        $('#rbReportRows .rbReportRow').removeClass('rbReportRow-selected');
+        $(`#rbReportRows .rbReportRow[data-report-id="${selectedReportId}"]`).addClass('rbReportRow-selected');
+        if (Number(report?.canDelete) === 1) scloaddiag.enableButton("delete");
+        else scloaddiag.disableButton("delete");
+        scloaddiag.enableButton("ok");
+    };
+
+    renderReportRows();
+    $('#rbReportRows').on('click', '.rbReportRow', function(event) {
+        if ($(event.target).closest('.rbReportAccess, .rbReportAccessSelect').length > 0) return;
+        selectReport(this.dataset.reportId);
+    });
+    $('#rbReportRows').on('keydown', '.rbReportRow', function(event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            selectReport(this.dataset.reportId);
+        }
+    });
+    $('#rbReportRows').on('dblclick', '.rbReportRow', function(event) {
+        if ($(event.target).closest('.rbReportAccess, .rbReportAccessSelect').length > 0) return;
+        const report = cList.find(entry => Number(entry.id) === Number(this.dataset.reportId));
+        if (!report) return;
+        dochartLoad("ok", report.id, report.title);
         scloaddiag.dismiss();
+    });
+    $('#rbReportRows').on('change', '.rbReportAccessSelect', function(event) {
+        event.stopPropagation();
+        const reportId = Number(this.dataset.reportId);
+        const report = cList.find(entry => Number(entry.id) === reportId);
+        if (!report || Number(report.isOwner) !== 1) return;
+        const newVisibility = Number(this.value) === 1 ? 1 : 0;
+        $(this).prop('disabled', true);
+        results_startAjax('setChartVisibility', {
+            id: reportId,
+            testId: serverData.id,
+            vis: newVisibility
+        }).then(response => {
+            if (response.error) {
+                renderReportRows();
+                return;
+            }
+            report.visibility = newVisibility;
+            if (currentReport && Number(currentReport.id) === reportId) currentReport.visibility = newVisibility;
+            renderReportRows();
+        });
     });
 }
 
-/* save chart layout */
-function saveChart() {
+async function persistReport(reportName, reportVisible, overwrite = false, reportId = 0) {
+    const res = await results_startAjax("chartStore", {
+        title: reportName,
+        testId: serverData.id,
+        vis: reportVisible ? 1 : 0,
+        chartData: reportConfigurationPayload(),
+        layoutData: [],
+        owrite: overwrite,
+        reportId
+    });
+    if (!res.error && res.saved === true && res.report) {
+        currentReport = {
+            id: Number(res.report.id),
+            title: res.report.title,
+            ownerId: Number(res.report.ownerId),
+            visibility: Number(res.report.visibility) === 1 ? 1 : 0,
+            isOwner: true
+        };
+        lastLoaded = currentReport.title;
+        unsavedState = false;
+        updateReportSaveButtons(true);
+        return true;
+    }
+    return false;
+}
+
+/* Save the current owned report. New and shared reports use Save As. */
+async function saveChart() {
+    if (!currentReport || !currentReport.isOwner) {
+        saveChartAs();
+        return;
+    }
+    await persistReport(currentReport.title, currentReport.visibility === 1, false, currentReport.id);
+}
+
+/* Save the current report configuration to a new or explicitly replaced slot. */
+async function saveChartAs() {
+    const listResponse = await results_startAjax('getChartList', {testId: serverData.id});
+    if (listResponse.error || !Array.isArray(listResponse.chartList)) return;
+    const ownReports = listResponse.chartList.filter(report => Number(report.isOwner) === 1);
+    const existingRows = ownReports.length > 0
+        ? ownReports.map(report => `
+            <button type="button" class="rbExistingReport" data-report-id="${Number(report.id)}">
+                <span>${journeyEsc(report.title)}</span>
+                <small>${Number(report.visibility) === 1 ? UILANG.m("Shared") : UILANG.m("Private")} · ${journeyEsc(reportDateRangeLabel(report.dateRange))}</small>
+            </button>
+        `).join('')
+        : `<div class="rbReportDetails rbReportDetails-empty">${UILANG.m("You have no saved reports for this test yet.")}</div>`;
 
     let scsavediag = new nxDialog('scsavediag_id', {
-        title: UILANG.m("Save Report Configuration"),
+        title: UILANG.m("Save Report As"),
         datafields: ["sc_name", "chartVis"],
         dataFormat: "object",
         focus: "sc_name",
         contents: /* html */ `
-            <p>
-                <div>${UILANG.m("Enter report name:")} <input type="text" id="sc_name" value="${lastLoaded}" onfocus="this.select();"></div>
-            </p>
-            <p>
-                <div><input id="chartVis" type="checkbox"><label for="chartVis">${UILANG.m("Report visible to others with test access")}</label></div>
-            </p>
+            <div class="rbDialog rbSaveReportDialog">
+                <div class="rbDialogTile">
+                    <label class="rbDialogFieldLabel" for="sc_name">${UILANG.m("Report name")}</label>
+                    <input type="text" id="sc_name" value="${journeyEsc(currentReport?.title || lastLoaded)}" onfocus="this.select();">
+                </div>
+                <div class="rbDialogCheckRow">
+                    <input id="chartVis" type="checkbox">
+                    <label for="chartVis">${UILANG.m("Shared")}</label>
+                    <span id="rbSharedReportHelp"></span>
+                </div>
+                <div class="rbDialogTile">
+                    <span class="rbDialogFieldLabel">${UILANG.m("Your reports for this test")}</span>
+                    <div class="rbExistingReports">${existingRows}</div>
+                </div>
+            </div>
         `,
         buttons: [{
             value: 'cancel',
@@ -2640,92 +3727,74 @@ function saveChart() {
             'cancel': true
         }, {
             value: 'save',
-            label: UILANG.m("Save"),
+            label: UILANG.m("Save As"),
             disabled: true,
             'default': true
         }],
         callback: function(button, data) {
-            if (button === "save") {
-                results_startAjax("chartStorePrecheck", {
-                    title: data.sc_name,
-                    testId: serverData.id
-                }).then((res) => {
-                    if (res.checkRes === 1) {
-                        new nxDialog("confOR", {
-                            title: UILANG.m("Confirm Overwrite"),
-                            contents: /* html */ `
-                                <div>${UILANG.m("This name already exists! Are you sure you wish to overwrite the existing entry?")}</div>
-                            `,
-                            buttons: [{
-                                value: "yes",
-                                label: UILANG.m("Yes")
-                            }, {
-                                value: "no",
-                                label: UILANG.m("No"),
-                                'cancel': true,
-                                'default': true
-                            }],
-                            callback: function(confRes) {
-                                if (confRes === "yes") {
-                                    lastLoaded = data.sc_name;
-                                    results_startAjax("chartStore", {
-                                        title: data.sc_name,
-                                        testId: serverData.id,
-                                        vis: data.chartVis === "on" ? 1 : 0,
-                                        chartData: savePlot,
-                                        layoutData: layoutData,
-                                        owrite: true
-                                    });
-                                    unsavedState = false;
-
-                                } else {
-                                    return false;
-                                }
-                            }
-                        });
-                    } else if (res.checkRes === 0) {
-                        lastLoaded = data.sc_name;
-                        results_startAjax("chartStore", {
-                            title: data.sc_name,
-                            testId: serverData.id,
-                            vis: data.chartVis === "on" ? 1 : 0,
-                            chartData: savePlot,
-                            layoutData: layoutData,
-                            owrite: false
-                        });
-                        unsavedState = false;
-                    } else {
-                        return false;
-                    }
-                });
-            }
+            if (button !== "save") return;
+            const reportName = data.sc_name.trim();
+            const reportVisible = $('#chartVis').is(':checked');
+            if (reportName.length === 0) return false;
+            results_startAjax("chartStorePrecheck", {
+                title: reportName,
+                testId: serverData.id
+            }).then((res) => {
+                if (res.checkRes === 1) {
+                    new nxDialog("confOR", {
+                        title: UILANG.m("Replace Existing Report"),
+                        contents: /* html */ `
+                            <div class="rbDialog">
+                                <div class="rbDialogMessage rbDialogMessage-warning">
+                                    <div class="rbDialogMessageIcon">!</div>
+                                    <div class="rbDialogMessageText">
+                                        <strong>${UILANG.m("Replace your saved report?")}</strong>
+                                        <span>${UILANG.m("A report with this name already exists. Its configuration and access setting will be replaced.")}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `,
+                        buttons: [{
+                            value: "yes",
+                            label: UILANG.m("Replace")
+                        }, {
+                            value: "no",
+                            label: UILANG.m("Cancel"),
+                            'cancel': true,
+                            'default': true
+                        }],
+                        callback: function(confRes) {
+                            if (confRes === "yes") persistReport(reportName, reportVisible, true);
+                        }
+                    });
+                } else if (res.checkRes === 0) {
+                    persistReport(reportName, reportVisible, false);
+                }
+            });
         }
     });
 
-    if (lastLoaded.length > 0) scsavediag.enableButton("save");
-
-    /* conditional save button enabling */
-    $('#sc_name').on("input", function(v) {
-        if (v.currentTarget.value.length > 0 && v.currentTarget.value.length < 30) {
-            scsavediag.enableButton("save");
-        } else {
-            scsavediag.disableButton("save");
-        }
-
-        if (v.currentTarget.value.length > 30) {
-            $(v.currentTarget).trigger("blur");
-            new nxDialog('scoverlimit', {
-                buttons: [{
-                    value: 'ok',
-                    label: UILANG.m("Ok"),
-                    default: true
-                }],
-                contents: /* html */ `<div>${UILANG.m("Maximum chart layout title must be under 30 characters in length!")}</div>`,
-                returnPromise: true
-            }).then(() => {
-                $(v.currentTarget).trigger("focus");
-            });
-        }
+    new OasysHelp('rbSharedReportHelp', {
+        size: '16px',
+        title: UILANG.m('Shared report'),
+        maxWidth: '390px',
+        htmlContent: OasysHelp.layout({
+            lead: UILANG.m('Shared reports can be opened by other users who have permission to access results for this test.')
+        })
+    });
+    $('#chartVis').prop('checked', currentReport?.isOwner && currentReport.visibility === 1);
+    if ($('#sc_name').val().trim().length > 0) scsavediag.enableButton("save");
+    $('#sc_name').on("input", function(event) {
+        const title = event.currentTarget.value.trim();
+        const titleLength = Array.from(event.currentTarget.value).length;
+        if (title.length > 0 && titleLength <= 30) scsavediag.enableButton("save");
+        else scsavediag.disableButton("save");
+    });
+    $('.rbExistingReport').on('click', function() {
+        const report = ownReports.find(entry => Number(entry.id) === Number(this.dataset.reportId));
+        if (!report) return;
+        $('#sc_name').val(report.title).trigger('input');
+        $('#chartVis').prop('checked', Number(report.visibility) === 1);
     });
 }
 
@@ -2745,6 +3814,7 @@ function pdfPlotGen() {
 
     /* start self-executing asynchronous routine to build entire data URI array to send to server */
     (async () => {
+        try {
         const allImgData = await procAllCharts(allCharts);
         let finalImgData = {};
 
@@ -2753,10 +3823,16 @@ function pdfPlotGen() {
         }
 
         results_startAjax('report_export', {
-            htmlData: finalImgData
+            htmlData: finalImgData,
+            testId: serverData.id
         }).then((res) => {
-            dl_prompt(res.pdfData, "application/pdf", "oasys_plot.pdf");
+            if (!res.error && typeof res.pdfData === 'string' && res.pdfData.length > 0) {
+                dl_prompt(res.pdfData, "application/pdf", "oasys_plot.pdf");
+            }
         });
+        } catch (error) {
+            console.error(error);
+        }
     })();
 
     /* asynchronous function to build URI array set */
@@ -2787,6 +3863,17 @@ function pdfPlotGen() {
 function pageBreakStart() {
     freetextBuilder("ok", {}, true);
     unsavedState = true;
+    updateReportSaveButtons(true);
+}
+
+function dateRangeBlockStart() {
+    freetextBuilder("ok", {
+        dateRangeIns: true,
+        ft_title: UILANG.m("Report data range"),
+        freetext: reportDateRangeBlockContent()
+    });
+    unsavedState = true;
+    updateReportSaveButtons(true);
 }
 
 function freeTextStart(e_rptIdx) {
@@ -2795,7 +3882,8 @@ function freeTextStart(e_rptIdx) {
 
     new nxDialog("tmce_space", {
         title: UILANG.m("Custom Text Block Editor"),
-        width: 800,
+        width: 1100,
+        height: 540,
         contents: /* html */ `<div id="rb_textEditorContainer"><textarea id='stuff' style='width: 100%; height: 100%;'></div>`,
         buttons: [{
             value: "cancel",
@@ -2825,12 +3913,14 @@ function freeTextStart(e_rptIdx) {
         branding: false,
         height: '100%',
         schema: 'html5',
+        forced_root_block: 'p',
+        forced_root_block_attrs: { style: 'font-size: 14px;' },
         paste_as_text: true,
         content_css: "editor/inc/css/editor.css?" + new Date().getTime(),
+        content_style: "body { font-size: 14px; }",
         plugins: [
             "charmap",
             "code",
-            "preview",
             "searchreplace",
             "table",
             "visualblocks",
@@ -2839,25 +3929,37 @@ function freeTextStart(e_rptIdx) {
             "lists",
             "advlist"
         ],
-        toolbar: "bold italic underline subscript superscript forecolor backcolor | bullist numlist table | alignleft aligncenter alignright alignjustify styleselect fontsizeselect outdent indent",
-        toolbar_mode: 'sliding',
+        toolbar: "undo redo | blocks fontsize | bold italic underline | forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | table charmap",
+        menubar: 'edit insert format table tools',
+        block_formats: 'Paragraph=p; Heading 1=h1; Heading 2=h2; Heading 3=h3; Heading 4=h4; Quote=blockquote',
+        font_size_formats: '10px 12px 14px 16px 18px 20px 24px 28px 32px 36px 48px',
         menu: {
             edit: { title: 'Edit', items: 'undo redo | cut copy paste pastetext | selectall | searchreplace' },
-            insert: { title: 'Insert', items: 'charmap hr template' },
-            view: { title: 'View', items: 'visualchars visualblocks visualaid | preview' },
+            insert: { title: 'Insert', items: 'charmap hr inserttable' },
             format: {
                 title: 'Format',
-                items: 'bold italic underline strikethrough superscript subscript | formats | removeformat'
+                items: 'bold italic underline strikethrough superscript subscript | blockformats fontsize | align | forecolor backcolor'
             },
             table: { title: 'Table', items: 'inserttable tableprops deletetable cell row column' },
-            tools: { title: 'Tools', items: 'code' }
+            tools: { title: 'Tools', items: 'code visualchars visualblocks wordcount' }
         },
         contextmenu: "inserttable | cell row column deletetable",
         hidden_input: false,
-        paste_data_images: true,
+        paste_data_images: false,
         init_instance_callback: (ed) => {
             // callback for when editor initializes
-            if (updateMode) tinymce.activeEditor.setContent(report_config[e_rptIdx][kval].rawText);
+            if (updateMode) {
+                ed.setContent(report_config[e_rptIdx][kval].rawText);
+            } else {
+                ed.setContent('<p style="font-size: 14px;"><br></p>');
+            }
+            const firstBlock = ed.getBody().firstElementChild;
+            if (firstBlock) {
+                ed.selection.select(firstBlock, true);
+                ed.selection.collapse(true);
+            }
+            ed.focus();
+            ed.nodeChanged();
         },
         relative_urls: true,
         document_base_url: settings.JSrootURL,
@@ -2878,6 +3980,7 @@ function freeTextStart(e_rptIdx) {
     tinymce.init(conf);
 
     unsavedState = true;
+    updateReportSaveButtons(true);
 
 }
 
@@ -2951,8 +4054,17 @@ function multiPlotConf(data, curIdx = report_config.length, fromClick, button) {
             title: UILANG.m('Multi-plot Configuration'),
             width: 600,
             contents: /* html */ `
-                <div id='multiItemSelBox'></div>
-                <div style="margin-top: 5px;"><strong>${UILANG.m('Item Ordering')}:</strong>&nbsp;<span id='iorder'></span></div>
+                <div class="rbDialog rbMultiPlotDialog">
+                    <div class="rbDialogTile rbDialogIntro">
+                        <strong>${UILANG.m("Add Multiplot")}</strong>
+                        <span>${UILANG.m("Select two or more items and choose how they should be combined.")}</span>
+                    </div>
+                    <div id='multiItemSelBox'></div>
+                    <div class="rbDialogTile rbOrderTile">
+                        <span>${UILANG.m('Item Ordering')}</span>
+                        <strong id='iorder'></strong>
+                    </div>
+                </div>
             `,
             buttons: [{
                 label: UILANG.m('Cancel'),
@@ -2970,6 +4082,7 @@ function multiPlotConf(data, curIdx = report_config.length, fromClick, button) {
 
         /* define droplist showing chart type options */
         const m_type = insertDropdown($('#multiItemSelBox'), 'mp_dd_id', UILANG.m('Multiplot Type'), {
+            theme: 'backend',
             initialValue: (curIdx in report_config) ? report_config[curIdx].cfg.m_type : "sq",
             elements: [{
                 value: "sq",
@@ -2984,9 +4097,6 @@ function multiPlotConf(data, curIdx = report_config.length, fromClick, button) {
             onChange: setDD,
             alignmentProperty: "right"
         });
-
-        // force overflow of 'visible' on mp_diag_id for color picker to show
-        $('#mp_diag_id').css("overflow", "visible");
 
         // force right alignment for dropdown since we can't define it with the insertDropdown method
         $('#dlContainer_mp_dd_id').parent().css({ "text-align": "right" });
@@ -3160,6 +4270,7 @@ function multiPlotConf(data, curIdx = report_config.length, fromClick, button) {
         }
 
         unsavedState = true;
+        updateReportSaveButtons(true);
         buildChart(finalSend, null, null, "multi", curIdx);
 
         /* revert our xcats to original values for next time dialog is called */
@@ -3182,7 +4293,15 @@ function singlePlotStart() {
             disabled: true
         }],
         title: UILANG.m('Select Item to Plot'),
-        contents: /* html */ `<div id='singleItemSelBox'></div>`,
+        contents: /* html */ `
+            <div class="rbDialog rbSinglePlotDialog">
+                <div class="rbDialogTile rbDialogIntro">
+                    <strong>${UILANG.m("Add Single Plot")}</strong>
+                    <span>${UILANG.m("Select one item to configure as a report plot.")}</span>
+                </div>
+                <div id='singleItemSelBox'></div>
+            </div>
+        `,
         callback: function(button) {
             if (button === 'add') sendToSplotConf(plotItemSL.getSelection());
         }
@@ -3252,7 +4371,15 @@ function singlePlotConf(fn, cState = false, data, curIdx = report_config.length,
     let sp_diag = new nxDialog('fcfg_dialog', {
         title: /* html */ `${UILANG.m('Configure Report Variables for: ')} <em>${fn.fieldName}</em>`,
         width: "500",
-        contents: /* html */`<div class="rb-dialogLabel">${UILANG.m("Question")}</div><div class="rb-dialog-questionBox">${fn.fullTxt}</div><div id='cb_opts'></div>`,
+        contents: /* html */`
+            <div class="rbDialog rbPlotConfigDialog">
+                <div class="rbDialogTile">
+                    <div class="rb-dialogLabel">${UILANG.m("Question")}</div>
+                    <div class="rb-dialog-questionBox">${fn.fullTxt}</div>
+                </div>
+                <div id='cb_opts' class="rbOptionsPanel"></div>
+            </div>
+        `,
         buttons: [{
             label: UILANG.m('Cancel'),
             'default': false,
@@ -3270,6 +4397,7 @@ function singlePlotConf(fn, cState = false, data, curIdx = report_config.length,
                 // push plot data and build chart
                 if (!fromEntry) savePlot.push([data, fn, cState, "single", curIdx, report_config[curIdx], null]);
                 unsavedState = true;
+                updateReportSaveButtons(true);
                 buildChart(data, fn, cState, "single", curIdx);
             }
 
@@ -3405,6 +4533,7 @@ function singlePlotConf(fn, cState = false, data, curIdx = report_config.length,
     tt_init("#pie_opt", "pie.png");
 
     const cb_pie_lpos = insertDropdown($('#cb_opts'), 'pie_l_opt', UILANG.m('Label Layout'), {
+        theme: 'backend',
         elements: [{
             label: UILANG.m("Inside"),
             value: "inside"
@@ -3816,7 +4945,9 @@ function sp_colpic(objId, startCol, parNxBtns, cb1, cb2) {
     // default starting color value
     objId.css("background", `rgb(${startCol})`);
 
-    let newCol = null;
+    const colorToRgbList = function(color) {
+        return `${color._r}, ${color._g}, ${color._b}`;
+    };
 
     objId.spectrum({
         showPalette: true,
@@ -3831,15 +4962,24 @@ function sp_colpic(objId, startCol, parNxBtns, cb1, cb2) {
             ["#900", "#b45f06", "#bf9000", "#38761d", "#134f5c", "#0b5394", "#351c75", "#741b47"],
             ["#600", "#783f04", "#7f6000", "#274e13", "#0c343d", "#073763", "#20124d", "#4c1130"]
         ],
-        appendTo: "#" + objId.closest(".nxDialog")[0].id,
+        appendTo: "body",
         chooseText: UILANG.m("OK"),
         cancelText: UILANG.m("Cancel"),
+        clickoutFiresChange: false,
         preferredFormat: "rgb",
         color: `rgb(${startCol})`,
         move: function(color) {
-            newCol = `${color._r}, ${color._g}, ${color._b}`;
-            // ts_cb("hcol_opt", newCol);
+            if (!color) return;
+            const newCol = colorToRgbList(color);
             $(this).css("background", `rgb(${newCol})`);
+        },
+        change: function(color) {
+            if (!color) return;
+            const newCol = colorToRgbList(color);
+            cb1("hcol_opt", newCol);
+            startCol = newCol;
+            objId.css("background", `rgb(${newCol})`);
+            objId.spectrum("set", `rgb(${newCol})`);
         },
         show: function() {
             $(this).spectrum("container").css("left", $(this).spectrum("container").position().left - 342);
@@ -3849,46 +4989,17 @@ function sp_colpic(objId, startCol, parNxBtns, cb1, cb2) {
             parNxBtns.disableButton("cancel");
             parNxBtns.disableButton("ok");
 
-            // replace spectrum buttons with nxButtons
-            $('.sp-cancel').remove();
-            $('.sp-choose').remove();
-
-            // ok button init
-            $(".sp-button-container")[0].id = "spBtnAreaId";
-            const nx_ok = new nxButton("spBtnAreaId", "nxok_btn", {
-                label: UILANG.m("OK"),
-                default: true,
-                callback: function() {
-                    cb1("hcol_opt", newCol);
-                    startCol = newCol;
-                    objId.css("background", `rgb(${newCol})`);
-                    objId.spectrum("set", `rgb(${newCol})`);
-                    objId.spectrum("hide");
-                }
-            });
-
-            // cancel button init
-            $(".sp-button-container")[0].id = "spBtnAreaId";
-            const nx_canc = new nxButton("spBtnAreaId", "nxcanc_btn", {
-                label: UILANG.m("Cancel"),
-                callback: function() {
-                    objId.spectrum("set", `rgb(${startCol})`);
-                    objId.spectrum("hide");
-                    objId.css("background", `rgb(${startCol})`);
-                }
-            });
-
-            $('#nxcanc_btn, #nxok_btn').css("font-size", "smaller");
-
             // stop accepting input on all other options until the color is selected or color picker hidden (pseudo-semi-modal mode)
+            const colorRow = objId.closest('.jsInterfaceRow');
             $('.jsInterfaceRow').css("pointer-events", "none");
-            $('.jsInterfaceRowLabelCell:contains("Histogram Bar Color")').parent().css("pointer-events", "all"); // re-enable bar color interface toggle
+            colorRow.css("pointer-events", "all");
 
         },
         hide: function() {
             // retore nxdiag buttons underneath
             parNxBtns.enableButton("cancel");
             cb2();
+            objId.css("background", `rgb(${startCol})`);
             $('.jsInterfaceRow').css("pointer-events", "all"); // restore inputs on chart options
         }
     });
@@ -3907,14 +5018,14 @@ function build_an_table() {
         /* iterate each of the fields (questions) being reported on */
         for (let [fieldId, fieldText] of Object.entries(report_data.items).reverse()) {
 
-            let fieldText = report_data.items[fieldId];
+            fieldText = report_data.items[fieldId];
             if ($(`[id='cat_${fieldId}']`).length === 0) $('#st_header').after(/* html  */
                 `<tr id="cat_${fieldId}">
-				    <td class="ds_row_question" title="${fieldText}" style='white-space: nowrap; padding: 5px;'><strong>${fieldId}</strong></td>
+				    <td class="ds_row_question" title="${journeyEsc(fieldText)}" style='white-space: nowrap; padding: 5px;'><strong>${journeyEsc(fieldId)}</strong></td>
 			    </tr>`);
 
             let dataVal = report_data.core[statProp][fieldId] || "N/A"; // convert 'undefined' to "N/A"
-            $(`[id='cat_${fieldId}'] td:last`).after(`<td id=data_${fieldId} class='statItem it_${fieldId}' style='padding: 5px;'>${dataVal}</td>`);
+            $(`[id='cat_${fieldId}'] td:last`).after(`<td id="data_${journeyEsc(fieldId)}" class="statItem it_${journeyEsc(fieldId)}" style="padding:5px;">${journeyEsc(dataVal)}</td>`);
         }
 
         // setup mouse tracking effect on cells
@@ -4447,7 +5558,7 @@ async function buildChart(data, fInfo, cState, ctype, rptIdx) {
                     layoutData.push(plot.layout);
 
                     /* enable 'save chart' option */
-                    buttons.savePlot.enable();
+                    updateReportSaveButtons(true);
 
                     /* set stat values for non-ordinal vars on a 1-index scale */
                     // if (!m_isOrdinal && !nom) {
@@ -4747,7 +5858,7 @@ async function buildChart(data, fInfo, cState, ctype, rptIdx) {
             }
 
             /* enable 'save chart' option */
-            buttons.savePlot.enable();
+            updateReportSaveButtons(true);
 
             /* open text special operation */
             if (rcfg.ot_opt) {
@@ -4887,6 +5998,11 @@ async function buildChart(data, fInfo, cState, ctype, rptIdx) {
                     if (!rcfg.hist_opt && (rcfg.box_opt === true || rcfg.vio_opt === true || rcfg.sd_opt === true)) s_layout.xaxis.showgrid = true;
                 }
 
+                // strip html tags from  s_layout labels which may contain them
+                if (s_layout.title && typeof s_layout.title.text === "string") {
+                    s_layout.title.text = s_layout.title.text.replace(/<[^>]*>/g, "");
+                }
+
                 // final single plot
                 Plotly.react(`OA_chart_${rptIdx}`, r_data, s_layout).then(() => {
                     /* Create/update event handler for download image attached to each single plot image  */
@@ -4945,9 +6061,6 @@ async function buildChart(data, fInfo, cState, ctype, rptIdx) {
         theLabel.parentNode.replaceChild(theLabel.cloneNode(true), theLabel); // copy to remove anon fx event(s)
         theLabel = $(`#OA_chart_${rIdxVal} .${DOMclassName}`)[0]; // re-init the var for the new cloned object
 
-        // translate default placeholder text
-        if ($(theLabel).hasClass("js-placeholder")) theLabel.textContent = UILANG.m(theLabel.textContent);
-
         theLabel.removeEventListener("click", function() { });
         theLabel.addEventListener("click", function() {
 
@@ -4955,7 +6068,14 @@ async function buildChart(data, fInfo, cState, ctype, rptIdx) {
                 title: LTtitle,
                 width: 600,
                 datafields: ['newLabel'],
-                contents: /* html */`<div>${LTtxt}:&nbsp;<input maxlength="180" style="width: 100%;" id="newLabel" type="text"></div>`,
+                contents: /* html */`
+                    <div class="rbDialog rbLabelDialog">
+                        <div class="rbDialogTile">
+                            <label class="rbDialogFieldLabel" for="newLabel">${LTtxt}</label>
+                            <input maxlength="180" id="newLabel" type="text">
+                        </div>
+                    </div>
+                `,
                 buttons: [{
                     label: UILANG.m("Cancel"),
                     value: "cancel",
@@ -5388,8 +6508,8 @@ function updateRB(rb_idx, p_type, fInfo, data) {
 
     if (rb_exists) {
         /* if updating an existing report row */
-        $(`.sTableClickable[data-tdid=${rb_idx}]`).html(plotsVar);
-        $(`#rb_table_${rb_idx + 1} > [data-fielddesc='plotType']`).html(p_type + pt_subinfo());
+        $(`.sTableClickable[data-tdid=${rb_idx}]`).text(plotsVar);
+        $(`#rb_table_${rb_idx + 1} > [data-fielddesc='plotType']`).text(p_type + pt_subinfo());
     } else {
         /* new report item to build */
 
@@ -5420,7 +6540,7 @@ function updateRB(rb_idx, p_type, fInfo, data) {
     }
 
     // always set css for trash can image
-    $('td[data-abid^="actionButton_"]').css("background-size", "70%");
+    $('td[data-abid^="actionButton_"]').css("background-size", "64%");
 
     function pt_subinfo() {
 
@@ -5442,7 +6562,8 @@ function updateRB(rb_idx, p_type, fInfo, data) {
                 "pie_opt": UILANG.m("Pie"),
                 "ot_opt": UILANG.m("Open Text"),
                 "ct_opt": UILANG.m("Custom Text"),
-                "pb_opt": UILANG.m("Page Break")
+                "pb_opt": UILANG.m("Page Break"),
+                "dr_opt": UILANG.m("Report data range")
             };
 
             // loop and build string showing all main options
@@ -5480,11 +6601,15 @@ function updateRB(rb_idx, p_type, fInfo, data) {
  *
  * (Depth 1 of scoring process flow)
  */
-async function ms_build_subSumPanel() {
+async function ms_build_subSumPanel(showWait = true) {
+    const requestedTestId = serverData['id'];
+    const requestedManualScoringToken = manualScoringSummaryToken;
 
     const testSumData = await results_startAjax('fetchTestSubmissionSummary', {
-        testId: serverData['id'],
-    });
+        testId: requestedTestId,
+    }, showWait);
+
+    if (testSumData.error || String(serverData['id']) !== String(requestedTestId) || requestedManualScoringToken !== manualScoringSummaryToken) return;
 
     /* build manual scoring button and launch scoring operations */
 
@@ -5496,7 +6621,23 @@ async function ms_build_subSumPanel() {
 
     $('#mscore_embHolder').empty();
 
-    if (window.permList[selection[0].dbId].editSelection) {
+    const scoreAccess = testSumData.testTakerAccess || { readable: 0, writable: 0, total: 0 };
+    const canOpenManualScoring = scoreAccess.writable > 0;
+    if (canOpenManualScoring && testSumData.scorable === 1 && testSumData.containsMS === 1) buttons.manualScoring.enable();
+    else buttons.manualScoring.disable();
+    const addScoringNotice = function(html, prepend) {
+        const target = $('#mscore_embHolder');
+        if (prepend) target.prepend(html);
+        else target.append(html);
+    };
+    const accessNotice = function() {
+        if (scoreAccess.total > 0 && scoreAccess.writable < scoreAccess.total) {
+            return msScoringAccessCardHtml(scoreAccess);
+        }
+        return "";
+    };
+
+    if (canOpenManualScoring) {
         new nxButton($('#mscore_embHolder'), 'eManBtn', {
             label: UILANG.m('Open Manual Scoring'),
             value: {
@@ -5516,13 +6657,27 @@ async function ms_build_subSumPanel() {
 
         if (testSumData.containsMS === 1) {
             $('#eManBtn').show();
-            $('#background_eManBtn').prepend(/* html */`<span id='ms_scTime'>${UILANG.m("Scoring Last Updated")}: <strong>${testSumData.updateTime}</strong></span>`);
+            addScoringNotice(msScoringPanelSummaryHtml(testSumData, scoreAccess), true);
+            if (!canOpenManualScoring && scoreAccess.total > 0) {
+                addScoringNotice(msScoringAccessCardHtml(scoreAccess, true));
+            } else {
+                const notice = accessNotice();
+                if (notice !== "") addScoringNotice(notice);
+            }
         } else if (testSumData.containsMS === 0) {
             $('#eManBtn').hide();
-            $('#background_eManBtn').prepend(/* html */`<span style="margin-bottom: 0px;" id='ms_scTime'>${UILANG.m("This test is fully autoscored.")}</span>`);
+            addScoringNotice(msScoringInfoCardHtml(
+                'isAuto',
+                UILANG.m('Automatic scoring'),
+                UILANG.m('All scorable answers in this test are evaluated automatically. No manual scoring is required.')
+            ), true);
         } else if (testSumData.containsMS === -1) {
             $('#eManBtn').hide();
-            $('#background_eManBtn').prepend(/* html */`<span style="margin-bottom: 0px;" id='ms_scTime'>${UILANG.m("Scoring information not found.")}</span>`);
+            addScoringNotice(msScoringInfoCardHtml(
+                'isWarning',
+                UILANG.m('Scoring information unavailable'),
+                UILANG.m('The scoring configuration could not be determined. Check the test structure and try again.')
+            ), true);
         }
 
         buttons.exportScore.enable();
@@ -5531,10 +6686,133 @@ async function ms_build_subSumPanel() {
 
         /* not scorable test routine */
 
-        $('#mscore_embHolder').css({ 'margin-bottom: 0px; backgroundColor': '#e6e6e6', 'fontSize': 'smaller' }).html(UILANG.m('This test does not contain any scorable items.'));
+        $('#mscore_embHolder').html(msScoringInfoCardHtml(
+            'isNeutral',
+            UILANG.m('No scoring configured'),
+            UILANG.m('This test contains no scorable interactions. No score is calculated and score export is unavailable.')
+        ));
         buttons.exportScore.disable();
     }
 
+}
+
+function msScoringInfoCardHtml(stateClass, title, detail) {
+    return /* html */`
+        <div class="msScoringInfoCard ${stateClass}">
+            <span class="msScoringInfoIcon" aria-hidden="true"></span>
+            <span class="msScoringInfoCopy">
+                <strong>${journeyEsc(title)}</strong>
+                <span>${journeyEsc(detail)}</span>
+            </span>
+        </div>
+    `;
+}
+
+function msScoringAccessCardHtml(scoreAccess, noWriteAccess = false) {
+    const readable = Number(scoreAccess.readable || 0);
+    const writable = Number(scoreAccess.writable || 0);
+    const total = Number(scoreAccess.total || 0);
+    const note = noWriteAccess
+        ? `<span class="msScoringAccessNote">${journeyEsc(UILANG.m('Manual scoring requires write access.'))}</span>`
+        : '';
+
+    return /* html */`
+        <div id="ms_permInfo" class="msScoringAccessCard">
+            <strong class="msScoringAccessTitle">${journeyEsc(UILANG.m('Scoring access'))}</strong>
+            <span class="msScoringAccessStats">
+                <span>
+                    <strong>${readable}/${total}</strong>
+                    <small>${journeyEsc(UILANG.m('Readable'))}</small>
+                </span>
+                <span>
+                    <strong>${writable}/${total}</strong>
+                    <small>${journeyEsc(UILANG.m('Writable'))}</small>
+                </span>
+            </span>
+            ${note}
+        </div>
+    `;
+}
+
+function msScoringPanelSummaryHtml(testSumData, scoreAccess) {
+    const summary = testSumData.manualScoringSummary || {};
+    const writableTakersTotal = Number(summary.writableTakers || 0);
+    const writableTakersNeedScoring = Number(summary.writableTakersNeedScoring || 0);
+    const writableItemsTotal = Number(summary.writableItemsTotal || 0);
+    const writableItemsNeedScoring = Number(summary.writableItemsNeedScoring || 0);
+    const accessibleItemsTotal = Number(summary.accessibleItemsTotal || 0);
+    const accessibleTakersNeedScoring = Number(summary.accessibleTakersNeedScoring || 0);
+    const accessibleItemsNeedScoring = Number(summary.accessibleItemsNeedScoring || 0);
+    const readOnlyAccounts = Math.max(0, Number(scoreAccess.readable || 0) - Number(scoreAccess.writable || 0));
+    const readOnlyNeedScoring = Math.max(0, accessibleTakersNeedScoring - writableTakersNeedScoring);
+    const complete = accessibleItemsTotal > 0 && accessibleItemsNeedScoring === 0;
+    const statusLabel = complete ? UILANG.m('Scoring complete') : UILANG.m('Manual scoring needed');
+    const updated = testSumData.updateTime ? `${UILANG.m("Last updated")}: ${msScoringPanelTimestamp(testSumData.updateTime)}` : '';
+    const writableItemsScored = Math.max(0, writableItemsTotal - writableItemsNeedScoring);
+    const readOnlyText = readOnlyAccounts > 0
+        ? `${UILANG.m('Read-only')}: ${readOnlyAccounts}${readOnlyNeedScoring > 0 ? ` (${readOnlyNeedScoring} ${UILANG.m('with open scoring')})` : ''}`
+        : '';
+
+    return /* html */`
+        <div class="msScoringPanelSummary ${complete ? 'isComplete' : 'isPending'}">
+            <div class="msScoringPanelHead">
+                <strong>${statusLabel}</strong>
+            </div>
+            ${updated ? `<div class="msScoringPanelUpdated">${journeyEsc(updated)}</div>` : ''}
+            <div class="msScoringPanelStats">
+                ${msScoringPanelChartHtml(writableItemsNeedScoring, writableItemsTotal, complete)}
+                <div class="msScoringPanelLegend">
+                    ${complete
+                        ? `${msScoringPanelLegendLine(`${writableItemsScored}/${writableItemsTotal}`, UILANG.m('manual answers scored'))}
+                           <span class="msScoringPanelLegendDivider"></span>
+                           ${msScoringPanelLegendLine(writableTakersTotal, UILANG.m('writable test takers'))}`
+                        : `${msScoringPanelLegendLine(`${writableItemsNeedScoring}/${writableItemsTotal}`, UILANG.m('manual answers left to score'))}
+                           <span class="msScoringPanelLegendDivider"></span>
+                           ${msScoringPanelLegendLine(`${writableTakersNeedScoring}/${writableTakersTotal}`, UILANG.m('writable test takers still need scoring'))}`}
+                </div>
+            </div>
+            ${readOnlyText ? `<div class="msScoringPanelNote">${journeyEsc(readOnlyText)}</div>` : ''}
+        </div>
+    `;
+}
+
+function msScoringPanelLegendLine(value, label) {
+    const textValue = String(value ?? '');
+    const fraction = textValue.match(/^([^/]+)\/(.+)$/);
+    if (fraction) {
+        return /* html */`
+            <strong class="msScoringPanelLegendPart msScoringPanelLegendLeft">${journeyEsc(fraction[1])}</strong>
+            <strong class="msScoringPanelLegendPart msScoringPanelLegendSlash">/</strong>
+            <strong class="msScoringPanelLegendPart msScoringPanelLegendRight">${journeyEsc(fraction[2])}</strong>
+            <em>${journeyEsc(label)}</em>
+        `;
+    }
+
+    return /* html */`
+        <strong class="msScoringPanelLegendPart msScoringPanelLegendSingle">${journeyEsc(textValue)}</strong>
+        <em>${journeyEsc(label)}</em>
+    `;
+}
+
+function msScoringPanelChartHtml(left, total, complete = false) {
+    const safeLeft = Math.max(0, Number(left || 0));
+    const safeTotal = Math.max(0, Number(total || 0));
+    const scoredPercent = complete ? 100 : (safeTotal > 0 ? journeyClampPercent(((safeTotal - safeLeft) / safeTotal) * 100) : 0);
+    const scored = Math.max(0, safeTotal - safeLeft);
+    return /* html */`
+        <span class="msScoringPanelChart ${complete ? 'isCompleteValue' : ''}" style="--ms-score-panel-pie:${scoredPercent}%">
+            <i><span>${complete || safeTotal > 0 ? journeyEsc(journeyPercent(scoredPercent)) : '0 %'}</span><small>${UILANG.m('scored')}</small></i>
+            <strong>${journeyEsc(`${scored}/${safeTotal}`)}</strong>
+            <b>${UILANG.m('Manual answers scored')}</b>
+        </span>
+    `;
+}
+
+function msScoringPanelTimestamp(value) {
+    if (!value) return '';
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    if (!match) return String(value).replace(/\.\d+$/, '');
+    return `${match[3]}.${match[2]}.${match[1]} ${match[4]}:${match[5]}`;
 }
 
 /**
@@ -5559,6 +6837,8 @@ async function ms_build_scoreTypeScreen(data) {
     });
 
     if (ftsData.error) return;
+    msStartLeaseHeartbeat(ftsData.testId, ftsData.manualScoringLease);
+    scoring.testTakerAccess = ftsData.testTakerAccess || { readable: 0, writable: 0, total: 0 };
 
     // disable up/down start section key definitions when in manual scoring mode (they are redefined when 'ms_scoreDetailScreen()' is callled)
     kbHandler.registerShortcut('up', "");
@@ -5582,6 +6862,7 @@ async function ms_build_scoreTypeScreen(data) {
         // all show routines for buttons2 and dividers and statusbar text
         $('#sb_submsg').html(`${UILANG.m("browsing scoring selection for test")} "${ftsData.testName}"`);
         msMainView.forEach(e => { e.show() });
+        if (scoring.testTakerAccess.writable !== scoring.testTakerAccess.total || scoring.testTakerAccess.total === 0 || ftsData.manualScoringLease?.owned !== true) buttons.resetFullTest.hide();
         $('[id="vd_ms1"]').show();
     });
 
@@ -5590,13 +6871,8 @@ async function ms_build_scoreTypeScreen(data) {
     gui.boxes.mscore_main.setTitle(`${UILANG.m('TEST TAKERS WITH RESULTS LIST FOR ')} <span class='ms_title_emph'>${testName}</span> (${testId})`);
 
     /* ----------------- */
-    const tViewData = ftsData.t_scoringSummary;
-    const qViewData = ftsData.q_scoringSummary;
-
-    /* remove any test taker who has not touched the test yet from scoring */
-    for (const [i, v] of tViewData.entries()) {
-        if (v.testId === null) tViewData.splice(i, 1);
-    }
+    const tViewData = (ftsData.t_scoringSummary || []).filter((entry) => entry.testId !== null);
+    const qViewData = ftsData.q_scoringSummary || [];
 
     /* build by test taker view data element */
     const q_view_data = [];
@@ -5612,6 +6888,7 @@ async function ms_build_scoreTypeScreen(data) {
 
         // populate test taker list table data elements
         t_view_data.push({
+            hiddenID: val.passwordId,
             tt_info: {
                 id: val.passwordId,
                 data: (val.msLeft === 0) ? UILANG.m("ALL SCORED") : val.msLeft + " " + UILANG.m("unscored"),
@@ -5620,9 +6897,11 @@ async function ms_build_scoreTypeScreen(data) {
                     passwordTag: val.passwordTag,
                     loginId: val.loginId,
                     loginName: val.loginName,
-                    testId: testId
+                    testId: testId,
+                    canWriteScores: val.canWriteScores === true
                 },
             },
+            scoreAccess: (val.canWriteScores === true) ? UILANG.m("Write access") : UILANG.m("Read only"),
             loginId: val.loginName + " [" + val.loginId + "]",
             displayName: val.displayName,
             passwordId: val.passwordId,
@@ -5641,6 +6920,7 @@ async function ms_build_scoreTypeScreen(data) {
 
         if (val.scoringTypes.includes("manual")) msList.push(val.id);
         q_view_data.push({
+            hiddenID: val.id,
             q_info: {
                 id: val.id,
                 // data: `${val.itemName} (${val.id}) [${UILANG.m("left to score:")} ${val.msLeftPage}]`,
@@ -5659,6 +6939,7 @@ async function ms_build_scoreTypeScreen(data) {
     });
 
     $('#mainManScore').empty(); // wipe UI for new page load
+    $('#mainManScore').append(msLeaseWarningHtml(ftsData.manualScoringLease));
 
     /* initalize jsTabs */
     let msMainTabs = new jsTabs($('#mainManScore'), 'msTabs');
@@ -5668,7 +6949,7 @@ async function ms_build_scoreTypeScreen(data) {
     msMainTabs.setTabs(scoringTabList);
 
     /* build by test taker view table */
-    new jsSortableTable('mainManScore', 'ms_t_listId', {
+    new JsSortableTable('mainManScore', 'ms_t_listId', {
         /* TABLE CSS */
         cssStylesCells: {},
         cssHeadCells: { "color": "white" },
@@ -5681,6 +6962,7 @@ async function ms_build_scoreTypeScreen(data) {
         tableHeadDisplay: true,
         tableHead: {
             status: UILANG.m("Status"),
+            scoreAccess: UILANG.m("Access"),
             loginId: UILANG.m("Test Taker Value/ID"),
             displayName: UILANG.m("Test Taker Name"),
             passwordId: UILANG.m('Password ID'),
@@ -5707,9 +6989,9 @@ async function ms_build_scoreTypeScreen(data) {
 
     /* next page handler */
     $('#ttl_ms_t_nextPage').on("click", function() {
-
-        ttl_pagePos = ttl_pagePos + 100;
-        ttl_pagePos > ftsData.ttl_count ? ttl_pagePos = ftsData.ttl_count - (ftsData.ttl_count % 100) : ms_build_scoreTypeScreen({ testId: data.testId });
+        if (ttl_pagePos + 100 >= ftsData.ttl_count) return;
+        ttl_pagePos += 100;
+        ms_build_scoreTypeScreen({ testId: data.testId });
     });
 
     /* prev page handler */
@@ -5720,16 +7002,16 @@ async function ms_build_scoreTypeScreen(data) {
 
     // calc and set page number info for navigation
     $('#ttl_curPgNo').html(Math.floor((ttl_pagePos / 100) + 1));
-    $('#ttl_lastPgNo').html(Math.floor((ftsData.ttl_count / 100) + 1));
+    $('#ttl_lastPgNo').html(Math.max(1, Math.ceil(ftsData.ttl_count / 100)));
 
     // selectively disable next/prev page buttons based on page position and total item counts
-    (ttl_pagePos + 100) > ftsData.ttl_count ? $('#ttl_ms_t_nextPage').prop('disabled', true) : $('#ttl_ms_t_nextPage').prop('disabled', false);
+    (ttl_pagePos + 100) >= ftsData.ttl_count ? $('#ttl_ms_t_nextPage').prop('disabled', true) : $('#ttl_ms_t_nextPage').prop('disabled', false);
     ttl_pagePos <= 0 ? $('#ttl_ms_t_prevPage').prop('disabled', true) : $('#ttl_ms_t_prevPage').prop('disabled', false);
 
     if ($('#ttl_ms_t_prevPage').prop('disabled') && $('#ttl_ms_t_nextPage').prop('disabled')) $('#ttl_ms_navholder').hide();
 
     /* build by question view table */
-    new jsSortableTable('mainManScore', 'ms_q_listId', {
+    new JsSortableTable('mainManScore', 'ms_q_listId', {
         /* TABLE CSS */
         cssStylesCells: {},
         cssHeadCells: { "color": "white" },
@@ -5764,8 +7046,9 @@ async function ms_build_scoreTypeScreen(data) {
     /* next page handler */
     $('#tpl_ms_t_nextPage').on("click", function() {
         ms_lastTabView = 'bp';
-        tpl_pagePos = tpl_pagePos + 100;
-        tpl_pagePos > ftsData.tpl_count ? tpl_pagePos = ftsData.tpl_count - (ftsData.tpl_count % 100) : ms_build_scoreTypeScreen({ testId: data.testId });
+        if (tpl_pagePos + 100 >= ftsData.tpl_count) return;
+        tpl_pagePos += 100;
+        ms_build_scoreTypeScreen({ testId: data.testId });
     });
 
     /* prev page handler */
@@ -5777,26 +7060,40 @@ async function ms_build_scoreTypeScreen(data) {
 
     // calc and set page number info for navigation
     $('#tpl_curPgNo').html(Math.floor((tpl_pagePos / 100) + 1));
-    $('#tpl_lastPgNo').html(Math.floor((ftsData.tpl_count / 100) + 1));
+    $('#tpl_lastPgNo').html(Math.max(1, Math.ceil(ftsData.tpl_count / 100)));
 
     // selectively disable next/prev page buttons based on page position and total item counts
-    (tpl_pagePos + 100) > ftsData.tpl_count ? $('#tpl_ms_t_nextPage').prop('disabled', true) : $('#tpl_ms_t_nextPage').prop('disabled', false);
+    (tpl_pagePos + 100) >= ftsData.tpl_count ? $('#tpl_ms_t_nextPage').prop('disabled', true) : $('#tpl_ms_t_nextPage').prop('disabled', false);
     tpl_pagePos <= 0 ? $('#tpl_ms_t_prevPage').prop('disabled', true) : $('#tpl_ms_t_prevPage').prop('disabled', false);
 
     if ($('#tpl_ms_t_prevPage').prop('disabled') && $('#tpl_ms_t_nextPage').prop('disabled')) $('#tpl_ms_navholder').hide();
 
     /* color code both test takers and pages with man. corr. items left */
+    const allScoredLabel = UILANG.m("ALL SCORED");
+    const unscoredLabel = UILANG.m("unscored");
     $(`[data-fielddesc="tt_info"], [data-fielddesc="q_info"]`).each(function() {
-        if ($(this).html() === "ALL SCORED") {
+        const statusText = $(this).text().trim();
+        if (statusText === allScoredLabel) {
             $(this).css('color', 'green');
             $(this).html("<img style='height: 13px; padding-right: 5px;' src='../images/ok.png'>" + $(this).html());
         } else {
-            let us_val = /^\d+/.exec($(this).html());
+            let us_val = /^\d+/.exec(statusText);
             if (us_val !== null) {
                 us_val = us_val[0];
-                $(this).html(`<span class='msLeftBubble';>${us_val}</span> unscored`);
+                $(this).html(`<span class="msLeftBubble">${us_val}</span> ${unscoredLabel}`);
             }
         }
+    });
+
+    $(`#sortableTable_ms_t_listId [data-fielddesc="scoreAccess"]`).each(function() {
+        const accessText = $(this).text().trim();
+        const canWrite = accessText === UILANG.m("Write access");
+        $(this)
+            .html(`<span class="msAccessBadge ${canWrite ? 'msAccessWrite' : 'msAccessRead'}">${accessText}</span>`)
+            .attr('title', canWrite
+                ? UILANG.m("You can open and edit manual scoring for this test taker.")
+                : UILANG.m("You can view this test taker, but cannot change manual scoring."));
+        $(this).closest('tr').addClass(canWrite ? 'msScoreWriteRow' : 'msScoreReadRow');
     });
 
     // special marker for pages containing manual scoring item(s)
@@ -5872,7 +7169,7 @@ async function ms_build_scoreTypeScreen(data) {
  *
  */
 
-async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = false) {
+async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = false, preferredSelectionId = null, preferredItemName = null) {
 
     // get the detailed question/answer data
     i_data.msOnly = (typeof scoring === "undefined") ? true : scoring.msOnly;
@@ -5881,6 +7178,7 @@ async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = fals
 
     scoring.listData = listData;
     scoring.viewType = listData.qType;
+    msStartLeaseHeartbeat(listData.userInfo?.testId ?? i_data.testId, listData.manualScoringLease);
 
     // set view var for when returning to screen 2
     if (listData.qType === 'q') ms_lastTabView = 'bp';
@@ -5903,12 +7201,10 @@ async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = fals
     showSection(ms_panels.right_section, [ms_panels.right_section], function() {
         msDetailView.forEach(e => { e.show() });
         $('#vd_ms2').show();
-        // init reset corrections button and logic
-        scoring.reCorsInit(listData, i_data);
+        scoring.reCorsInit(listData, i_data); // init reset corrections button and logic
         scoring.prevBtnInit();
-        //show keyboard help
-        scoring.kbShortsInit();
-        scoring.chLangBtnInit(i_data);
+        scoring.kbShortsInit(); //show keyboard help
+        scoring.i_data = i_data;
     }, listData.fastSwitch);
 
     /* View Type Header Title */
@@ -5936,15 +7232,17 @@ async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = fals
     $('#questionListBox').append(/* html */`<div class="listbox_titleContainer">${subHeadBox}</div>`);
 
     $('#questionListBox').append(/* html */`<div id="questionListBoxControls"></div>`);
+    $('#questionListBox').append(msLeaseWarningHtml(listData.manualScoringLease));
 
     /* Toggle selection to filter out auto-corrected questions */
     insertToggleswitch($('#questionListBoxControls'), 'onlyManualTog', UILANG.m('Manual Scoring Only'), {
         checked: scoring.msOnly,
         changeCallback: function(_a, toggleState) {
-            pagePos = 0;
+            const currentSelection = scoring.qTable?.getSelection();
+            const currentSelectionId = currentSelection?.id ?? null;
+            const currentItemName = scoring.itemName ?? null;
             scoring.msOnly = toggleState;
-            forcePageSel = false;
-            ms_scoreDetailScreen(i_data, false, true);
+            ms_scoreDetailScreen(i_data, true, true, currentSelectionId, currentItemName);
         }
     });
 
@@ -5966,7 +7264,18 @@ async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = fals
     ms_panels.left_section.box.getInnerBox().append("<div id='qHolder'></div>");
 
     /* Build list of questions to select for scoring */
-    const lastPageSel = (scoring.qTable === null) ? null : String(scoring.qTable.getSelection().id);
+    const currentSelection = scoring.qTable?.getSelection();
+    const lastPageSel = (preferredSelectionId !== null) ? String(preferredSelectionId) : ((currentSelection?.id) ? String(currentSelection.id) : null);
+    let pendingPreferredItemName = preferredItemName;
+    const selectListItemOrTop = function(itemId) {
+        if (itemId !== null && document.getElementById(`testListItem_${itemId}`)) {
+            scoring.qTable.setSelection([String(itemId)]);
+            return;
+        }
+
+        const topSel = scoring.qTable.getIdForPosition(0);
+        if (topSel !== null && typeof topSel !== "undefined") scoring.qTable.setSelection([topSel]);
+    };
 
     $('#qHolder').prepend( /* html */ `<input id="ms_filter_page" class="ms_fltrBox" type='search' placeholder="${UILANG.m("Filter test page name")}" />`);
     $('#qHolder').prepend( /* html */ `
@@ -6007,6 +7316,8 @@ async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = fals
 
     scoring.qTable = new jsSelectList($('#qHolder'), 'testListItem', {
         orderKey: listData.qType === 't' ? "sortOrder" : "id",
+        prefixKey: "accessPrefix",
+        prefixFormat: "%@",
         postfixKey: "qScore",
         postfixFormat: "<span class='qt_total'>%@</span>",
         selectionCallback: () => pageLoader()
@@ -6084,21 +7395,25 @@ async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = fals
                     id: userVals.passwordId.toString(),
                     loginId: loginId,
                     name: `${userVals.loginName} ${(userVals.passwordTag !== "") ? '[tag: ' + userVals.passwordTag + ']' : ""}`,
+                    accessPrefix: userVals.canWriteScores === true
+                        ? `<span class="msAccessMini msAccessWrite">${UILANG.m("Write")}</span>`
+                        : `<span class="msAccessMini msAccessRead">${UILANG.m("Read only")}</span>`,
                     pageId: listData.testInfo.pageId,
                     pageName: listData.testInfo.pageName,
-                    qScore: `${earned} pts.`,
+                    qScore: scoring.buildScoreLabel(userVals.scoringData[listData.testInfo.pageId], listData.markedScores[userVals.passwordId]?.[listData.testInfo.pageId] ?? {}),
                     itemName: Object.keys(userVals.scoringData[listData.testInfo.pageId])[0],
                     passwordId: userVals.passwordId,
                     passwordTag: userVals.passwordTag,
                     testId: listData.testInfo.testId,
+                    canWriteScores: userVals.canWriteScores === true,
                     touched: touched,
                     hasMan: hasMan,
                     qType: 'q'
                 }]);
             }
 
-            /* force select first entry on scoring detail page load */
-            scoring.qTable.setSelection([Object.values(listData.userList)[0].passwordId.toString()]);
+            /* keep the current selection when reloading/filtering, otherwise select the first entry */
+            selectListItemOrTop(forcePageSel ? lastPageSel : Object.values(listData.userList)[0].passwordId.toString());
 
             // special table styling for manual/corrected items
             const pwdIdList = listData.passwordList;
@@ -6190,21 +7505,21 @@ async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = fals
 
                     sortOrder: pageObject.sortOrder.toString(),
                     name: `${pageObject.pageName}`,
-                    qScore: (hasTouched === 0) ? `<span class="list_incomplete_scoring"'>${UILANG.m("Incomplete")}</span>` : `<span class='list_complete_scoring'>${earned}</span>`,
+                    qScore: scoring.buildScoreLabel(pageObject, listData.markedScores[listData.userInfo.passwordId]?.[pageId] ?? {}),
                     pageId: pageId,
                     pageName: pageObject.pageName,
                     passwordId: listData.userInfo.passwordId,
                     passwordTag: listData.userInfo.passwordTag,
                     testId: listData.userInfo.testId,
+                    canWriteScores: listData.userInfo.canWriteScores === true,
                     hasMan: hasMan,
                     touched: touched,
                     qType: 't'
                 }]);
             }
 
-            /* force select first entry on scoring detail page load */
-            let topSel = scoring.qTable.getIdForPosition(0);
-            (forcePageSel) ? scoring.qTable.setSelection([lastPageSel]) : scoring.qTable.setSelection([topSel]);
+            /* keep the current selection when reloading/filtering, otherwise select the first entry */
+            selectListItemOrTop(forcePageSel ? lastPageSel : null);
 
             // special table styling for manual/corrected items
             scoring.setTestListStyles(Object.keys(listData.scoringAnswerList));
@@ -6226,7 +7541,7 @@ async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = fals
 
 
     scoring.alreadyInRO = false; // reset 'already read mode' value on each new ttaker/test load
-	await pageLoader();
+    await pageLoader();
 
     /**
      * The primary page loading mechanism which will load individual
@@ -6241,7 +7556,7 @@ async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = fals
         /* custom jsSelectList navigation handling in search/filter mode */
 
         let selItemVal = scoring.viewType === 't' ? scoring.qTable.getSelection().pageId : scoring.qTable.getSelection().passwordId;
-		const tl = scoring.qTable.getJQueryListItems();
+        const tl = scoring.qTable.getJQueryListItems();
         const visList = scoring.qTable.getJQueryVisibleListItems();
 
         scoring.cmBase = {};
@@ -6314,6 +7629,7 @@ async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = fals
         scoring.ms_kbreg(true, pageDetailData);
 
         if (pageDetailData.error !== false) return;
+        scoring.readOnlyByPermission = pageDetailData.canWriteScores !== true;
 
         /* Summary stats build [inside '#questionListBox', sibling of '#qHolder'] */
         scoring.buildSummaryBox(pageDetailData);
@@ -6326,10 +7642,12 @@ async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = fals
         // empty out and stage various UI elements
         scoring.stageUI();
 
-        scoring.itemName = pageDetailData.items[0]; // set/select first item as default, change later on switch
-
         // question item filtering
         if (scoring.msOnly) scoring.msObjMod(pageDetailData);
+        scoring.itemName = (pendingPreferredItemName !== null && pageDetailData.items.includes(pendingPreferredItemName))
+            ? pendingPreferredItemName
+            : pageDetailData.items[0]; // set/select first item as default, change later on switch
+        pendingPreferredItemName = null;
 
         // test activity status conditional handling
         await scoring.testActivityHandling(pageDetailData);
@@ -6483,7 +7801,7 @@ async function ms_scoreDetailScreen(i_data, forcePageSel = false, forceFS = fals
                         // ajax call to send in new score value
                         await scoring.setScore(pageDetailData, scoreTarg).then((scoringReturn) => {
                             if (!scoringReturn) {
-                                pageLoader(true);
+                                return pageLoader(true);
                             }
                             pageDetailData.scoredByInfo[scoreTarg] = scoringReturn;
                             window.stopNAV = false;
@@ -6530,6 +7848,57 @@ function ms_revertToMainView() {
     hideSection(ms_panels.right_section, [ms_panels.right_section]);
 }
 
+function resetFullTestResults() {
+    let testId = serverData.id;
+    const resetDiag = new nxDialog("resetTestConfirm", {
+        title: UILANG.m("Confirm Test Results Reset"),
+        width: 550,
+        buttons: [
+            { label: UILANG.m("OK"), value: "yes", disabled: true },
+            { label: UILANG.m("Cancel"), value: "cancel", 'cancel': true, 'default': true }
+        ],
+        contents: /* html */ `
+            <div class="msResetDialog">
+                <div class="msDialogMessage msDialogMessage-warning">
+                    <div class="msDialogBadge">!</div>
+                    <div class="msDialogCopy">
+                        <strong>${UILANG.m("Reset scoring")}</strong>
+                        <p>${UILANG.m("A scoring reset will revert all manually corrected items back to their original unscored state for ALL test takers.")}</p>
+                        <p>${UILANG.m("Please note that this will also remove all comments from all items!")}</p>
+                    </div>
+                </div>
+                <div class="msResetTarget">
+                    <span>${UILANG.m("Test ID")}</span>
+                    <strong>${testId}</strong>
+                </div>
+                <label class="msConfirmCheck" for="rc_conf">
+                    <input type='checkbox' name='rc_type' id='rc_conf' value='rc_conf'>
+                    <span>${UILANG.m("I confirm")}</span>
+                </label>
+            </div>
+        `,
+        callback: function(btnVal) {
+            if (btnVal === "yes") {
+                const conf = document.getElementById("rc_conf").checked;
+                results_startAjax("resetAllCorrections", {
+                    fullTestReq: true,
+                    testId: serverData.id,
+                    conf: conf
+                }).then((res) => {
+                    if (!res.error) {
+                        ms_build_scoreTypeScreen({ testId: serverData.id });
+                    }
+                });
+            }
+        }
+    });
+
+    $('#rc_conf').off();
+    $('#rc_conf').on('click', function() {
+        (this.checked === true) ? resetDiag.enableButton('yes') : resetDiag.disableButton('yes');
+    });
+}
+
 /**
  * Handles the UI logic required to revert
  * view back to inital test selection screen.
@@ -6537,6 +7906,8 @@ function ms_revertToMainView() {
  * (Depth 2 -> 1 in scoring process flow)
  */
 function ms_closeManScoreList() {
+
+    msReleaseLease();
 
     // reset some critical Scoring class vars
     scoring.listData = null;
@@ -6563,19 +7934,21 @@ function ms_closeManScoreList() {
     msMainView.forEach(element => { element.hide() });
     $('[id^="vd_ms"]').hide();
 
-    hideSection(gui.s6, [gui.s6], function() {
-        showSection(gui.s1, [gui.s1]);
-        showSection(gui.s2, [gui.s2]);
-        showSection(gui.s5, [gui.s5]);
+    // Match the other managers by transitioning outgoing and incoming sections together.
+    hideSection(gui.s6, [gui.s6]);
+    showSection(gui.s1, [gui.s1], function() {
         testView.forEach(element => { element.show(); });
         $('[id^="vd_test"]').show();
         // $('[id="vd_ms1"]').show();
     });
+    showSection(gui.s2, [gui.s2]);
+    showSection(gui.s5, [gui.s5]);
 
     // reset status bar msg
     gui.statusBar.setStatus(statusBarDefault);
 
-    ms_build_subSumPanel();
+    // Refresh scoring information without covering the already-loaded browser with a wait dialog.
+    ms_build_subSumPanel(false);
 }
 
 /**
@@ -6617,39 +7990,41 @@ function ms_closeManScoreDetail() {
 
 /* END OF MANUAL SCORING SECTION */
 
-function paintBlocked(oData) {
-    for (const a of Object.values(oData)) {
-        if (a.isBlocked) {
-            let iv1 = setInterval(() => {
-                /* verify filer list is visible and available */
-                if ($(`#_idSuffix${a.id}`).length === 1) {
-                    $(`#_idSuffix${a.id}`).off();
-                    $(`#_idSuffix${a.id}`).removeClass("droppable selectable ui-draggable ui-draggable-handle context").addClass("filerBlocked");
-                    $(`#_idSuffix${a.id}`).prop('title', UILANG.m("You do not have access to this object."));
-                    clearInterval(iv1);
-                }
-            }, 0);
-        }
-    }
-}
-
-
 /* Ajax communication */
-async function results_startAjax(action, data) {
-    waitDialog.show();
+function results_startAjax(action, data, showWait = true, ajaxOptions = {}) {
+    if (showWait) waitDialog.show();
+    const requestToken = data && data._requestToken;
+    const suppressGlobalError = ajaxOptions.suppressGlobalError === true;
+    const suppressActionError = ajaxOptions.suppressActionError === true;
+    const requestOptions = Object.assign({}, ajaxOptions);
+    delete requestOptions.suppressGlobalError;
+    delete requestOptions.suppressActionError;
+    const payload = data ? Object.assign({}, data) : {};
+    delete payload._requestToken;
     const params = {
         action: action,
-        data: JSON.stringify(data)
+        data: JSON.stringify(payload)
     };
-    return window.ajx = $.ajax({
-        data: params
-    })
+    return window.ajx = $.ajax(Object.assign({
+        data: params,
+        success: function(res) {
+            if (typeof requestToken !== 'undefined') res._requestToken = requestToken;
+            if (suppressActionError && res.error !== false) {
+                if (showWait) waitDialog.hide();
+            } else {
+                ajaxSuccess(res, showWait);
+            }
+        },
+        error: function(jqXHR, textStatus, errorThrown) {
+            if (!suppressGlobalError) ajaxError(jqXHR, textStatus, errorThrown, showWait);
+            else if (showWait) waitDialog.hide();
+        }
+    }, requestOptions))
 
 }
 
-function ajaxError(jqXHR, textStatus, errorThrown) {
-    waitDialog.hide();
-
+function ajaxError(jqXHR, textStatus, errorThrown, hideWait = true) {
+    if (hideWait) waitDialog.hide();
     if (textStatus === 'abort') return;
 
     const dialogData = {
@@ -6659,20 +8034,20 @@ function ajaxError(jqXHR, textStatus, errorThrown) {
             cancel: true,
             value: 'ok'
         }],
-        contents: jqXHR.responseJSON.fatalError,
+        contents: (jqXHR.responseJSON && jqXHR.responseJSON.fatalError) ? jqXHR.responseJSON.fatalError : "Unknown Error",
         title: UILANG.m('Error: ') + errorThrown,
         width: 500
     };
     new nxDialog('ajaxError', dialogData);
 }
 
-function ajaxSuccess(res) {
+function ajaxSuccess(res, hideWait = true) {
     if ("isSuper" in res) window.isSuper = res.isSuper; // check for superadmin level status
     if ("isAdmin" in res) window.isAdmin = res.isAdmin; // check for admin level status
     $('#un_val').html(res.loggedInName);
 
     let dialogData;
-    waitDialog.hide();
+    if (hideWait) waitDialog.hide();
 
     if (res.fatalError) {
         dialogData = {
@@ -6682,7 +8057,7 @@ function ajaxSuccess(res) {
                 cancel: true,
                 value: 'ok'
             }],
-            contents: '<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br />' + res.fatalError,
+            contents: formatActionErrorMessage('<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br />' + res.fatalError),
             title: UILANG.m('Error'),
             icon: "../images/error.png",
             iconWidth: 64,
@@ -6695,6 +8070,12 @@ function ajaxSuccess(res) {
     if (res.error !== false) {
 
         //FYI: required for permission compatibility BEGIN
+
+        if (res.action === 'setScore' && res.reloadFolder) {
+            window.location.reload();
+            return false;
+        }
+
 
         // dismiss the edit permission dialog prior to launching the error msg to show
         if (res.action === "fetchIgPerm") {
@@ -6709,6 +8090,7 @@ function ajaxSuccess(res) {
         if (res.action === 'fetchTestSummaryData') {
             oldLoc.folder = loc.folder;
         }
+
         //FYI: required for permission compatibility END
 
         dialogData = {
@@ -6718,7 +8100,7 @@ function ajaxSuccess(res) {
                 cancel: true,
                 value: 'ok'
             }],
-            contents: '<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br />' + res.error,
+            contents: formatActionErrorMessage('<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br /><br />' + res.error),
             title: UILANG.m('Error'),
             icon: "../images/error.png",
             iconWidth: 64,
@@ -6728,7 +8110,14 @@ function ajaxSuccess(res) {
                     window.location = 'index.php';
                 }
 
-                if (res.reloadFolder) {
+                if (res.action === 'fetchReportData') {
+                    closeRptBld();
+                }
+
+                const exportActions = ['fetchTestResults', 'fetchDetailedTestScore', 'fetchBehaviourTiming'];
+                if (res.reloadFolder
+                    && !String(res.action || '').startsWith('fetchTestJourney')
+                    && !exportActions.includes(res.action)) {
                     if (res.openNewLocation) {
                         results_startAjax('fetchLibrary', {
                             location: res.openNewLocationId,
@@ -6751,6 +8140,7 @@ function ajaxSuccess(res) {
                             if (res.action === 'fetchTestSummaryData') gui.library.setSelection([{ id: selection[0].id }]); // reselect previous item on edit scores permission failure
                         });
                     }
+                    // bailing from a setScore means permissions have changed, and we should reload the module to fully refresh consistency
                 }
 
                 if (res.action === 'fetchQAListDetail' || res.action === 'fetchQADetail') {
@@ -6774,18 +8164,6 @@ function ajaxSuccess(res) {
                 }]);
             }
             window.permList = res.permList; // used for selective button enabling
-            if (!isSuper && !isAdmin) {
-                curFFlist = res.data.list;
-                paintBlocked(curFFlist);
-                $('#bv_toggle').show();
-
-                // on pre-selection, the entry may come in which requires a showBlock = true state from the start
-                if (res.f_showBlocked === true) {
-                    showBlocked = true;
-                    $('#bv_toggle').attr("src", "../images/flexSectionToolBar/ic_flex_locked_hidden.png");
-                    $('#bv_toggle').data("val", 1);
-                }
-            }
             break;
         case 'fetchPreSelect':
             let selected = res.preFix + res.data.id;
@@ -6801,15 +8179,22 @@ function ajaxSuccess(res) {
                 showMsgNoSrchResults(UILANG.m('no_search_results'), res.data.searchString, gui.library);
             }
             break;
-        case 'fetchTestResultOverview':
-            serverData['id'] = res.testId;
+	        case 'fetchTestResultOverview':
+	            if (typeof res._requestToken !== 'undefined' &&
+	                (res._requestToken !== pendingResultToken ||
+	                String(res.testId) !== String(pendingResultTestId) ||
+	                selection.length !== 1 ||
+	                selection[0].type === 'folder' ||
+	                String(selection[0].dbId) !== String(res.testId))) {
+	                return;
+	            }
+	            serverData['id'] = res.testId;
             serverData['testType'] = selection[0].testStructure.type;
             gui.s2.fadeIn(0);
             gui.s5.fadeIn(0);
             const rovl = $("#resultsOverviewList");
             rovl.hide();
             rovl.empty();
-            $("#resultsOverviewHeader").empty();
             const noLoginCount = res.noLogins;
             const userRecs = res.activityData.length;
             if (userRecs > 0) {
@@ -6817,14 +8202,17 @@ function ajaxSuccess(res) {
                 buttons.exportTiming.enable();
                 // buttons.exportScore.enable();
                 buttons.reportBuilder.enable();
-                $("#resultsOverviewHeader").append(UILANG.m('Recorded data found!'));
+                buttons.testJourney.enable();
                 rovl.show();
                 let r = dataPrep(res.testActivity);
                 rovl.append('<table width="100%" id="resTaInf"></table>');
                 const rti = $("#resTaInf");
                 rti.append('<tr><th colspan="2">' + UILANG.m('Test information') + '</th></tr>');
                 rti.append('<tr><td>' + UILANG.m('Test-ID:') + '</td><td class="rightalign">' + serverData['id'] + '</tdclass></tr>');
-                rti.append('<tr><td>' + UILANG.m('Test-name:') + '</td><td class="rightalign">' + serverData.testname + '</td></tr>');
+                rti.append($('<tr>').append(
+                    $('<td>').text(UILANG.m('Test-name:')),
+                    $('<td>', {class: 'rightalign'}).text(serverData.testname)
+                ));
                 rti.append('<tr><td>' + UILANG.m('Test-type:') + '</td><td class="rightalign">' + serverData.testType + '</td></tr>');
                 rti.append('<tr><td>' + UILANG.m('Test-takers with results:') + '</td><td class="rightalign">' + userRecs + '</td></tr>');
                 rti.append('<tr><td>' + UILANG.m('Passwords not logged in:') + '</td><td class="rightalign">' + noLoginCount + '</td></tr>');
@@ -6842,21 +8230,30 @@ function ajaxSuccess(res) {
                     }
                 }
 
-                rtv.append('<tr><td width="50%">' + UILANG.m('less than 20 %') + '</td><td class="resultTd" style="background-size: ' + cProz['p0'] + '% 100%;">' + cProz['p0'] + ' % - (' + r.c0 + ')</td></tr>');
-                rtv.append('<tr><td>' + UILANG.m('21-40 %') + '</td><td class="resultTd" style="background-size: ' + cProz['p1'] + '% 100%;">' + cProz['p1'] + ' % - (' + r.c1 + ')</td></tr>');
-                rtv.append('<tr><td>' + UILANG.m('41-60 %') + '</td><td class="resultTd" style="background-size: ' + cProz['p2'] + '% 100%;">' + cProz['p2'] + ' % - (' + r.c2 + ')</td></tr>');
-                rtv.append('<tr><td>' + UILANG.m('61-80 %') + '</td><td class="resultTd" style="background-size: ' + cProz['p3'] + '% 100%;">' + cProz['p3'] + ' % - (' + r.c3 + ')</td></tr>');
-                rtv.append('<tr><td>' + UILANG.m('81-99 %') + '</td><td class="resultTd" style="background-size: ' + cProz['p4'] + '% 100%;">' + cProz['p4'] + ' % - (' + r.c4 + ')</td></tr>');
-                rtv.append('<tr><td>' + UILANG.m('100 % (fully completed)') + '</td><td class="resultTd" style="background-size: ' + cProz['p5'] + '% 100%;">' + cProz['p5'] + ' % - (' + r.c5 + ')</td></tr>');
+                const progressRow = function(label, pct, count, widthAttr) {
+                    return '<tr><td' + (widthAttr || '') + '>' + label + '</td><td class="resultTd">' +
+                        '<div class="resProgressBarRow"><div class="resProgressBarTrack" aria-hidden="true">' +
+                        '<div class="resProgressBarFill" style="width:' + pct + '%;"></div></div>' +
+                        '<span class="resProgressBarPct">' + pct + ' % - (' + count + ')</span></div></td></tr>';
+                };
+
+                rtv.append(progressRow(UILANG.m('less than 20 %'), cProz['p0'], r.c0, ' width="50%"'));
+                rtv.append(progressRow(UILANG.m('21-40 %'), cProz['p1'], r.c1));
+                rtv.append(progressRow(UILANG.m('41-60 %'), cProz['p2'], r.c2));
+                rtv.append(progressRow(UILANG.m('61-80 %'), cProz['p3'], r.c3));
+                rtv.append(progressRow(UILANG.m('81-99 %'), cProz['p4'], r.c4));
+                rtv.append(progressRow(UILANG.m('100 % (fully completed)'), cProz['p5'], r.c5));
 
                 // score editor button link
                 rovl.append( /* html */ `<div id='mscore_embHolder'></div>`);
 
-                // continue to scoring UI section if operator has rights on test selection
+                // Build scoring summary for all readable tests so score export can be enabled.
+                // The manual scoring entry point remains gated inside ms_build_subSumPanel().
                 ms_build_subSumPanel();
 
             } else {
                 // reset panels
+                const hasRecordedButRestrictedData = (res.activityAccess?.total || 0) > 0;
                 $('#scoressumOverviewList').empty();
                 $('#scoresumOverviewHeader').empty();
 
@@ -6864,15 +8261,29 @@ function ajaxSuccess(res) {
                 buttons.exportTiming.disable();
                 buttons.exportScore.disable();
                 buttons.reportBuilder.disable();
-                $("#resultsOverviewHeader").append(UILANG.m('No data recorded yet!'));
+                buttons.testJourney.disable();
+                buttons.manualScoring.disable();
+                rovl.append($('<div>', {
+                    class: 'resultsOverviewEmpty',
+                    text: hasRecordedButRestrictedData
+                        ? UILANG.m('No accessible test takers found.')
+                        : UILANG.m('No data recorded yet!')
+                })).show();
             }
             break;
-
-
 
         case 'fetchTestResults':
         case 'fetchDetailedTestScore':
         case 'fetchBehaviourTiming':
+            if (res.reportToken) {
+                const exportLink = document.createElement('a');
+                exportLink.style.display = 'none';
+                exportLink.href = 'resultsExportDownload.php?token=' + encodeURIComponent(res.reportToken);
+                document.body.appendChild(exportLink);
+                exportLink.click();
+                document.body.removeChild(exportLink);
+                break;
+            }
             const universalBOM = "\uFEFF";
 
             let MIMEstr;
@@ -6944,11 +8355,9 @@ function ajaxSuccess(res) {
                     document.body.removeChild(element);
 
                     break;
-
             }
 
             break;
-
 
         case 'fetchReportData':
 
@@ -6959,7 +8368,6 @@ function ajaxSuccess(res) {
             (Object.values(report_data.items).length < 2) ? buttons.addMultiPlot.disable() : buttons.addMultiPlot.enable();
 
             break;
-
 
         default:
 

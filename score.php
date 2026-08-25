@@ -3,12 +3,8 @@
 	//the JSON output will happen, even if a fatal error prevents the script from finishing
 	register_shutdown_function('outputScore');
 
-	global $filterSettings;
-	$filterSettings = true;
-
-	require_once 'inc/php/database.php'; //contains the database connection credentials
-	require_once 'inc/php/rixPDO.php'; //wrapper around PDO functions (c.f. docs folder for manual)
-	require_once 'inc/php/settings.php';
+	require_once 'inc/php/initSettings.php';
+	require_once 'inc/php/actionAllowlist.php';
 	require_once 'inc/php/parser.php';
 	require_once 'inc/php/helperRoutines.php';
 	require_once 'inc/php/OasysScoring.php';
@@ -39,6 +35,9 @@
 	$data['testId'] = $state->testId ?? null;
 	$data['loginId'] = $state->loginId ?? null;
 	$data['passwordId'] = $state->passwordId ?? null;
+	if ($state->preview === 'test') {
+		$data['saveResults'] = false;
+	}
 
 	//all data that is returned by this script will be put into $returnData array which is sent back in JSON encoded form
 	$returnData = [];
@@ -46,17 +45,10 @@
 	$returnData['error'] = false; //if there is an error, this will contain a string with the error message
 	$returnData['fatalError'] = false; //if there is an error, this will contain a string with the error message
 
-	//make a connection to the database and define the log file in which database errors are to be recorded
-	$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/logs/score_errors.txt', 1, $returnData, 'error');
-	$results = $db->results();
-	if ($results['error']) {
-		$returnData['error'] = 'mySQL connection error';
-		die();
-	}
-
 	//call function whose name is given by the $action variable
 	//(the name of the function must obviously exactly match the string in $action)
 	//an action function will always be given the $data sent by the client, a pointer to the database object and a pointer to the global $returnData array
+	if (oasysRejectUnknownAction(__FILE__, $action, $returnData)) exit;
 	$action($data, $db, $returnData);
 
 	/*
@@ -72,18 +64,18 @@
 		$testId = $data['testId'];
 		$passwordId = $data['passwordId'];
 		try {
-			$settings = new stdClass();
-			$settings->saveResults = $data['saveResults'];
-			if (!$settings->saveResults) {
-				$settings->adhocAnswers = [$testId => $data['answers']];
-				$settings->activity = [
+			$scoreSettings = new stdClass();
+			$scoreSettings->saveResults = $data['saveResults'];
+			if (!$scoreSettings->saveResults) {
+				$scoreSettings->adhocAnswers = [$testId => $data['answers']];
+				$scoreSettings->activity = [
 					$passwordId => [
 						'passwordId' => $passwordId,
 						'login' => 'adhoc'
 					]
 				];
 			}
-			$testScoring = new OasysScoring(testId: $testId, db: $db, passwordId: $passwordId, settings: $settings);
+			$testScoring = new OasysScoring(testId: $testId, db: $db, passwordId: $passwordId, settings: $scoreSettings);
 			$testScoring->populateAnswers();
 		} catch (Exception $e) {
 			$returnData['error'] = $e->getMessage();

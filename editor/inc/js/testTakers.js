@@ -34,6 +34,7 @@ const serverData = {
     testLevel: null
 };
 let editType;
+let templateCloneBoxElement = null;
 let add2allFlag = false;
 //wizard data object
 const wizardData = {};
@@ -56,6 +57,8 @@ wizardData.oSetTimer = false;
 wizardData.oSetSaving = false;
 wizardData.oSetNavLimit = false;
 wizardData.oDemoMode = false;
+wizardData.oLoginForwarding = false;
+wizardData.oForwardUrl = '';
 wizardData.assignMtags = false;
 wizardData.deleteExistingPwds = false;
 wizardData.deleteExistingMtags = false;
@@ -63,6 +66,7 @@ wizardData.metaTags = {};
 const wizardErrors = {};
 let wizState = false;
 let selHasStudent = false;
+let bulkModifyContext = null;
 let wizardId;
 let uploader;
 //CreateFromFile data
@@ -89,12 +93,20 @@ let breadcrumbs;
 let testbreadcrumbs;
 //selected test in testbrowser
 let testSelection;
-//variables for tracking doubleclicks
-let waitingForDblClick;
-let libraryTimeout;
+//variables for delayed edit handling
 let editOnData = false;
-//HTML frame for test structures in the  in the assign-test-form
-const testStructureDisplayHTML = "<div id='presMsg'></div><div id='testID'></div><table id='testStrucDisplayHTML'></table><br />";
+let pendingTestLevelId = null;
+let pendingTestLevelToken = null;
+let pendingTestLevelRequest = null;
+let ajaxRequestToken = 0;
+let pendingPreviewCheckToken = null;
+let previewPlausibilityResult = null;
+let suppressPreviewPlausibilityForTesteeId = null;
+let suppressPreviewPlausibilityRemaining = 0;
+let refreshPreviewAfterLibraryForTesteeId = null;
+let preserveLibraryScrollOnNextSelection = false;
+//HTML frame for test structures in the assign-test-form
+const testStructureDisplayHTML = "<div id='presMsg'></div><div class='tmTestAssignPreviewMeta' id='testID'></div><div class='tmTestAssignPreviewTableShell'><table class='tmTestAssignPreviewTableHead'><colgroup><col class='tmTestAssignPreviewColName'><col class='tmTestAssignPreviewColInfo'></colgroup><thead></thead></table><div class='tmTestAssignPreviewTableWrap'><table id='testStrucDisplayHTML'><colgroup><col class='tmTestAssignPreviewColName'><col class='tmTestAssignPreviewColInfo'></colgroup><tbody></tbody></table></div></div>";
 //OasysHelp
 let standardLoginHtml, standardLoginTitle, studentLoginHtml, studentLoginTitle;
 // global vars for blocked object handling
@@ -102,6 +114,62 @@ let curFFlist = null;
 let showBlocked = true;
 
 let jsph;
+
+const TT_ALLOWED_PASSWORD_CHARACTERS = /[^\w.(){}\[\]-]/g;
+const TT_ALLOWED_NAME_CHARACTERS = /[^\w .(){}\[\]-]/g;
+
+function ttEscapeHtml(value) {
+    return $('<div>').text(String(value)).html();
+}
+
+function ttShowInvalidCharacters(characters, allowSpaces, details, importStopped) {
+    if ($('#veil_ttInvalidCharacters').length) return;
+    const display = [...new Set(characters)].map((character) => {
+        if (character === ' ') return '{SPACE}';
+        if (character === '\t') return '{TAB}';
+        if (character === '\n' || character === '\r') return '{LINE BREAK}';
+        return character;
+    }).join(' ');
+    const allowed = allowSpaces
+        ? 'A–Z  a–z  0–9  SPACE  ( )  { }  [ ]  .  _  -'
+        : 'A–Z  a–z  0–9  ( )  { }  [ ]  .  _  -';
+    const detailHtml = details ? '<p class="tmValidationContext">' + ttEscapeHtml(details) + '</p>' : '';
+    const heading = importStopped
+        ? UILANG.m('Unsupported character found in CSV')
+        : UILANG.m('Unsupported character removed');
+    const explanation = importStopped
+        ? UILANG.m('The import was stopped. Correct the CSV file and try again.')
+        : UILANG.m('Please use only the characters shown below.');
+    const valueLabel = importStopped ? UILANG.m('Character found') : UILANG.m('You typed');
+    new nxDialog('ttInvalidCharacters', {
+        buttons: [{label: UILANG.m('OK'), 'default': true, value: 'ok'}],
+        contents: '<div class="tmValidationMessage">' +
+            '<div class="tmValidationBody"><strong>' + heading + '</strong>' +
+            '<p>' + explanation + '</p>' + detailHtml +
+            '<div class="tmValidationValue"><span>' + valueLabel + '</span><code>' + ttEscapeHtml(display) + '</code></div>' +
+            '<div class="tmValidationAllowed"><span>' + UILANG.m('Allowed characters') + '</span><code>' + allowed + '</code></div>' +
+            '</div></div>',
+        title: importStopped ? UILANG.m('CSV import stopped') : UILANG.m('Check your entry'),
+        type: 'warning',
+        width: 500
+    });
+}
+
+function ttBindAllowedCharacters(selector, allowSpaces) {
+    const input = $(selector);
+    input.addClass('tmValidatedInput').off('input.ttAllowedCharacters').on('input.ttAllowedCharacters', function () {
+        const expression = allowSpaces ? TT_ALLOWED_NAME_CHARACTERS : TT_ALLOWED_PASSWORD_CHARACTERS;
+        const value = this.value;
+        const invalid = value.match(expression);
+        if (!invalid) return;
+        const cursor = this.selectionStart === null ? value.length : this.selectionStart;
+        const removedBeforeCursor = (value.slice(0, cursor).match(expression) || []).length;
+        this.value = value.replace(expression, '');
+        const nextCursor = Math.max(0, cursor - removedBeforeCursor);
+        if (typeof this.setSelectionRange === 'function') this.setSelectionRange(nextCursor, nextCursor);
+        ttShowInvalidCharacters(invalid, allowSpaces);
+    });
+}
 
 function onReady() {
     //setup in the beginning (e.g. onload or onready)
@@ -393,7 +461,7 @@ function onReady() {
     gui.s6 = createFlexSection('UI', 'sect006', 450, 450); //wizard_tests
     gui.s7 = createFlexSection('UI', 'sect007', 1000, 1000); //create from csv
     gui.s8 = createFlexSection('UI', 'sect008', 350, 350); //wizard_Meta Tags
-    gui.s9 = createFlexSection('UI', 'sect009', 350, 350); //login Settings Student logins
+    gui.s10 = createFlexSection('UI', 'sect010', 846, 846); //preview
 
     // section 1 (browser)
     gui.boxes.tests = createFlexBox(gui.s1, 'testList', {
@@ -456,6 +524,7 @@ function onReady() {
     });
 
     gui.boxes.loginSettings.getPanel().append('<div id="loginSettingsPanel"></div>');
+    gui.boxes.loginSettings.getInnerBox().addClass('tmCompactFlexPanel');
     gui.boxes.loginSettings.getInnerBox().append('<div id="loginSettings"></div>');
 
     //section 2meta tags
@@ -469,6 +538,7 @@ function onReady() {
         useVeil: true,
         panelHeight: 30
     });
+    gui.boxes.metaTags.getInnerBox().addClass('tmCompactFlexPanel');
     gui.boxes.metaTags.getInnerBox().append('<div id="metaTagList"></div>');
 
     //section 2 (passwords)
@@ -482,6 +552,7 @@ function onReady() {
         useVeil: true,
         panelHeight: 30
     });
+    gui.boxes.passwords.getInnerBox().addClass('tmCompactFlexPanel');
     gui.s2.hide();
 
     //section 3 (tests)
@@ -490,7 +561,33 @@ function onReady() {
     });
     gui.s3.hide();
 
+    gui.boxes.assignedTests.getInnerBox().addClass('tmCompactFlexPanel');
     gui.boxes.assignedTests.getInnerBox().append('<div id="inactiveMsg"><h3 style="text-align:center;color:#AAA">' + UILANG.m('Please create a password first!') + '</h3></div><div id="noAssignmentMsg"><h3 style="text-align:center;color:#AAA">' + UILANG.m('No test assigned yet. Click on the Plus-Icon to assign a test!') + '</h3></div><div id="testPanelList"></div>');
+
+    gui.boxes.templateClones = createFlexBox(gui.s3, 'templateClones', {
+        title: UILANG.m('Recorded datasets'), minHeight: 480, flex: 1, panelHeight: 30
+    });
+    gui.boxes.templateClones.getInnerBox().addClass('tmCompactFlexPanel');
+    gui.boxes.templateClones.getInnerBox().append('<div id="templateCloneList"></div>');
+    gui.boxes.templateClones.getPanel().append(
+        '<div><div id="templateClonesTbText"></div><div id="templateClonesTbButton">' +
+        '<button type="button" id="templateClonesDeleteAll" class="tmTemplateCloneDelete" ' +
+        'title="' + UILANG.m('Reset test taker results') + '" disabled></button></div></div>'
+    );
+    $('#templateClonesDeleteAll').on('click', function () {
+        resetTestee();
+    });
+    templateCloneBoxElement = $('#box_templateClones');
+    resetTemplateCloneBoxSizing();
+    templateCloneBoxElement.detach();
+    $(window).on('resize.templateCloneLayout', syncTemplateDatasetLayout);
+
+    //section 10 (preview)
+    gui.boxes.testeePreview = createFlexBox(gui.s10, 'testeePreview', {
+        title: UILANG.m('Test taker preview'), minHeight: 480, flex: 1, noPadding: true
+    });
+    gui.s10.hide();
+    gui.boxes.testeePreview.getInnerBox().append('<div id="testeePreviewContent"></div>');
 
     //section 4 (Wizard_main)
     gui.boxes.wizard = createFlexBox(gui.s4, 'wizard', {
@@ -498,12 +595,14 @@ function onReady() {
     });
     gui.s4.hide();
 
+    gui.boxes.wizard.getInnerBox().addClass('tmCompactFlexPanel');
     gui.boxes.wizard.getInnerBox().append('<div id="wiz_mainfr"></div>');
 
     //section 5 (wizard_passwords)
     gui.boxes.wpasswords = createFlexBox(gui.s5, 'wpasswords', {
         title: UILANG.m('Passwords'), minHeight: 480, flex: 1, locked: true, panelHeight: 30
     });
+    gui.boxes.wpasswords.getInnerBox().addClass('tmCompactFlexPanel');
     gui.s5.hide();
 
     //section 6 (wizard_tests)
@@ -511,6 +610,7 @@ function onReady() {
         title: UILANG.m('Assigned Tests'), minHeight: 480, flex: 1, locked: true, panelHeight: 30
     });
     gui.s6.hide();
+    gui.boxes.wtests.getInnerBox().addClass('tmCompactFlexPanel');
     gui.boxes.wtests.getInnerBox().append('<div id="wInactiveMsg"><h3 style="text-align:center;color:#AAA">' + UILANG.m('Please create a password first!') + '</h3></div><div id="wNoAssignmentMsg"><h3 style="text-align:center;color:#AAA">' + UILANG.m('No test assigned yet. Click on the Plus-Icon to assign a test!') + '</h3></div><div id="wTestPanelList"></div>');
 
     //section 7 (Create from CSV)
@@ -519,7 +619,20 @@ function onReady() {
     });
     gui.s7.hide();
 
-    gui.boxes.createFromCSV.getInnerBox().append('<div id="csv_mainfr"><div id="infoZone" style="text-align:center;display:none;"></div><div id="uploadZone" style="text-align:center;display:none;"><h4>' + UILANG.m('Please select a csv-file from your local disk.') + '</h4><div id="mmBrowseDiv"><button>' + UILANG.m('Select a file') + '</button><input type="file" multiple id="browseDialog"></div></div><br /><br /><br /><div id="infomsg"></div>');
+    gui.boxes.createFromCSV.getInnerBox().addClass('tmCompactFlexPanel csvImportPanel');
+    gui.boxes.createFromCSV.getInnerBox().append(
+        '<div id="csv_mainfr" class="csvImportMain">' +
+            '<div id="infoZone" class="csvImportPreview" style="display:none;"></div>' +
+            '<div id="uploadZone" class="csvImportUpload" style="display:none;">' +
+                '<div class="csvImportUploadText">' +
+                    '<strong>' + UILANG.m('Select CSV file') + '</strong>' +
+                    '<span>' + UILANG.m('Please select a csv-file from your local disk.') + '</span>' +
+                '</div>' +
+                '<div id="mmBrowseDiv"><button>' + UILANG.m('Select a file') + '</button><input type="file" multiple id="browseDialog"></div>' +
+            '</div>' +
+            '<div id="infomsg" class="csvImportInfo"></div>' +
+        '</div>'
+    );
 
     //section 8 wizard meta tags
     gui.boxes.wMetaTags = createFlexBox(gui.s8, 'wMetaTags', {
@@ -527,6 +640,7 @@ function onReady() {
     });
     gui.s8.hide();
 
+    gui.boxes.wMetaTags.getInnerBox().addClass('tmCompactFlexPanel');
     gui.boxes.wMetaTags.getInnerBox().append('<div id="wMetaTagList"></div>');
 
     const nxUploaderSettings = {
@@ -549,7 +663,7 @@ function onReady() {
     const fileOpPermissions = {
         copyFolders: false, copyItems: true, copyMultiple: true, cutFolders: true, cutItems: true, cutMultiple: true
     };
-    gui.library = new fileMgr("#testList", "_idSuffix", [], breadcrumbs, fileOpPermissions, true, libraryEvent, 'all', true);
+    gui.library = new FileManager("#testList", "_idSuffix", [], breadcrumbs, fileOpPermissions, true, libraryEvent, 'all', true);
 
     preSelect = Number(preSelect);
     preType = Number(preType);
@@ -570,6 +684,7 @@ function onReady() {
         labelKey: 'name',
         orderKey: 'tag',
         secondaryOrderKey: 'name',
+        prefixKey: 'listBadges',
         postfixKey: 'tag',
         postfixFormat: "<span class='passwTagClass'>[%@]</span>",
         idKey: 'id',
@@ -631,6 +746,7 @@ function onReady() {
     gui.wpasswords = new jsSelectList(gui.boxes.wpasswords.getInnerBox(), 'wPasswords', {
         labelKey: 'name',
         orderKey: 'name',
+        prefixKey: 'listBadges',
         postfixKey: 'tag',
         postfixFormat: "<span class='passwTagClass'>[%@]</span>",
         idKey: 'id',
@@ -687,10 +803,27 @@ function onReady() {
         onClick: resetTest,
         elements: [],
         tdSizes: {
-            name: '300px', ID: '65px'
+            name: '276px', ID: '65px'
         },
         tableHead: {
-            name: 'Tests', ID: 'Test-ID'
+            name: '', ID: 'Test-ID'
+        },
+        iconColumn: {
+            field: 'testType',
+            title: 'Test',
+            width: '24px',
+            size: '20px',
+            path: '../inc/filer/images/',
+            icons: {
+                linear: 'testLinear.png',
+                fluid: 'testFluid.png',
+                mutation: 'testMutation.png'
+            },
+            labels: {
+                linear: UILANG.m('Linear test'),
+                fluid: UILANG.m('Fluid test'),
+                mutation: UILANG.m('Mutation test')
+            }
         },
         deleteLinkSize: '20px',
         cssStylesTable: {
@@ -728,7 +861,7 @@ function onReady() {
         actionFieldInactiveText: 'n / a',
         showTextOnly: 'default'
     };
-    gui.structureView = new jsSortableTable('testPanelList', 'assignedTests_table', STOptions);
+    gui.structureView = new JsSortableTable('testPanelList', 'assignedTests_table', STOptions);
     gui.structureView.lock('greyout');
     //Toolbar Test Structure
     gui.boxes.assignedTests.getPanel().append('<div><div id="structureTbText"></div><div id="structureTbButton"></div></div>');
@@ -758,33 +891,12 @@ function onReady() {
     });
 
     //Meta Tags
-    const metaList = {
+    gui.metaView = new JsTagEditor('metaTagList', {
         onChange: metaChanged,
-        elements: [],
-        tdSizes: {
-            metakey: '120px', metavalue: '185px'
-        },
-        tableHead: {
-            metakey: 'Meta-Key', metavalue: 'Meta-Value'
-        },
-        deleteLinkSize: '20px',
-        cssStylesTable: {
-            'border': '0px', 'border-spacing': '0px'
-        },
-        cssStylesCells: {
-            'padding': '3px', 'background-color': 'transparent', 'border-bottom': '1px dotted #CCC', 'height': '20px'
-        },
-        cssHeadCells: {
-            'padding': '5px', 'background-color': '#e8e8e8', 'height': '20px'
-        },
-        dataId: 'metatags',
-        consecutiveNumbers: false,
-        tableHeadDisplay: true,
-        fixedOrder: true,
-        appPath: '../inc/jsSortableTable/',
-        readOnly: false
-    };
-    gui.metaView = new jsSortableTable('metaTagList', 'metaTagList_table', metaList);
+        keyLabel: UILANG.m('Meta-key (e.g. "Class"):'),
+        valueLabel: UILANG.m('Meta-value (e.g. "9a"):'),
+        inputClass: 'amt'
+    });
     gui.metaView.lock('greyout');
 
     gui.boxes.metaTags.getPanel().append('<div><div id="metaTbText"></div><div id="metaTbButton"></div></div>');
@@ -799,33 +911,12 @@ function onReady() {
     });
 
     //Wizard Meta Tags
-    const wMetaList = {
+    gui.wMetaView = new JsTagEditor('wMetaTagList', {
         onChange: wMetaChanged,
-        elements: [],
-        tdSizes: {
-            metakey: '120px', metavalue: '155px'
-        },
-        tableHead: {
-            metakey: UILANG.m('Meta-Key'), metavalue: UILANG.m('Meta-Value')
-        },
-        deleteLinkSize: '20px',
-        cssStylesTable: {
-            'width': '320px', 'border': '0px', 'border-spacing': '0px'
-        },
-        cssStylesCells: {
-            'padding': '3px', 'background-color': 'transparent', 'border-bottom': '1px dotted #CCC', 'height': '20px'
-        },
-        cssHeadCells: {
-            'padding': '5px', 'background-color': '#e8e8e8', 'height': '20px'
-        },
-        dataId: 'metatags',
-        consecutiveNumbers: false,
-        tableHeadDisplay: true,
-        fixedOrder: true,
-        appPath: '../inc/jsSortableTable/',
-        readOnly: false
-    };
-    gui.wMetaView = new jsSortableTable('wMetaTagList', 'wMetaTagList_table', wMetaList);
+        keyLabel: UILANG.m('Meta-key (e.g. "Class"):'),
+        valueLabel: UILANG.m('Meta-value (e.g. "9a"):'),
+        inputClass: 'amt'
+    });
 
     gui.boxes.wMetaTags.getPanel().append('<div><div id="wMetaTbText"></div><div id="wMetaTbButton"></div></div>');
     const wMetaTbText = $('#metaTbText');
@@ -843,10 +934,27 @@ function onReady() {
         onChange: wtestsChanged,
         elements: [],
         tdSizes: {
-            name: '240px', ID: '45px'
+            name: '216px', ID: '45px'
         },
         tableHead: {
-            name: 'Tests', ID: 'Test-ID'
+            name: '', ID: 'Test-ID'
+        },
+        iconColumn: {
+            field: 'testType',
+            title: 'Test',
+            width: '24px',
+            size: '20px',
+            path: '../inc/filer/images/',
+            icons: {
+                linear: 'testLinear.png',
+                fluid: 'testFluid.png',
+                mutation: 'testMutation.png'
+            },
+            labels: {
+                linear: UILANG.m('Linear test'),
+                fluid: UILANG.m('Fluid test'),
+                mutation: UILANG.m('Mutation test')
+            }
         },
         deleteLinkSize: '20px',
         cssStylesTable: {
@@ -866,7 +974,7 @@ function onReady() {
         appPath: '../inc/jsSortableTable/',
         readOnly: false
     };
-    gui.wStructureView = new jsSortableTable('wTestPanelList', 'wTests_table', WSTOptions);
+    gui.wStructureView = new JsSortableTable('wTestPanelList', 'wTests_table', WSTOptions);
     //Toolbar Test Structure
     gui.boxes.wtests.getPanel().append('<div><div id="wStructureTbText"></div><div id="wStructureTbButton"></div></div>');
     const wStructureTbText = $('#wStructureTbText');
@@ -902,12 +1010,16 @@ function switchMode() {
     let visibleButtons = [];
     switch (mode) {
         case 'browsing':
+            gui.s2.fadeOut(0);
             gui.s3.fadeOut(0);
             gui.s4.fadeOut(0);
             gui.s5.fadeOut(0);
             gui.s6.fadeOut(0);
             gui.s7.fadeOut(0);
             gui.s8.fadeOut(0);
+            if (!(selection.length === 1 && ['testee', 'template', 'cloned'].includes(selection[0].type))) {
+                gui.s10.fadeOut(0);
+            }
             //Dividers
             $('#wizardStart').show();
             $('#wizardEnd').show();
@@ -954,8 +1066,10 @@ function switchMode() {
             $('#wizardStart').show();
             $('#wizardEnd').hide();
             $('#pCheckDivider').show();
+            ttRestoreEditSections();
+            gui.s2.fadeIn(0);
             gui.s3.fadeIn(250);
-            if (selection[0].type === 'testee' || selection[0].type === 'cloned') buttons.resetTestee.enable();
+            if (selection[0].type === 'testee' || selection[0].type === 'template' || selection[0].type === 'cloned') updateResetResultsAvailability();
             passwordsTbButtons.addElements.enable();
             passwordsTbButtons.addQuickPass.enable();
             buttons.abortEditing.enable();
@@ -974,6 +1088,7 @@ function switchMode() {
             $('#wizardEnd').hide();
             $('#pCheckDivider').hide();
             gui.s2.fadeOut(250);
+            gui.s10.fadeOut(250);
             gui.s4.fadeIn(250);
             visibleButtons = ['abortWizard', 'save'];
             gui.statusBar.setStatus(UILANG.m('Test taker wizard'));
@@ -989,6 +1104,7 @@ function switchMode() {
             $('#wizardEnd').hide();
             $('#pCheckDivider').hide();
             gui.s2.fadeOut(250);
+            gui.s10.fadeOut(250);
             gui.s4.fadeIn(250);
             visibleButtons = ['abortWizard', 'addToSelection'];
             if (stuLog || selHasStudent) {
@@ -1003,6 +1119,7 @@ function switchMode() {
             $('#wizardEnd').hide();
             $('#pCheckDivider').hide();
             gui.s2.fadeOut(250);
+            gui.s10.fadeOut(250);
             gui.s7.fadeIn(250);
             visibleButtons = ['abortWizard', 'saveFromFile', 'resetCffWizard'];
             gui.statusBar.setStatus(UILANG.m('Create test takers from CSV-file'));
@@ -1030,14 +1147,15 @@ function libraryEvent(type, data) {
             if (curFFlist !== null) paintBlocked(curFFlist);
             break;
         case 'getSelect':
-            if (mode === 'browsing') librarySelection(data);
+            if (mode === 'browsing') librarySelection(data, true);
             break;
         case 'getSelectKeys':
             if (mode === 'browsing') librarySelection(data, true);
             break;
+        case 'getSelectDblclick':
+            if (mode === 'browsing') librarySelection(data, false);
+            break;
         case 'onNavigate':
-            clearTimeout(libraryTimeout);
-            waitingForDblClick = null;
             oldLoc = cloneObj(loc);
             loc.folder = data.dbId;
             startAjax('fetchLibrary', {
@@ -1116,6 +1234,9 @@ function libraryEvent(type, data) {
             startAjax('search', {
                 searchString: data
             });
+            break;
+        case 'onMetaSearchRequest':
+            startAjax('metaSearch', data);
             break;
         case 'onSearchItemClick':
             loc.folder = data.pid.replace(/^\D*/i, '');
@@ -1212,6 +1333,44 @@ function updateIgLibrary(list, path) {
     gui.library2.setItems(list, testbreadcrumbs);
 }
 
+function normalizeTestTakerSelectionId(selectedId) {
+    if (!selectedId) return null;
+    return String(selectedId).replace(/^t/, '');
+}
+
+function findLibraryItemBySelectionId(list, selectedId) {
+    const normalizedId = normalizeTestTakerSelectionId(selectedId);
+    if (!normalizedId || !Array.isArray(list)) return null;
+    return list.find(function(item) {
+        return normalizeTestTakerSelectionId(item.id) === normalizedId || String(item.dbId) === normalizedId;
+    }) || null;
+}
+
+function armBrowsePreviewRefresh(selectedId) {
+    const normalizedId = normalizeTestTakerSelectionId(selectedId);
+    if (!normalizedId) return;
+    suppressPreviewPlausibilityForTesteeId = normalizedId;
+    suppressPreviewPlausibilityRemaining = 2;
+    refreshPreviewAfterLibraryForTesteeId = normalizedId;
+}
+
+function reloadBrowsePreviewForTestee(selectedId) {
+    const dbId = normalizeTestTakerSelectionId(selectedId);
+    if (!dbId) return;
+    ttShowBrowsePreviewSection();
+    renderTesteePreviewLoading();
+    pendingTestLevelId = dbId;
+    pendingTestLevelToken = ++ajaxRequestToken;
+    if (pendingTestLevelRequest && pendingTestLevelRequest.readyState !== 4 && typeof pendingTestLevelRequest.abort === 'function') {
+        pendingTestLevelRequest.abort();
+    }
+    pendingTestLevelRequest = startAjax('fetchTest', {
+        dbId: dbId,
+        location: loc.folder,
+        _requestToken: pendingTestLevelToken
+    });
+}
+
 function moveObjects(sources, target) {
     startAjax('moveObjects', {
         location: loc.folder, sources: sources, target: target, showBlocked: showBlocked
@@ -1230,10 +1389,11 @@ function librarySelection(data, delayed) {
     }
     editOnData = false;
     selection = data;
+    pendingPreviewCheckToken = null;
+    previewPlausibilityResult = null;
     buttons.plausibilityCheck.disable();
     buttons.overrideSettings.disable();
     buttons.addPwdsTests.disable();
-    clearTimeout(libraryTimeout);
     if (selection.length === 0) {
         buttons.deleteSelection.disable();
         buttons.resetResultsTestee.disable();
@@ -1242,21 +1402,9 @@ function librarySelection(data, delayed) {
         buttons.rename.disable();
         buttons.wizardToFile.disable();
         gui.s2.fadeOut(250);
+        gui.s3.fadeOut(250);
+        gui.s10.fadeOut(250);
     } else if (selection.length === 1) {
-        if (!waitingForDblClick) {
-            waitingForDblClick = data;
-            libraryTimeout = setTimeout(function () {
-                librarySelection(data, true);
-            }, 250);
-            return;
-        } else if (selection[0] !== waitingForDblClick[0]) {
-            waitingForDblClick = data;
-            libraryTimeout = setTimeout(function () {
-                librarySelection(data, true);
-            }, 250);
-            return;
-        }
-        waitingForDblClick = null;
         buttons.deleteSelection.enable();
         buttons.resetResultsTestee.enable();
         buttons.rename.enable();
@@ -1264,6 +1412,9 @@ function librarySelection(data, delayed) {
         if (selection[0].type === 'folder') {
             buttons.editSelection.disable();
             buttons.duplicate.disable();
+            gui.s2.removeClass('ttPreviewCollapsedSection').hide();
+            gui.s3.removeClass('ttPreviewCollapsedSection').hide();
+            gui.s10.hide();
         }
         if (selection[0].type === 'testee' || selection[0].type === 'template' || selection[0].type === 'cloned') {
             if (!delayed) {
@@ -1284,7 +1435,13 @@ function librarySelection(data, delayed) {
                 gui.boxes.passwords.lock();
             }
 
-            gui.s2.fadeIn(0);
+            if (editOnData) {
+                ttRestoreEditSections();
+                gui.s2.fadeIn(0);
+            } else {
+                ttShowBrowsePreviewSection();
+                renderTesteePreviewLoading();
+            }
             editType = 'testee';
             buttons.plausibilityCheck.enable();
             buttons.overrideSettings.enable();
@@ -1293,12 +1450,18 @@ function librarySelection(data, delayed) {
             buttons.addPwdsTests.enable();
             gui.structureView.clearElements(true);
             if (data.length >= 2) selIcheck(loc, data);
-            startAjax('fetchTest', {
-                dbId: selection[0].dbId, location: loc.folder
+            pendingTestLevelId = selection[0].dbId;
+            pendingTestLevelToken = ++ajaxRequestToken;
+            if (pendingTestLevelRequest && pendingTestLevelRequest.readyState !== 4 && typeof pendingTestLevelRequest.abort === 'function') {
+                pendingTestLevelRequest.abort();
+            }
+            pendingTestLevelRequest = startAjax('fetchTest', {
+                dbId: selection[0].dbId, location: loc.folder, _requestToken: pendingTestLevelToken
             });
         } else if (delayed) {
-            gui.s2.fadeOut(0);
-            gui.s3.fadeOut(0);
+            gui.s2.hide();
+            gui.s3.hide();
+            gui.s10.hide();
         }
     } else {
         buttons.deleteSelection.enable();
@@ -1314,6 +1477,7 @@ function librarySelection(data, delayed) {
         }
         gui.s2.fadeOut(250);
         gui.s3.fadeOut(250);
+        gui.s10.fadeOut(250);
     }
 
     /* existence validation checks on file interaction */
@@ -1413,6 +1577,8 @@ function buildWizard(add2sel) {
     wizardData.oSetNavLimit = false;
     wizardData.oDemoMode = false;
     wizardData.assignMtags = false;
+    wizardData.oLoginForwarding = false;
+    wizardData.oForwardUrl = '';
     wizardData.metaTags = {};
     wizardData.deleteExistingPwds = false;
     wizardData.deleteExistingMtags = false;
@@ -1459,32 +1625,20 @@ function buildWizard(add2sel) {
         preTesteesSub.hide();
         sufTesteesSub.hide();
 
-        //check for invalid chars input fields and update example name at the top
-        prefixInput.on('keyup', function () {
+        ttBindAllowedCharacters(prefixInput, true);
+        ttBindAllowedCharacters(suffixInput, true);
+        // Update the example name while typing.
+        prefixInput.on('input', function () {
             wizState = true;
-            const start = this.selectionStart, end = this.selectionEnd;
             const thisInput = $(this);
-            thisInput.val(thisInput.val().replace(/[^\w\s.(){}\[\]-]/ig, function (str) {
-                if (!$('#veil_Message').length) showMessage(UILANG.m('You typed :') + ' ' + str + ' \n\n<br />' + UILANG.m('only_valid_chars') + ' ( ){ } [ ] . _ -');
-                prefixInput.trigger('blur');
-                return '';
-            }));
-            $('#wpre').html(thisInput.val());
+            $('#wpre').text(thisInput.val());
             wizardData.prefix = thisInput.val();
-            this.setSelectionRange(start, end);
         });
-        suffixInput.on('keyup', function () {
+        suffixInput.on('input', function () {
             wizState = true;
-            const start = this.selectionStart, end = this.selectionEnd;
             const thisInput = $(this);
-            thisInput.val(thisInput.val().replace(/[^\w\s.(){}\[\]-]/ig, function (str) {
-                if (!$('#veil_Message').length) showMessage(UILANG.m('You typed :') + ' ' + str + ' \n\n<br />' + UILANG.m('only_valid_chars') + ' ( ){ } [ ] . _ -');
-                suffixInput.trigger('blur');
-                return '';
-            }));
-            $('#wsuf').html(thisInput.val());
+            $('#wsuf').text(thisInput.val());
             wizardData.suffix = thisInput.val();
-            this.setSelectionRange(start, end);
         });
 
         prefixTestees.on("click", function () {
@@ -1588,6 +1742,29 @@ function buildWizard(add2sel) {
     wizardOverridesSub.append('<div id="div_oSetSaving" class ="wizarditem">&nbsp;' + UILANG.m('Disable saving') + '<img src="../inc/filer/images/unchecked_checkbox.png" id="img_oSetSaving" /></div>');
     wizardOverridesSub.append('<div id="div_oSetNavLimit" class ="wizarditem">&nbsp;' + UILANG.m('Disable navigation limitation') + '<img src="../inc/filer/images/unchecked_checkbox.png" id="img_oSetNavLimit" /></div>');
     wizardOverridesSub.append('<div id="div_oDemoMode" class ="wizarditem">&nbsp;' + UILANG.m('Demo Mode') + '<img src="../inc/filer/images/unchecked_checkbox.png" id="img_oDemoMode" /></div>');
+
+    // NEW: Login forwarding override
+    wizardOverridesSub.append('<div id="div_oLoginForwarding" class ="wizarditem">&nbsp;'
+        + UILANG.m('Forward login to other OASYS')
+        + '<img src="../inc/filer/images/unchecked_checkbox.png" id="img_oLoginForwarding" /></div>');
+
+    wizardOverridesSub.append(`
+        <div id="sub_oForwardUrl" class="subwizarditem" style="display:none; margin-left:18px;">
+            <div style="margin:6px 0 4px 0;font-size:14px;">${UILANG.m('Forward URL')}</div>
+            <div style="display:flex; gap:6px;">
+                <input id="oForwardUrlInput"
+                       type="text"
+                       placeholder="https://example.org/oasys"
+                       style="flex:1; height:26px; box-sizing:border-box;" />
+                <button id="oForwardUrlTest"
+                        type="button"
+                        class="nxButton">
+                    ${UILANG.m('Test')}
+                </button>
+            </div>
+            <div id="oForwardUrlStatus" style="margin-top:6px; font-size:12px;"></div>
+        </div>
+    `);
 
 
     //Meta Tags
@@ -1816,7 +1993,8 @@ function buildWizard(add2sel) {
     });
 
 
-    if(selHasStudent){
+    // The student-specific password panel exists only in the add-to-selected wizard.
+    if(add2sel && selHasStudent){
         activePasswords.hide();
         manualPasswords.hide();
         $('#pwHeader').hide();
@@ -1843,6 +2021,11 @@ function buildWizard(add2sel) {
     const oSetNavLimitIMG = $("#img_oSetNavLimit");
     const oDemoMode = $("#div_oDemoMode");
     const oDemoModeIMG = $("#img_oDemoMode");
+    const oLoginForwarding = $("#div_oLoginForwarding");
+    const oLoginForwardingIMG = $("#img_oLoginForwarding");
+    const oForwardUrlSub = $("#sub_oForwardUrl");
+    const oForwardUrlInput = $("#oForwardUrlInput");
+    const oForwardUrlTest = $("#oForwardUrlTest");
     const overrides = $("#div_overrides");
     const overridesIMG = $("#img_overrides");
     wizardOverridesSub.hide();
@@ -1919,6 +2102,61 @@ function buildWizard(add2sel) {
             }
         }
     });
+    oLoginForwarding.on("click", function () {
+        wizState = true;
+        if (oLoginForwarding.hasClass('wizarditemhover')) {
+            oLoginForwarding.toggleClass('wizChecked');
+            if (oLoginForwarding.hasClass('wizChecked')) {
+                wizardData.oLoginForwarding = true;
+                oLoginForwardingIMG.attr('src', '../inc/filer/images/checked_checkbox.png');
+                oForwardUrlSub.show(200);
+
+                // keep current input in wizardData
+                wizardData.oForwardUrl = oForwardUrlInput.val() || wizardData.oForwardUrl || '';
+            } else {
+                wizardData.oLoginForwarding = false;
+                oLoginForwardingIMG.attr('src', '../inc/filer/images/unchecked_checkbox.png');
+                oForwardUrlSub.hide(200);
+                setWizardForwardUrlStatus('');
+                // policy: keep URL or clear. I’d keep it to avoid retyping.
+            }
+        }
+    });
+
+    oForwardUrlInput.on('input change', function () {
+        wizState = true;
+        wizardData.oForwardUrl = $(this).val();
+        setWizardForwardUrlStatus('');
+    });
+
+    oForwardUrlTest.on('click', function () {
+        const url = normalizeBaseUrl(oForwardUrlInput.val());
+        const $status = $('#oForwardUrlStatus');
+
+        // ALWAYS reset state at click time
+        $status.removeClass('oasysStatusOk oasysStatusErr');
+
+        if (!url) {
+            $status
+                .text(UILANG.m('Please enter a URL.'))
+                .addClass('oasysStatusErr');
+            return;
+        }
+
+        if (!/^https?:\/\//i.test(url)) {
+            $status
+                .text(UILANG.m('Please enter a full URL including http:// or https://'))
+                .addClass('oasysStatusErr');
+            return;
+        }
+
+        oForwardUrlTest.prop('disabled', true);
+
+        // Checking = neutral (no class)
+        $status.text(UILANG.m('Checking OASYS instance...'));
+
+        startAjax('checkForwardUrl', { url: url });
+    });
 
     mTags.on("click", function () {
         wizState = true;
@@ -1929,7 +2167,7 @@ function buildWizard(add2sel) {
                 wizardData.assignMtags = true;
                 if (add2sel) mTagsMessage.show('fast');
                 if (add2sel) buttonStatus();
-                $('#wMetaTbText').html('0 meta tags');
+                updateMetaTagCounter('#wMetaTbText', 0);
                 if (add2sel) wizardMTagsSub.show('fast');
                 wizardData.metaTags = {};
                 gui.wMetaView.clearElements(true);
@@ -1945,16 +2183,66 @@ function buildWizard(add2sel) {
             }
         }
     });
+
+    function normalizeBaseUrl(url) {
+        if (!url) return '';
+        return ('' + url).trim().replace(/\/+$/, '');
+    }
+
+    function setWizardForwardUrlStatus(text) {
+        $('#oForwardUrlStatus').text(text || '');
+        $('#oForwardUrlTest').prop('disabled', false);
+    }
+
+    // Hook for ajaxSuccess -> case 'checkForwardUrl'
+    window._wizardForwardUrlTestCb = function (res) {
+        if (!res || res.action !== 'checkForwardUrl') return;
+
+        const $status = $('#oForwardUrlStatus');
+        const $btn = $('#oForwardUrlTest');
+        if (!$status.length) return;
+
+        // reset classes
+        $status.removeClass('oasysStatusOk oasysStatusErr');
+
+        if (res.ok === true && res.version) {
+            const text = res.statusText || ('OASYS ' + res.version + ' ' + UILANG.m('found'));
+            $status.text(text);
+
+            // green only if supported, else red
+            if (res.supported === true) {
+                $status.addClass('oasysStatusOk');
+            } else {
+                $status.addClass('oasysStatusErr');
+            }
+        } else {
+            $status.text(res.reason || UILANG.m('Reached URL, but no OASYS found'));
+            $status.addClass('oasysStatusErr');
+        }
+
+        $btn.prop('disabled', false);
+    };
 }
 
 function createFromWizard(sender, button) {
     if (!button) {
-        let message;
+        const testTakerLabel = wizardData.noTestees === 1 ? UILANG.m('new test taker') : UILANG.m('new test takers');
+        let detailMessage = sf(UILANG.m('You are about to create %@ %@.'), wizardData.noTestees, testTakerLabel);
+        let note = '';
         if (wizardData.noTestees === 1) {
-            message = sf('<p>' + UILANG.m('The number of testees to be created is set to 1. Are you sure you want to create %@ new test taker in the folder "%@" ?') + '</p>', wizardData.noTestees, filerPath);
-        } else {
-            message = sf('<p>' + UILANG.m('Are you sure you want to create %@ new test takers in the folder "%@" ?') + '</p>', wizardData.noTestees, filerPath);
+            note = '<p class="tmActionConfirmNote">' + UILANG.m('The number of test takers is set to 1. Continue only if this is intentional.') + '</p>';
         }
+        const message = sf(
+            '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                '<strong>' + UILANG.m('Ready to create') + '</strong>' +
+                '<span>%@</span>' +
+                '<div class="tmActionConfirmMeta"><span>' + UILANG.m('Folder') + '</span><strong>"%@"</strong></div>' +
+                '%@' +
+            '</div>',
+            detailMessage,
+            filerPath,
+            note
+        );
 
         const dialogData = {
             buttons: [{
@@ -1966,8 +2254,7 @@ function createFromWizard(sender, button) {
             width: 450,
             callback: createFromWizard,
             title: UILANG.m('Create test takers'),
-            icon: "../images/warning.png",
-            iconWidth: 64
+            type: 'warning'
         };
         new nxDialog('confirmWizard', dialogData, arguments);
     }
@@ -1990,6 +2277,8 @@ function createFromWizard(sender, button) {
             oSetSaving: wizardData.oSetSaving,
             oSetNavLimit: wizardData.oSetNavLimit,
             oDemoMode: wizardData.oDemoMode,
+            oLoginForwarding: wizardData.oLoginForwarding,
+            oForwardUrl: wizardData.oForwardUrl,
             overrides: wizardData.overrides,
             assignMtags: wizardData.assignMtags,
             metaTags: wizardData.metaTags,
@@ -2001,20 +2290,30 @@ function createFromWizard(sender, button) {
 function addToSelected(sender, button) {
 
     if (!button) {
-        const message = '<p>' + UILANG.m('Are you sure to save the modifications to all your selected test takers?') + '</p>';
+        const selectedCount = selection.length || 0;
+        const targetLabel = selectedCount === 1 ? UILANG.m('selected test taker') : UILANG.m('selected test takers');
+        const message = sf(
+            '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                '<strong>' + UILANG.m('Ready to apply') + '</strong>' +
+                '<span>%@</span>' +
+                '<div class="tmActionConfirmMeta"><span>' + UILANG.m('Selection') + '</span><strong>%@ %@</strong></div>' +
+            '</div>',
+            UILANG.m('The current modifications will be saved to the selected test takers.'),
+            selectedCount,
+            targetLabel
+        );
 
         const dialogData = {
             buttons: [{
                 label: UILANG.m('cancel'), 'cancel': true, 'default': true, value: 'cancel'
             }, {
-                label: UILANG.m('Add to selected test takers'), value: UILANG.m('OK')
+                label: UILANG.m('Apply to selected'), value: UILANG.m('OK')
             }],
             contents: message,
             width: 450,
             callback: addToSelected,
-            title: UILANG.m('Save modifications to selected test takers(s)?'),
-            icon: "../images/warning.png",
-            iconWidth: 64
+            title: UILANG.m('Apply to selected test takers?'),
+            type: 'warning'
         };
         new nxDialog('confirmAdding', dialogData, arguments);
     }
@@ -2050,6 +2349,8 @@ function addToSelected(sender, button) {
             oSetSaving: wizardData.oSetSaving,
             oSetNavLimit: wizardData.oSetNavLimit,
             oDemoMode: wizardData.oDemoMode,
+            oLoginForwarding: wizardData.oLoginForwarding,
+            oForwardUrl: wizardData.oForwardUrl,
             overrides: wizardData.overrides,
             assignMtags: wizardData.assignMtags,
             metaTags: wizardData.metaTags,
@@ -2059,6 +2360,381 @@ function addToSelected(sender, button) {
             sLogFlag: sLogFlag
         });
     }
+}
+
+function openBulkSelectionMode(hasStudent) {
+    const entryPlural = hasStudent ? UILANG.m('labels') : UILANG.m('passwords');
+    const contents =
+        '<div class="tmActionConfirm">' +
+            '<strong>' + UILANG.m('What do you want to do?') + '</strong>' +
+            '<span>' + sf(UILANG.m('Add new %@, or modify an existing one across the selected test takers.'), entryPlural) + '</span>' +
+        '</div>';
+    new nxDialog('bulkSelectionMode', {
+        buttons: [{
+            label: UILANG.m('Cancel'), cancel: true, value: 'cancel'
+        }, {
+            label: UILANG.m('Modify existing'), value: 'modify'
+        }, {
+            label: UILANG.m('Add new'), 'default': true, value: 'add'
+        }],
+        contents: contents,
+        width: 520,
+        callback: function(button) {
+            if (button === 'add') {
+                mode = 'add2selected';
+                selHasStudent = hasStudent;
+                switchMode();
+                buildWizard(true);
+                hideMenu();
+                hideSection(gui.s1, [gui.s4, gui.s5, gui.s6]);
+            } else if (button === 'modify') {
+                startBulkExistingAnalysis(hasStudent);
+            }
+        },
+        title: UILANG.m('Apply to selected')
+    });
+}
+
+function startBulkExistingAnalysis(hasStudent) {
+    startAjax('bulkModifyExisting', {
+        phase: 'analyze',
+        selection: selection,
+        pid: loc.folder
+    }).then(function(res) {
+        if (res.error !== false || !res.bulkAnalysis) return;
+        if (!res.bulkAnalysis.candidates.length) {
+            showMessage(hasStudent
+                ? UILANG.m('The selected test takers do not contain any labels that can be modified.')
+                : UILANG.m('The selected test takers do not contain any passwords that can be modified.'));
+            return;
+        }
+        selHasStudent = hasStudent;
+        mode = 'modifyselected';
+        wizardData.currentPwId = 1;
+        wizardData.structure = [];
+        wizardData.structure[1] = [];
+        gui.wStructureView.clearElements(true);
+        showBulkExistingDialog(res.bulkAnalysis);
+    });
+}
+
+function showBulkExistingDialog(analysis) {
+    bulkModifyContext = {
+        analysis: analysis,
+        selection: selection.slice()
+    };
+    const noun = analysis.kind === 'student' ? UILANG.m('label') : UILANG.m('password');
+    const contents =
+        '<div class="tmBulkModify">' +
+            '<div class="tmBulkModifyIntro">' +
+                '<strong>' + sf(UILANG.m('Modify an existing %@'), noun) + '</strong>' +
+                '<span>' + sf(UILANG.m('Choose the %@ you want to change. It will be updated for every selected test taker that has it. Others will be skipped.'), noun) + '</span>' +
+            '</div>' +
+            '<label for="tmBulkTarget">' + UILANG.m('Current') + ' ' + noun + '</label>' +
+            '<select id="tmBulkTarget"></select>' +
+            '<div id="tmBulkTargetSummary" class="tmBulkModifySummary"></div>' +
+            '<button type="button" id="tmBulkCurrentTests" class="tmBulkFoundTestsLink"></button>' +
+            '<div class="tmBulkModifyGrid">' +
+                '<div><label for="tmBulkNewName">' + UILANG.m('New') + ' ' + noun + '</label><input id="tmBulkNewName" maxlength="255"></div>' +
+                '<div><label for="tmBulkNewTag">' + UILANG.m('Tag') + '</label><input id="tmBulkNewTag" maxlength="255"></div>' +
+            '</div>' +
+            (analysis.kind === 'student'
+                ? '<div class="tmBulkStudentPassword">' +
+                    '<label for="tmBulkPasswordMode">' + UILANG.m('Password for this label') + '</label>' +
+                    '<div class="tmBulkModifyGrid">' +
+                        '<div><select id="tmBulkPasswordMode">' +
+                            '<option value="keep">' + UILANG.m('Keep unchanged') + '</option>' +
+                            '<option value="set">' + UILANG.m('Create or replace password') + '</option>' +
+                            '<option value="remove">' + UILANG.m('Remove password requirement') + '</option>' +
+                        '</select></div>' +
+                        '<div><input id="tmBulkNewPassword" type="text" maxlength="200" placeholder="' + UILANG.m('New password') + '"></div>' +
+                    '</div>' +
+                    '<div id="tmBulkPasswordSummary" class="tmBulkModifyHint"></div>' +
+                '</div>'
+                : '') +
+            '<label for="tmBulkAssignmentMode">' + UILANG.m('Connected tests') + '</label>' +
+            '<select id="tmBulkAssignmentMode">' +
+                '<option value="keep">' + UILANG.m('Keep unchanged') + '</option>' +
+                '<option value="add">' + UILANG.m('Add selected tests') + '</option>' +
+                '<option value="remove">' + UILANG.m('Remove selected tests') + '</option>' +
+                '<option value="replace">' + UILANG.m('Replace with selected tests') + '</option>' +
+            '</select>' +
+            '<div id="tmBulkTestControls" class="tmBulkTestControls">' +
+                '<button type="button" id="tmBulkChooseTests">' + UILANG.m('Choose tests...') + '</button>' +
+                '<button type="button" id="tmBulkModifyTestsSummary" class="tmBulkSelectedTestsLink" disabled>' + UILANG.m('No tests selected') + '</button>' +
+            '</div>' +
+            '<div id="tmBulkDestructiveNote" class="tmBulkModifyWarning">' +
+                sf(UILANG.m('Removing a connected test also removes result and scoring data linked through this %@.'), noun) +
+            '</div>' +
+        '</div>';
+
+    const bulkModifyDialog = new nxDialog('bulkModifyExistingDialog', {
+        buttons: [{
+            label: UILANG.m('Cancel'), cancel: true, value: 'cancel'
+        }, {
+            label: UILANG.m('Preview changes'), 'default': true, value: 'preview'
+        }],
+        contents: contents,
+        width: 650,
+        callback: bulkExistingDialogCallback,
+        title: UILANG.m('Modify selected test takers')
+    });
+    const previewButton = document.getElementById('bulkModifyExistingDialog_button_1');
+    if (previewButton) {
+        let previewPointerDown = false;
+        previewButton.addEventListener('pointerdown', function(event) {
+            if (event.button !== 0 && event.pointerType === 'mouse') return;
+            previewPointerDown = true;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }, true);
+        previewButton.addEventListener('pointerup', function(event) {
+            if (!previewPointerDown) return;
+            previewPointerDown = false;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            bulkModifyDialog.dismiss('preview');
+        }, true);
+        previewButton.addEventListener('pointercancel', function() {
+            previewPointerDown = false;
+        }, true);
+    }
+
+    const target = $('#tmBulkTarget');
+    analysis.candidates.forEach(function(candidate, index) {
+        $('<option/>', {
+            value: index,
+            text: candidate.name + (candidate.tag ? ' [' + candidate.tag + ']' : '')
+        }).appendTo(target);
+    });
+    target.on('change', updateBulkTargetFields).trigger('change');
+    ttBindAllowedCharacters('#tmBulkNewName', analysis.kind === 'student');
+    if (analysis.kind === 'student') ttBindAllowedCharacters('#tmBulkNewPassword', false);
+    $('#tmBulkAssignmentMode').on('change', updateBulkAssignmentControls).trigger('change');
+    $('#tmBulkPasswordMode').on('change', updateBulkPasswordControls).trigger('change');
+    $('#tmBulkChooseTests').on('click', function() {
+        addTests();
+    });
+    $('#tmBulkModifyTestsSummary').on('click', showBulkSelectedTests);
+    $('#tmBulkCurrentTests').on('click', showBulkFoundTests);
+}
+
+function updateBulkTargetFields() {
+    if (!bulkModifyContext) return;
+    const candidate = bulkModifyContext.analysis.candidates[Number($('#tmBulkTarget').val())];
+    if (!candidate) return;
+    $('#tmBulkNewName').val(candidate.name);
+    $('#tmBulkNewTag').val(candidate.tag);
+    $('#tmBulkTargetSummary').text(
+        candidate.unique + '/' + bulkModifyContext.analysis.selected + ' ' + UILANG.m('unique matches') +
+        ' · ' + candidate.missing + ' ' + UILANG.m('missing') +
+        ' · ' + candidate.ambiguous + ' ' + UILANG.m('ambiguous') +
+        ' · ' + candidate.assignmentVariants + ' ' + UILANG.m('assignment variants')
+    );
+    const assignedTests = candidate.assignedTests || [];
+    $('#tmBulkCurrentTests').text(
+        assignedTests.length
+            ? assignedTests.length + ' ' + (assignedTests.length === 1 ? UILANG.m('test found') : UILANG.m('tests found'))
+            : UILANG.m('No connected tests found')
+    ).prop('disabled', assignedTests.length === 0);
+    if (bulkModifyContext.analysis.kind === 'student') {
+        $('#tmBulkPasswordSummary').text(
+            (candidate.passwordRequired || 0) + ' ' + UILANG.m('currently require a password') +
+            ' · ' + (candidate.passwordNotRequired || 0) + ' ' + UILANG.m('do not require one')
+        );
+    }
+}
+
+function updateBulkAssignmentControls() {
+    const modeValue = $('#tmBulkAssignmentMode').val();
+    $('#tmBulkTestControls').toggleClass('is-inactive', modeValue === 'keep')
+        .attr('aria-hidden', modeValue === 'keep');
+    $('#tmBulkTestControls button').prop('disabled', modeValue === 'keep');
+    if (modeValue !== 'keep') {
+        $('#tmBulkModifyTestsSummary').prop('disabled', (wizardData.structure[1] || []).length === 0);
+    }
+    $('#tmBulkDestructiveNote').toggleClass('is-inactive', modeValue !== 'remove' && modeValue !== 'replace')
+        .attr('aria-hidden', modeValue !== 'remove' && modeValue !== 'replace');
+}
+
+function updateBulkPasswordControls() {
+    const passwordMode = $('#tmBulkPasswordMode').val();
+    $('#tmBulkNewPassword').prop('disabled', passwordMode !== 'set')
+        .toggleClass('is-inactive', passwordMode !== 'set');
+}
+
+function showBulkSelectedTests() {
+    const tests = (wizardData.structure[1] || []).slice();
+    if (!tests.length) return;
+    showBulkTestList(UILANG.m('Selected tests'), tests);
+}
+
+function showBulkFoundTests() {
+    if (!bulkModifyContext) return;
+    const candidate = bulkModifyContext.analysis.candidates[Number($('#tmBulkTarget').val())];
+    const tests = candidate && candidate.assignedTests ? candidate.assignedTests : [];
+    if (!tests.length) return;
+    showBulkTestList(UILANG.m('Tests currently found'), tests);
+}
+
+function bulkTestType(test) {
+    const candidates = [test.type, test.testType, test.testStructure];
+    for (let type of candidates) {
+        if (typeof type === 'string' && type.trim().charAt(0) === '{') {
+            try {
+                type = JSON.parse(type).type;
+            } catch (_error) {
+                type = null;
+            }
+        } else if (type && typeof type === 'object') {
+            type = type.type || type.id;
+        }
+        if (['linear', 'fluid', 'mutation'].includes(type)) return type;
+    }
+    return 'linear';
+}
+
+function showBulkTestList(title, tests) {
+    const list = $('<div/>', {'class': 'tmBulkSelectedTestsList'});
+    tests.forEach(function(test) {
+        const testId = test.hiddenID || test.id;
+        const testType = bulkTestType(test);
+        $('<div/>', {'class': 'tmBulkSelectedTest'}).append(
+            $('<img/>', {
+                'class': 'tmBulkSelectedTestIcon',
+                src: '../inc/filer/images/test' + testType.charAt(0).toUpperCase() + testType.slice(1) + '.png',
+                alt: ''
+            }),
+            $('<strong/>', {text: test.name || UILANG.m('Test')}),
+            $('<span/>', {text: 'ID ' + testId})
+        ).appendTo(list);
+    });
+    const holderId = 'tmBulkSelectedTestsContent';
+    $('#' + holderId).remove();
+    list.attr('id', holderId).appendTo('body').hide();
+    new nxDialog('bulkSelectedTestsDialog', {
+        buttons: [{
+            label: UILANG.m('Close'), 'default': true, cancel: true, value: 'close'
+        }],
+        contentId: holderId,
+        title: title,
+        width: 480
+    });
+}
+
+function bulkExistingDialogCallback(button) {
+    if (button === 'cancel') {
+        mode = 'browsing';
+        bulkModifyContext = null;
+        selHasStudent = false;
+        return;
+    }
+    if (button !== 'preview' || !bulkModifyContext) return;
+    const candidate = bulkModifyContext.analysis.candidates[Number($('#tmBulkTarget').val())];
+    const newName = String($('#tmBulkNewName').val() || '').trim();
+    const newTag = String($('#tmBulkNewTag').val() || '').trim();
+    const assignmentMode = $('#tmBulkAssignmentMode').val();
+    const passwordMode = bulkModifyContext.analysis.kind === 'student' ? $('#tmBulkPasswordMode').val() : 'keep';
+    const newPassword = bulkModifyContext.analysis.kind === 'student'
+        ? String($('#tmBulkNewPassword').val() || '').trim()
+        : '';
+    if (!candidate || !newName) {
+        mode = 'browsing';
+        showMessage(UILANG.m('Please select an entry and enter its new name.'));
+        return;
+    }
+    if (candidate.ambiguous > 0) {
+        mode = 'browsing';
+        showMessage(bulkModifyContext.analysis.kind === 'student'
+            ? UILANG.m('This label is ambiguous for one or more selected test takers and cannot be modified in bulk.')
+            : UILANG.m('This password is ambiguous for one or more selected test takers and cannot be modified in bulk.'));
+        return;
+    }
+    if (passwordMode === 'set' && !newPassword) {
+        mode = 'browsing';
+        showMessage(UILANG.m('Please enter the new password for the selected labels.'));
+        return;
+    }
+    if (assignmentMode !== 'keep' && wizardData.structure[1].length === 0 && assignmentMode !== 'replace') {
+        mode = 'browsing';
+        showMessage(UILANG.m('Please choose at least one test for this assignment operation.'));
+        return;
+    }
+    bulkModifyContext.request = {
+        phase: 'preview',
+        selection: bulkModifyContext.selection,
+        matchName: candidate.name,
+        matchTag: candidate.tag,
+        newName: newName,
+        newTag: newTag,
+        passwordMode: passwordMode,
+        newPassword: newPassword,
+        assignmentMode: assignmentMode,
+        structure: wizardData.structure[1] || [],
+        pid: loc.folder
+    };
+    mode = 'browsing';
+    startAjax('bulkModifyExisting', bulkModifyContext.request).then(function(res) {
+        if (res.error !== false || !res.bulkPreview) {
+            bulkModifyContext = null;
+            return;
+        }
+        showBulkExistingPreview(res.bulkPreview);
+    });
+}
+
+function showBulkExistingPreview(preview) {
+    const destructive = preview.affectedActivity > 0 || preview.affectedScoring > 0;
+    const entryPlural = bulkModifyContext && bulkModifyContext.analysis.kind === 'student'
+        ? UILANG.m('Labels to update')
+        : UILANG.m('Passwords to update');
+    const missingEntryLabel = bulkModifyContext && bulkModifyContext.analysis.kind === 'student'
+        ? UILANG.m('Selected test takers without this label')
+        : UILANG.m('Selected test takers without this password');
+    let contents =
+        '<div class="tmActionConfirm ' + (destructive ? 'tmActionConfirm-warning' : '') + '">' +
+            '<strong>' + UILANG.m('Bulk modification preview') + '</strong>' +
+            '<div class="tmActionConfirmMeta"><span>' + entryPlural + '</span><strong>' + preview.matched + '</strong></div>' +
+            '<div class="tmActionConfirmMeta"><span>' + missingEntryLabel + '</span><strong>' + preview.missing + '</strong></div>';
+    if (preview.passwordsChanged > 0) {
+        contents += '<div class="tmActionConfirmMeta"><span>' + UILANG.m('Label passwords changed') + '</span><strong>' + preview.passwordsChanged + '</strong></div>';
+    }
+    contents += '<div class="tmActionConfirmMeta"><span>' + UILANG.m('Test assignments removed') + '</span><strong>' + preview.removedAssignments + '</strong></div>';
+    if (destructive) {
+        contents +=
+            '<span>' + UILANG.m('This operation removes linked result data and cannot be undone.') + '</span>' +
+            '<div class="tmActionConfirmMeta"><span>' + UILANG.m('Activity records affected') + '</span><strong>' + preview.affectedActivity + '</strong></div>' +
+            '<div class="tmActionConfirmMeta"><span>' + UILANG.m('Scoring records affected') + '</span><strong>' + preview.affectedScoring + '</strong></div>';
+    }
+    contents += '</div>';
+    new nxDialog('bulkModifyExistingPreview', {
+        buttons: [{
+            label: UILANG.m('Cancel'), cancel: true, value: 'cancel'
+        }, {
+            label: destructive ? UILANG.m('Apply and remove data') : UILANG.m('Apply changes'),
+            'default': true,
+            value: 'apply'
+        }],
+        contents: contents,
+        width: 540,
+        callback: function(button) {
+            if (button !== 'apply' || !bulkModifyContext) {
+                mode = 'browsing';
+                bulkModifyContext = null;
+                selHasStudent = false;
+                return;
+            }
+            const request = Object.assign({}, bulkModifyContext.request, {
+                phase: 'apply',
+                confirmDestructive: destructive
+            });
+            startAjax('bulkModifyExisting', request).then(function(res) {
+                if (res.error !== false) bulkModifyContext = null;
+            });
+        },
+        title: UILANG.m('Confirm bulk modification'),
+        type: destructive ? 'warning' : undefined
+    });
 }
 
 function enterWizard(sender) {
@@ -2079,17 +2755,28 @@ function enterWizard(sender) {
                     }
                 });
                 if (hasLocal && hasStudent) {
-                    showMessage(UILANG.m('In your selection, there are both standard and student logins. Bulk editing is only possible when all selected logins are of the same type.'));
+                    const message = '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                        '<strong>' + UILANG.m('Selection cannot be edited together') + '</strong>' +
+                        '<span>' + UILANG.m('Bulk editing is only possible when all selected logins are of the same type.') + '</span>' +
+                        '<p class="tmActionConfirmNote">' + UILANG.m('Select either standard logins or student logins, then try again.') + '</p>' +
+                    '</div>';
+                    new nxDialog('mixedLoginSelectionWarning', {
+                        buttons: [{
+                            label: UILANG.m('OK'), 'default': true, cancel: true, value: 'ok'
+                        }],
+                        contents: message,
+                        width: 500,
+                        title: UILANG.m('Selection warning'),
+                        type: 'warning'
+                    });
                 } else {
-                    mode = 'add2selected';
-                    selHasStudent = hasStudent;
-                    switchMode();
-                    buildWizard(true);
-                    hideMenu();
-                    hideSection(gui.s1, [gui.s4, gui.s5, gui.s6]);
+                    openBulkSelectionMode(hasStudent);
                 }
             } else {
                 mode = 'wizard';
+                // The regular creation wizard always creates standard logins and
+                // must not inherit the previous bulk-selection login type.
+                selHasStudent = false;
                 switchMode();
                 buildWizard();
                 hideMenu();
@@ -2099,7 +2786,25 @@ function enterWizard(sender) {
 }
 
 function enterFileWizard() {
-    const dHtml='<p>'+UILANG.m('Please choose the type of logins you want to import:')+'</p><div class="csv-button-wrapper"><div class="csv-button-container"><button id="import-csv-standard" class="csv-button">'+UILANG.m('Standard logins')+'</button><button id="upload-csv-student" class="csv-button">'+UILANG.m('Student logins')+'</button></div></div>';
+    const dHtml =
+        '<div class="csvImportChoiceDialog">' +
+            '<div class="csvImportChoiceIntro">' +
+                '<strong>' + UILANG.m('Choose import type') + '</strong>' +
+                '<span>' + UILANG.m('Please choose the type of logins you want to import:') + '</span>' +
+            '</div>' +
+            '<div class="csv-button-wrapper">' +
+                '<div class="csv-button-container">' +
+                    '<button id="import-csv-standard" class="csv-button">' +
+                        '<strong>' + UILANG.m('Standard logins') + '</strong>' +
+                        '<span>' + UILANG.m('Passwords and assigned tests') + '</span>' +
+                    '</button>' +
+                    '<button id="upload-csv-student" class="csv-button">' +
+                        '<strong>' + UILANG.m('Student logins') + '</strong>' +
+                        '<span>' + UILANG.m('Authentication, labels and assigned tests') + '</span>' +
+                    '</button>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
 
     let dialogData = {
         buttons: [{
@@ -2107,7 +2812,7 @@ function enterFileWizard() {
         }],
         contents: dHtml,
         title: UILANG.m('Import CSV'),
-        width: 400
+        width: 620
     };
     let impCsvDia = new nxDialog('impCsvDialog', dialogData);
 
@@ -2141,13 +2846,33 @@ function enterFileToWizard(sender) {
     });
 }
 
+function buildCsvFormatErrorMessage(fileName) {
+    const requiredFields = fileWizardType === 'student'
+        ? ['testtaker', 'authentication', 'password', 'label', 'tag', 'test-id', 'subfolder', 'displayname']
+        : ['testtaker', 'password', 'tag', 'test-id', 'subfolder', 'displayname'];
+    return '<div class="csvImportFormatError">' +
+        '<strong>' + UILANG.m('CSV format not recognized') + '</strong>' +
+        '<p>' + sf(UILANG.m('The file "%@" does not match the expected CSV structure.'), escapeHtml(fileName)) + '</p>' +
+        '<div class="csvImportFormatBlock">' +
+            '<span>' + UILANG.m('Check the first row') + '</span>' +
+            '<code>' + requiredFields.join(', ') + '</code>' +
+        '</div>' +
+        '<ul>' +
+            '<li>' + UILANG.m('Use comma or semicolon as field separator.') + '</li>' +
+            '<li>' + UILANG.m('Optional meta tags may be added with metakeyX/metavalueX columns.') + '</li>' +
+            '<li>' + UILANG.m('Refer to the example file in the application for guidance.') + '</li>' +
+        '</ul>' +
+    '</div>';
+}
+
 /* Create from CSV */
 function buildFileWizard() {
 
     $('#infomsg').empty();
-    let csvText1, csvText2, csvText3, csvText4, csvText5, csvText6, csvText7, csvText8, csvText9, csvText10, loginTypeHtml, loginTypeTitle;
+    let csvText1, csvText2, csvText3, csvText4, csvText5, csvText6, csvText7, csvText8, csvText9, csvText10, loginTypeHtml, loginTypeTitle, csvInfoTitle, csvInfoItems, csvExample;
 
     if (fileWizardType === 'student') {
+        csvInfoTitle = UILANG.m('CSV-File structure for student logins:');
         csvText1 = UILANG.m('The CSV-file for importing student logins (direct password, SAML or LDAP) and their labels & assigned tests into the database needs the following format:');
         csvText2 = UILANG.m('the first line contains the key names: testtaker, authentication, password, label, tag, test-id, subfolder and displayname');
         csvText3 = UILANG.m('field separators can be "," or ";"');
@@ -2156,13 +2881,15 @@ function buildFileWizard() {
         csvText6 = UILANG.m('to assign more than one test to a label, use \\ as separator');
         csvText7 = UILANG.m('in the field subfolder you can specify a subfolder or subfolder path (\\ as separator). Your defined path will be created in your current folder.');
         csvText8 = UILANG.m('you can enter the name of the test taker in the column displayname (optional)');
-        csvText9 = UILANG.m('you can specify meta tags (optional) for the test takers (meta keys & meta values). Make sure you modify the first line accordingly.');
-        csvText10 = 'testtaker,authentication,password,label,tag,test-id,subfolder,displayname,metakey1,metavalue1,metakey2,metavalue2,metakey3,metavalue3<br />Student1,direct,jghu7667f,German test,3219\\3220\\3221,,Anne Muller,School,CLN,Class,7c,Teacher,"Miller, Glenn"<br />Student2,SAML,,English test,3179,folder1,Luc Wagner,School,CLN,Class,7c,Teacher,"Miller, Glenn"<br />Student3,LDAP,,Maths test,3183\\3967,folder1\\subfolder1,Sophie Schmit,School,ABC,Class,9c,Teacher,"Smith, Adrian"';
+        csvText9 = UILANG.m('you can specify meta tags (optional) for the test takers. Use metakey1/metavalue1 columns for key-value tags. To add a single tag without a value, use a single column named metatag2 or singletag2; the cell value itself becomes the tag. A metakey column at the end of the file without a matching metavalue column is also imported as a single tag.');
+        csvText10 = 'testtaker,authentication,password,label,tag,test-id,subfolder,displayname,metakey1,metavalue1,metatag2,metakey3,metavalue3<br />Student1,direct,jghu7667f,German test,,3219\\3220\\3221,,Anne Muller,School,CLN,NeedsReview,Teacher,"Miller, Glenn"<br />Student2,SAML,,English test,,3179,folder1,Luc Wagner,School,CLN,NeedsReview,Teacher,"Miller, Glenn"<br />Student3,LDAP,,Maths test,,3183\\3967,folder1\\subfolder1,Sophie Schmit,School,ABC,Remote,Teacher,"Smith, Adrian"';
 
-        $('#infomsg').html('<strong>' + UILANG.m('CSV-File structure for student logins:') + '</strong><span id="loginTypeHelp"></span><br />' + csvText1 + '<br /><ul id="csvMsg"><li>' + csvText2 + '</li><li>' + csvText3 + '</li><li>' + csvText4 + '</li><li>' + csvText5 + '</li><li>' + csvText6 + '</li><li>' + csvText7 + '</li><li>' + csvText8 + '</li><li>' + csvText9 + '</li></ul><br /><table width="100%"><tr><td><strong>' + UILANG.m('Example CSV-file:') + '</strong><br />' + csvText10 + '</td><td><div id="exFileButton"></div></div></td></tr></table></div>');
+        csvInfoItems = [csvText2, csvText3, csvText4, csvText5, csvText6, csvText7, csvText8, csvText9];
+        csvExample = csvText10;
         loginTypeHtml = studentLoginHtml;
         loginTypeTitle = studentLoginTitle;
     } else {
+        csvInfoTitle = UILANG.m('CSV-File structure for standard logins:');
         csvText1 = UILANG.m('The CSV-file for importing standard logins and their passwords & assigned tests into the database needs the following format:');
         csvText2 = UILANG.m('the first line contains the key names: testtaker, password, tag, test-id, subfolder and displayname');
         csvText3 = UILANG.m('field separators can be "," or ";"');
@@ -2170,13 +2897,31 @@ function buildFileWizard() {
         csvText5 = UILANG.m('to assign more than one test to a password, use \\ as separator');
         csvText6 = UILANG.m('in the field subfolder you can specify a subfolder or subfolder path (\\ as separator). Your defined path will be created in your current folder.');
         csvText7 = UILANG.m('you can enter the name of the test taker in the column displayname (optional)');
-        csvText8 = UILANG.m('you can specify meta tags (optional) for the test takers (meta keys & meta values). Make sure you modify the first line accordingly.');
-        csvText9 = 'testtaker,password,tag,test-id,subfolder,displayname,metakey1,metavalue1,metakey2,metavalue2,metakey3,metavalue3<br />Student1,ffgthg,3219\\3220\\3221,,Anne Muller,School,CLN,Class,7c,Teacher,"Miller, Glenn"<br />Student2,ertfgd,3179,folder1,Luc Wagner,School,CLN,Class,7c,Teacher,"Miller, Glenn"<br />Student3,eewwsd,3183\\3967,folder1\\subfolder1,Sophie Schmit,School,ABC,Class,9c,Teacher,"Smith, Adrian"';
+        csvText8 = UILANG.m('you can specify meta tags (optional) for the test takers. Use metakey1/metavalue1 columns for key-value tags. To add a single tag without a value, use a single column named metatag2 or singletag2; the cell value itself becomes the tag. A metakey column at the end of the file without a matching metavalue column is also imported as a single tag.');
+        csvText9 = 'testtaker,password,tag,test-id,subfolder,displayname,metakey1,metavalue1,metatag2,metakey3,metavalue3<br />Student1,ffgthg,,3219\\3220\\3221,,Anne Muller,School,CLN,NeedsReview,Teacher,"Miller, Glenn"<br />Student2,ertfgd,,3179,folder1,Luc Wagner,School,CLN,NeedsReview,Teacher,"Miller, Glenn"<br />Student3,eewwsd,,3183\\3967,folder1\\subfolder1,Sophie Schmit,School,ABC,Remote,Teacher,"Smith, Adrian"';
 
-        $('#infomsg').html('<strong>' + UILANG.m('CSV-File structure for standard logins:') + '</strong><span id="loginTypeHelp"></span><br />' + csvText1 + '<br /><ul id="csvMsg"><li>' + csvText2 + '</li><li>' + csvText3 + '</li><li>' + csvText4 + '</li><li>' + csvText5 + '</li><li>' + csvText6 + '</li><li>' + csvText7 + '</li><li>' + csvText8 + '</li></ul><br /><table width="100%"><tr><td><strong>' + UILANG.m('Example CSV-file:') + '</strong><br />' + csvText9 + '</td><td><div id="exFileButton"></div></div></td></tr></table></div>');
+        csvInfoItems = [csvText2, csvText3, csvText4, csvText5, csvText6, csvText7, csvText8];
+        csvExample = csvText9;
         loginTypeHtml = standardLoginHtml;
         loginTypeTitle = standardLoginTitle;
     }
+
+    $('#infomsg').html(
+        '<div class="csvImportInfoCard">' +
+            '<div class="csvImportInfoHeader">' +
+                '<strong>' + csvInfoTitle + '</strong><span id="loginTypeHelp"></span>' +
+            '</div>' +
+            '<div class="csvImportIntro">' + csvText1 + '</div>' +
+            '<ul id="csvMsg" class="csvImportRules"><li>' + csvInfoItems.join('</li><li>') + '</li></ul>' +
+            '<div class="csvImportExample">' +
+                '<div class="csvImportExampleContent">' +
+                    '<strong>' + UILANG.m('Example CSV-file:') + '</strong>' +
+                    '<div class="csvImportExampleText">' + csvExample + '</div>' +
+                '</div>' +
+                '<div class="csvImportExampleAction"><div id="exFileButton"></div></div>' +
+            '</div>' +
+        '</div>'
+    );
 
     //show online help
     new OasysHelp('loginTypeHelp', {
@@ -2201,6 +2946,7 @@ function buildFileWizard() {
     $('#infoZone').empty();
     $('#infoZone').hide();
     $(uploadZone).show();
+    $('#uploadZone').css('display', 'grid');
     $('#infomsg').show();
 }
 
@@ -2263,26 +3009,41 @@ function onImport(name, text) {
         let metaSet = 0;
         let metaStart = 6;
         if(fileWizardType==='student')metaStart = 8;
-        $.each(d[0], function (k, v) {
-            if (x) {
-                if (k >= metaStart) {
-                    if (k % 2 === 0) {
-                        metaSet++;
-                        if (v !== 'metakey' + metaSet) {
-                            showMessage(sf('<strong>' + UILANG.m('ERROR in import-file:') + '</strong><br />' + UILANG.m('Keyline field %@ has wrong identifier "%@". Expected:"metakey%@"'), k + 1, v, metaSet));
-                            x = false;
-                        }
-                    } else {
-                        if (v !== 'metavalue' + metaSet) {
-                            showMessage(sf('<strong>' + UILANG.m('ERROR in import-file:') + '</strong><br />' + UILANG.m('Keyline field %@ has wrong identifier "%@". Expected:"metavalue%@"'), k + 1, v, metaSet));
-                            x = false;
-                        }
-                    }
+        for (let k = metaStart; k < d[0].length; k++) {
+            const v = d[0][k];
+            metaSet++;
+            if (v === 'metakey' + metaSet) {
+                if (k + 1 < d[0].length && d[0][k + 1] !== 'metavalue' + metaSet) {
+                    showMessage(sf('<strong>' + UILANG.m('ERROR in import-file:') + '</strong><br />' + UILANG.m('Keyline field %@ has wrong identifier "%@". Expected:"metavalue%@"'), k + 2, d[0][k + 1], metaSet));
+                    x = false;
+                    break;
                 }
+                if (k + 1 < d[0].length) k++;
+            } else if (v !== 'metatag' + metaSet && v !== 'singletag' + metaSet) {
+                showMessage(sf('<strong>' + UILANG.m('ERROR in import-file:') + '</strong><br />' + UILANG.m('Keyline field %@ has wrong identifier "%@". Expected:"metakey%@"'), k + 1, v, metaSet));
+                x = false;
+                break;
             }
-
-        });
+        }
         return x;
+    }
+
+    function normalizeCsvMetaTags(d) {
+        let metaStart = fileWizardType === 'student' ? 8 : 6;
+        const header = d[0];
+        if (header.length <= metaStart) return d;
+        const normalized = d.map(row => row.slice(0, metaStart));
+        let metaSet = 0;
+        for (let k = metaStart; k < header.length; k++) {
+            metaSet++;
+            const isPair = header[k] === 'metakey' + metaSet && header[k + 1] === 'metavalue' + metaSet;
+            normalized[0].push('metakey' + metaSet, 'metavalue' + metaSet);
+            for (let rowIndex = 1; rowIndex < d.length; rowIndex++) {
+                normalized[rowIndex].push(d[rowIndex][k] || '', isPair ? (d[rowIndex][k + 1] || '') : '');
+            }
+            if (isPair) k++;
+        }
+        return normalized;
     }
 
     function chkTts(d) {
@@ -2310,9 +3071,9 @@ function onImport(name, text) {
             if (x) {
                 if(line > 1) {
                     //check for non-allowed chars in test taker fields (logins)
-                    regex = /[^\w\s.(){}\[\]-]/ig;
+                    regex = /[^\w .(){}\[\]-]/ig;
                     if (v[0].match(regex)) {
-                        showMessage(sf('<strong>' + UILANG.m('ERROR in import-file:') + '</strong><br />' + UILANG.m('line %@ field %@ has non allowed characters. Valid characters are: Letters & numbers plus ( ){ } [ ] / . _ - and SPACE.'), line, 1));
+                        ttShowInvalidCharacters(v[0].match(regex), true, sf(UILANG.m('CSV line %@, field %@'), line, 1), true);
                         x = false;
                         return false;
                     }
@@ -2320,7 +3081,7 @@ function onImport(name, text) {
                     //check for non-allowed chars in test taker fields (passwords)
                     regex = /[^\w.(){}\[\]-]/ig;
                     if (v[passwordIndex].match(regex)) {
-                        showMessage(sf('<strong>' + UILANG.m('ERROR in import-file:') + '</strong><br />' + UILANG.m('line %@ field %@ has non allowed characters. Valid characters are: Letters & numbers plus ( ){ } [ ] / . _ -'), line, 1));
+                        ttShowInvalidCharacters(v[passwordIndex].match(regex), false, sf(UILANG.m('CSV line %@, password field %@'), line, passwordIndex + 1), true);
                         x = false;
                         return false;
                     }
@@ -2437,14 +3198,20 @@ function onImport(name, text) {
 
     //Check if minimum header is present and ok
     if (chkHead(data) !== true) {
-        if(fileWizardType==='student'){
-            showMessage(sf(UILANG.m('The file "%@" is not recognized. Ensure it has correct separators (, or ;) and the following key names in the first row: testtaker, authentification, password, label, tag, test-id, subfolder & displayname. Optional meta tags (metakeyX, metavalueX) may also be included.<br /><br /> Refer to the example file in the application for guidance.'), name));
-        } else {
-            showMessage(sf(UILANG.m('The file "%@" is not recognized. Ensure it has correct separators (, or ;) and the following key names in the first row: testtaker, password, tag, test-id, subfolder & displayname. Optional meta tags (metakeyX, metavalueX) may also be included.<br /><br /> Refer to the example file in the application for guidance.'), name));
-        }
+        showMessage(buildCsvFormatErrorMessage(name));
         resetCff();
         return;
     }
+
+    if (data.length <= 1) {
+        showMessage(sf(
+            UILANG.m('ERROR: The file "%@" contains only the header row. Please add at least one test taker line and try again.'),
+            name
+        ));
+        resetCff();
+        return;
+    }
+
     //Check if all data lines have the same number if fields
     let cll = chkLineLenghts(data);
     if (cll[0] !== true) {
@@ -2462,6 +3229,7 @@ function onImport(name, text) {
         resetCff();
         return;
     }
+    data = normalizeCsvMetaTags(data);
     parseFile(name, data, readData);
 }
 
@@ -2474,8 +3242,12 @@ function parseFile(name, data) {
     infoZone.show();
     infoZone.empty();
     const dataLines = data.length - 1;
-    infoZone.append('<div class=infoZoneMsg>' + UILANG.m('The data from your file') + ' "' + name + '" ' + UILANG.m('is ready to be imported. 1 headerline and') + ' ' + dataLines + ' ' + UILANG.m('data-lines have been read.') + '</div>');
-    infoZone.append('<br />');
+    infoZone.append(
+        '<div class="infoZoneMsg">' +
+            '<strong>' + UILANG.m('CSV file ready') + '</strong>' +
+            '<span>' + UILANG.m('The data from your file') + ' "' + escapeHtml(name) + '" ' + UILANG.m('is ready to be imported. 1 headerline and') + ' ' + dataLines + ' ' + UILANG.m('data-lines have been read.') + '</span>' +
+        '</div>'
+    );
 
     const table = $("<table class='csvResults' />");
 
@@ -2483,13 +3255,14 @@ function parseFile(name, data) {
         let row = $("<tr />");
         $.each(v, function (key, val) {
             let cell = $("<td />");
-            cell.html(escapeHtml(val));
+            const isSingleTagValue = key > 0 && data[0][key] && /^metavalue\d+$/.test(data[0][key]) && val === '' && v[key - 1] !== '';
+            cell.html(isSingleTagValue ? '<span class="csvSingleTag">' + UILANG.m('single tag') + '</span>' : escapeHtml(val));
             row.append(cell);
         });
         table.append(row);
     });
 
-    infoZone.append(table);
+    infoZone.append($('<div class="csvResultsFrame" />').append(table));
 
     buttons.saveFromFile.enable();
     buttons.resetCffWizard.enable();
@@ -2499,7 +3272,14 @@ function parseFile(name, data) {
 function createFromFile(sender, button) {
 
     if (!button) {
-        const message = sf('<p>' + UILANG.m('Are you sure you want to import to the folder "%@" ?') + '</p>', filerPath);
+        const message = sf(
+            '<div class="tmActionConfirm csvImportConfirm">' +
+                '<strong>' + UILANG.m('Ready to import') + '</strong>' +
+                '<span>' + UILANG.m('The CSV data is ready to be imported.') + '</span>' +
+                '<div class="tmActionConfirmMeta"><span>' + UILANG.m('Folder') + '</span><strong>"%@"</strong></div>' +
+            '</div>',
+            filerPath
+        );
 
         const dialogData = {
             buttons: [{
@@ -2511,8 +3291,7 @@ function createFromFile(sender, button) {
             width: 450,
             callback: createFromFile,
             title: UILANG.m('Start import?'),
-            icon: "../images/warning.png",
-            iconWidth: 64
+            type: 'warning'
         };
         new nxDialog('confirmFileWizard', dialogData, arguments);
     }
@@ -2562,6 +3341,12 @@ function editSelectionAfterCheck() {
         });
         if (editType === 'testee') {
             mode = 'editTest';
+            ttRestoreEditSections();
+            gui.s2.show();
+            gui.s3.show();
+            if (serverData.testLevel && String(serverData.testLevel.id) === String(selection[0].dbId)) {
+                fillDataFields('editTest');
+            }
             gui.structureView.unlock();
             gui.metaView.unlock();
             gui.passwords.enable();
@@ -2580,12 +3365,14 @@ function abortEditingReq() {
                 'default': true,
                 value: 'ok'
             }],
-            contents: UILANG.m('Do you want to exit without saving or continue?'),
+            contents: '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                '<strong>' + UILANG.m('Close without saving?') + '</strong>' +
+                '<span>' + UILANG.m('Your current wizard changes will be discarded.') + '</span>' +
+            '</div>',
             title: UILANG.m('Abort wizard'),
             returnPromise: true,
             width: 400,
-            icon: "../images/warning.png",
-            iconWidth: 64
+            type: 'warning'
         };
         showDialog('abortWiz', dialogData).then((res) => {
             if (res.button === 'ok') {
@@ -2597,9 +3384,36 @@ function abortEditingReq() {
     }
 }
 
+function refreshTestTakerLibraryForBrowsing(selectId, options) {
+    if (!loc || !loc.folder) return;
+    options = options || {};
+    const payload = {
+        location: loc.folder,
+        rebuild: true,
+        showBlocked: showBlocked
+    };
+    if (options.noSelection) {
+        selection = [];
+        serverData.testLevel = null;
+        refreshPreviewAfterLibraryForTesteeId = null;
+        if (gui.library && typeof gui.library.clearSelection === 'function') {
+            gui.library.clearSelection();
+        }
+    }
+    const selectedId = options.noSelection ? null : (selectId || (serverData.testLevel && serverData.testLevel.id ? 't' + serverData.testLevel.id : (selection[0] && selection[0].id)));
+    if (selectedId) payload.select = selectedId;
+    if (options.suppressPreviewPlausibility && selectedId) {
+        armBrowsePreviewRefresh(selectedId);
+    }
+    preserveLibraryScrollOnNextSelection = options.preserveScroll === true;
+    startAjax('fetchLibrary', payload);
+}
+
 function abortEditing() {
     switch (mode) {
         case 'editTest':
+            const selectedTesteeId = serverData.testLevel && serverData.testLevel.id ? 't' + serverData.testLevel.id : (selection[0] && selection[0].id);
+            armBrowsePreviewRefresh(selectedTesteeId);
             gui.metaView.lock('greyout');
             $('#passwords').scrollTop(0);
             $('#assignedTests').scrollTop(0);
@@ -2608,16 +3422,38 @@ function abortEditing() {
             showSection(gui.s1, [gui.s2, gui.s3], function () {
                 mode = 'browsing';
                 switchMode();
+                refreshTestTakerLibraryForBrowsing(null, {
+                    suppressPreviewPlausibility: true,
+                    preserveScroll: true
+                });
+                refreshPreviewAfterLibraryForTesteeId = null;
+                reloadBrowsePreviewForTestee(selectedTesteeId);
             });
             break;
         case 'wizard':
-        case 'add2selected':
             showMenu();
             showSection(gui.s1, [gui.s2, gui.s3], function () {
                 mode = 'browsing';
                 switchMode();
                 wizardData.prefix = '';
                 wizardData.suffix = '';
+                refreshTestTakerLibraryForBrowsing(null, {
+                    noSelection: true
+                });
+            });
+            break;
+        case 'add2selected':
+            const wizardReturnTesteeId = serverData.testLevel && serverData.testLevel.id ? 't' + serverData.testLevel.id : (selection[0] && selection[0].id);
+            showMenu();
+            showSection(gui.s1, [gui.s2, gui.s3], function () {
+                mode = 'browsing';
+                switchMode();
+                wizardData.prefix = '';
+                wizardData.suffix = '';
+                refreshTestTakerLibraryForBrowsing(wizardReturnTesteeId, {
+                    suppressPreviewPlausibility: true,
+                    preserveScroll: true
+                });
             });
             break;
         case 'fileWizard':
@@ -2625,6 +3461,9 @@ function abortEditing() {
             showSection(gui.s1, [gui.s2, gui.s3], function () {
                 mode = 'browsing';
                 switchMode();
+                refreshTestTakerLibraryForBrowsing(null, {
+                    noSelection: true
+                });
             });
             uploader.setInactive();
             break;
@@ -2637,20 +3476,597 @@ function pCheckProceed(button, btn) {
     }
 }
 
+function ttPCheckSuccessHtml(intro, checks) {
+    return '<div class="pCheckSuccessDiv"><h3>' + UILANG.m('Plausibility check completed successfully!') + '</h3><p>' + intro + '</p><ul class="pCheckUl">' + checks.map(function(check) {
+        return '<li><img alt="" src="../images/ok.png" height="15px;" />&nbsp;' + check + '</li>';
+    }).join('') + '</ul></div>';
+}
+
+function updateMetaTagCounter(selector, count) {
+    const label = count === 1 ? UILANG.m('meta tag') : UILANG.m('meta tags');
+    $(selector).html(count + ' ' + label);
+}
+
+function ttPreviewEscape(value) {
+    if (value === null || typeof value === 'undefined') return '';
+    return $('<div>').text(String(value)).html();
+}
+
+function ttPreviewIsStudentLogin(login) {
+    return ['directPass', 'LDAP', 'SAML'].includes(login && login.loginType);
+}
+
+function ttEditTesteeLabel(login, selectedItem) {
+    if ((login && login.template === 'template') || (selectedItem && selectedItem.type === 'template')) {
+        return UILANG.m('Edit template');
+    }
+    if (ttPreviewIsStudentLogin(login)) {
+        return UILANG.m('Edit student login');
+    }
+    return UILANG.m('Edit test taker');
+}
+
+function ttPreviewLoginTypeInfo(login) {
+    const template = login && login.template;
+    if (template === 'template') {
+        return {label: UILANG.m('Test taker template'), icon: '../inc/filer/images/template.png', typeClass: 'template'};
+    }
+    if (template === 'cloned') {
+        return {label: UILANG.m('Cloned from template'), icon: '../inc/filer/images/testee.png', typeClass: 'cloned'};
+    }
+    switch (login && login.loginType) {
+        case 'directPass':
+            return {label: UILANG.m('Student login (Password)'), icon: '../inc/filer/images/testTaker_DP.png', typeClass: 'direct'};
+        case 'LDAP':
+            return {label: UILANG.m('Student login (LDAP)'), icon: '../inc/filer/images/testTaker_LDAP.png', typeClass: 'ldap'};
+        case 'SAML':
+            return {label: UILANG.m('Student login (SAML)'), icon: '../inc/filer/images/testTaker_IAM.png', typeClass: 'saml'};
+        default:
+            return {label: UILANG.m('Standard login'), icon: '../inc/filer/images/testee.png', typeClass: 'standard'};
+    }
+}
+
+function ttPreviewBoolIcon(value, label) {
+    const state = value === true || value === 'true' || value === 1 || value === '1';
+    return '<span class="tmPreviewBool ' + (state ? 'is-yes' : 'is-no') + '">' +
+        '<img src="../images/' + state + '.png" alt="" />' +
+        '<span>' + ttPreviewEscape(label || (state ? UILANG.m('Yes') : UILANG.m('No'))) + '</span>' +
+        '</span>';
+}
+
+function ttPreviewFormatSqlDateTime(value) {
+    if (!value) return UILANG.m('Not available');
+    if (typeof value !== 'string') return ttPreviewEscape(value);
+    const normalized = value.replace('T', ' ');
+    const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}:\d{2})(?::(\d{2}))?/);
+    if (match) {
+        return match[3] + '.' + match[2] + '.' + match[1] + ' ' + match[4] + ':' + (match[5] || '00');
+    }
+    return ttPreviewEscape(value);
+}
+
+function ttPreviewPasswordTitle(password, index) {
+    if (ttPreviewIsStudentLogin(serverData.testLevel)) {
+        return password.label || (UILANG.m('Label') + ' ' + (index + 1));
+    }
+    return password.name || ('#' + password.id);
+}
+
+function ttPreviewPasswordSubline(password) {
+    const parts = [];
+    if (!ttPreviewIsStudentLogin(serverData.testLevel) && password.tag) parts.push(password.tag);
+    if (ttPreviewIsStudentLogin(serverData.testLevel) && password.tag) parts.push(password.tag);
+    if (ttPreviewIsStudentLogin(serverData.testLevel) && password.metadata && password.metadata.pwReq === true) {
+        parts.push(UILANG.m('Password required'));
+    }
+    return parts.join(' | ');
+}
+
+function ttPasswordListBadges(item) {
+    if (item && item.metadata && item.metadata.pwReq === true) {
+        return '<span class="ttPasswordActiveIcon" title="' + escapeHtml(UILANG.m('Password active')) + '">P</span>';
+    }
+    return '';
+}
+
+function ttPreparePasswordListItems(items) {
+    if (!Array.isArray(items)) return items;
+    items.forEach((item) => {
+        if (!item) return;
+        item.listBadges = ttPasswordListBadges(item);
+    });
+    return items;
+}
+
+function ttPreviewSettingsCard() {
+    const login = serverData.testLevel;
+    const typeInfo = ttPreviewLoginTypeInfo(login);
+    const displayName = login.displayName ? login.displayName : UILANG.m('- No display name -');
+    const directPass = login.loginType === 'directPass' ? /* html */ `
+        <div class="tmPreviewSetting"><span>${UILANG.m('Direct password')}</span><strong>${ttPreviewEscape(login.password || UILANG.m('Not set'))}</strong></div>
+    ` : '';
+    return /* html */ `
+        <section class="tmPreviewCard">
+            <h3>${UILANG.m('Login')}</h3>
+            <div class="tmPreviewSettingGrid">
+                <div class="tmPreviewSetting"><span>${UILANG.m('Test taker name')}</span><strong>${ttPreviewEscape(login.name)}</strong></div>
+                <div class="tmPreviewSetting"><span>${UILANG.m('Type of password')}</span><strong>${ttPreviewEscape(typeInfo.label)}</strong></div>
+                <div class="tmPreviewSetting"><span>${UILANG.m('Display name')}</span><strong>${ttPreviewEscape(displayName)}</strong></div>
+                ${directPass}
+            </div>
+        </section>
+    `;
+}
+
+function ttPreviewSpecialConditionsCard() {
+    const overrides = serverData.testLevel.overrides || {};
+    const rows = [];
+    if (overrides.disableTimer === true) rows.push([UILANG.m('Disable Timer'), ttPreviewBoolIcon(true), true]);
+    if (overrides.disableTimer !== true && Number(overrides.additionalTime || 0) > 0) rows.push([UILANG.m('Additional time (%)'), Number(overrides.additionalTime || 0), false]);
+    if (overrides.disableSaving === true) rows.push([UILANG.m('Disable saving'), ttPreviewBoolIcon(true), true]);
+    if (overrides.allowNavigation === true) rows.push([UILANG.m('Disable navigation limitation'), ttPreviewBoolIcon(true), true]);
+    if (overrides.demoMode === true) rows.push([UILANG.m('Demo Mode'), ttPreviewBoolIcon(true), true]);
+    if (overrides.loginForwarding === true) {
+        rows.push([UILANG.m('Forward login to other OASYS'), ttPreviewBoolIcon(true), true]);
+        rows.push([UILANG.m('Forward URL'), overrides.forwardUrl || UILANG.m('Not set'), false]);
+    }
+    const body = rows.length ? rows.map(row => /* html */ `
+        <div class="tmPreviewSetting"><span>${ttPreviewEscape(row[0])}</span><strong>${row[2] ? row[1] : ttPreviewEscape(row[1])}</strong></div>
+    `).join('') : `<div class="tmPreviewEmpty">${UILANG.m('No special conditions active.')}</div>`;
+    return /* html */ `
+        <section class="tmPreviewCard">
+            <h3>${UILANG.m('Special conditions')}</h3>
+            <div class="tmPreviewSettingGrid">${body}</div>
+        </section>
+    `;
+}
+
+function ttPreviewMetaTagsCard() {
+    const mtags = serverData.testLevel.metatags || {};
+    const keys = Object.keys(mtags).sort((a, b) => String(a).localeCompare(String(b), undefined, {sensitivity: 'base'}));
+    const body = keys.length ? keys.map(key => {
+        const single = mtags[key] === '';
+        return /* html */ `
+            <div><span>${ttPreviewEscape(key)}</span><strong class="${single ? 'tmPreviewSingleTag' : ''}">${ttPreviewEscape(single ? UILANG.m('single tag') : mtags[key])}</strong></div>
+        `;
+    }).join('') : `<div class="tmPreviewEmpty ttPreviewSingleLine">${UILANG.m('No meta tags defined.')}</div>`;
+    return /* html */ `
+        <section class="tmPreviewCard">
+            <h3>${UILANG.m('Meta tags')}</h3>
+            <div class="tmPreviewMetaTags">${body}</div>
+        </section>
+    `;
+}
+
+function ttPreviewPlausibilityCard() {
+    const student = ttPreviewIsStudentLogin(serverData.testLevel);
+    if (!previewPlausibilityResult) {
+        return /* html */ `
+            <section class="tmPreviewCard"><h3>${UILANG.m('Plausibility check')}</h3><div class="tmPreviewCheckPending">${UILANG.m('Checking...')}</div></section>
+        `;
+    }
+    if (previewPlausibilityResult.skipped === true) {
+        return /* html */ `
+            <section class="tmPreviewCard"><h3>${UILANG.m('Plausibility check')}</h3><div class="tmPreviewCheckPending">${UILANG.m('Not checked automatically.')}</div></section>
+        `;
+    }
+    const issues = [];
+    if (previewPlausibilityResult.noPws) {
+        issues.push(student ? UILANG.m('No labels have been created for this test taker yet!') : UILANG.m('No passwords have been created for this test taker yet!'));
+    }
+    if (previewPlausibilityResult.pwsWithoutTests) {
+        issues.push(student ? UILANG.m('There are labels where no tests have been assigned!') : UILANG.m('There are passwords where no tests have been assigned!'));
+    }
+    if (previewPlausibilityResult.pwsWithDeletedTests) {
+        issues.push(UILANG.m('One or more assigned tests are not available anymore!'));
+    }
+    const body = issues.length ? `<div class="tmPreviewIssueList">${issues.map(issue => /* html */ `
+        <div class="tmPreviewIssue is-warning"><strong>${UILANG.m('Warning')}</strong><span>${ttPreviewEscape(issue)}</span></div>
+    `).join('')}</div>` : '<div class="tmPreviewCheckOk"><strong>' + UILANG.m('Plausibility check completed successfully!') + '</strong></div>';
+    return /* html */ `<section class="tmPreviewCard"><h3>${UILANG.m('Plausibility check')}</h3>${body}</section>`;
+}
+
+function ttPreviewAssignmentsCard() {
+    const passwords = serverData.testLevel.passwords || [];
+    const label = ttPreviewIsStudentLogin(serverData.testLevel) ? UILANG.m('Labels and connected tests') : UILANG.m('Passwords and connected tests');
+    const body = passwords.length ? passwords.map((password, index) => {
+        const tests = Array.isArray(password.structureResolved) ? password.structureResolved : [];
+        const subline = ttPreviewPasswordSubline(password);
+        const testRows = tests.length ? tests.map((test, tIndex) => {
+            const testType = bulkTestType(test);
+            const typeLabel = {
+                linear: UILANG.m('Linear test'),
+                fluid: UILANG.m('Fluid test'),
+                mutation: UILANG.m('Mutation test')
+            }[testType];
+            const typeIcon = test.removed ? '' : /* html */ `
+                <img class="ttPreviewTestTypeIcon" src="../inc/filer/images/test${testType.charAt(0).toUpperCase() + testType.slice(1)}.png" alt="" title="${ttPreviewEscape(typeLabel)}" />
+            `;
+            return /* html */ `
+            <div class="tmPreviewStructureRow ttPreviewAssignmentTestRow ${test.removed ? 'is-removed' : ''}">
+                <div class="tmPreviewStructureNo">${tIndex + 1}</div>
+                <div class="tmPreviewStructureMain">
+                    <strong>${ttPreviewEscape(test.name || UILANG.m('Test has been deleted!'))}</strong>
+                    <span>ID: ${ttPreviewEscape(test.id || '')}</span>
+                </div>
+                <div class="tmPreviewStructureScore">${test.removed ? UILANG.m('missing') : typeIcon}</div>
+            </div>
+        `;
+        }).join('') : `<div class="tmPreviewEmpty">${UILANG.m('No test assigned yet.')}</div>`;
+        return /* html */ `
+            <div class="ttPreviewPassGroup">
+                <div class="ttPreviewPassHeader">
+                    <div><strong>${ttPreviewEscape(ttPreviewPasswordTitle(password, index))}</strong>${subline ? `<span>${ttPreviewEscape(subline)}</span>` : ''}</div>
+                    <em>ID: ${ttPreviewEscape(password.id)}</em>
+                </div>
+                <div class="ttPreviewPassTests">${testRows}</div>
+            </div>
+        `;
+    }).join('') : `<div class="tmPreviewEmpty">${ttPreviewIsStudentLogin(serverData.testLevel) ? UILANG.m('No labels have been created for this test taker yet!') : UILANG.m('No passwords have been created for this test taker yet!')}</div>`;
+    return /* html */ `
+        <section class="tmPreviewCard ttPreviewAssignmentCard">
+            <h3>${label}</h3>
+            <div class="ttPreviewAssignmentList">${body}</div>
+        </section>
+    `;
+}
+
+function ttPreviewProgressBar(value) {
+    const val = Math.max(0, Math.min(100, Number(value) || 0));
+    return /* html */ `
+        <div class="tmResultMiniProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${val}" aria-label="${UILANG.m('Progress')}">
+            <div class="tmResultMiniProgressFill" style="width:${val}%"></div>
+            <div class="tmResultMiniProgressLabel">${val}%</div>
+        </div>
+    `;
+}
+
+function ttPreviewResultTestsCard() {
+    const stats = serverData.testLevel.previewResultStats || {};
+    const tests = Array.isArray(stats.resultTests) ? stats.resultTests : [];
+    const isTemplate = serverData.testLevel && serverData.testLevel.template === 'template';
+    const body = tests.length ? tests.map(test => {
+        const passwords = !isTemplate && Array.isArray(test.passwords) ? test.passwords.join(', ') : '';
+        const datasetCount = Number(test.datasetCount || 0);
+        const datasets = isTemplate ? ` | ${datasetCount} ${datasetCount === 1 ? UILANG.m('dataset') : UILANG.m('datasets')}` : '';
+        const progressValue = isTemplate ? test.avgProgress : test.maxProgress;
+        const deletedHint = isTemplate && test.deletedFromTemplate
+            ? `<span class="ttPreviewTemplateHint">${UILANG.m('Test removed from template')}</span>`
+            : '';
+        return /* html */ `
+            <div class="ttPreviewResultRow">
+                <div class="ttPreviewResultMain">
+                    <strong>${ttPreviewEscape(test.testName || UILANG.m('Test has been deleted!'))}</strong>
+                    <span>ID: ${ttPreviewEscape(test.testId || '')}${passwords ? ' | ' + ttPreviewEscape(passwords) : ''}${datasets}</span>
+                    ${deletedHint}
+                    <em>${UILANG.m('Last activity')}: ${ttPreviewEscape(ttPreviewFormatSqlDateTime(test.lastActivity))}</em>
+                </div>
+                <div class="ttPreviewResultProgress">
+                    ${isTemplate ? `<div class="ttPreviewProgressCaption">${UILANG.m('Average progress')}</div>` : ''}
+                    ${ttPreviewProgressBar(progressValue)}
+                </div>
+            </div>
+        `;
+    }).join('') : `<div class="tmPreviewEmpty">${UILANG.m('No results collected yet.')}</div>`;
+    return /* html */ `
+        <section class="tmPreviewCard ttPreviewResultsCard">
+            <h3>${UILANG.m('Results collected')}</h3>
+            ${ttPreviewTemplateDatasetSummary()}
+            <div class="tmPreviewStructureSummary"><strong>${UILANG.m('Tests with results')}</strong><span>${Number(stats.total_result_tests || tests.length)}</span></div>
+            <div class="ttPreviewResultList">${body}</div>
+        </section>
+    `;
+}
+
+function ttPreviewTemplateDatasetSummary() {
+    if (!serverData.testLevel || serverData.testLevel.template !== 'template') return '';
+    const summary = serverData.testLevel.templateCloneSummary || {};
+    return /* html */ `
+        <div class="tmPreviewTemplateDatasetSummary">
+            <div><span>${UILANG.m('Datasets recorded')}</span><strong>${Number(summary.total || 0)}</strong></div>
+            <div><span>${UILANG.m('Completed datasets')}</span><strong>${Number(summary.completed || 0)}</strong></div>
+            <div><span>${UILANG.m('Average progress')}</span><strong>${Number(summary.avgProgress || 0)}%</strong></div>
+            <div><span>${UILANG.m('Last activity')}</span><strong>${ttPreviewEscape(ttPreviewFormatSqlDateTime(summary.lastActivity))}</strong></div>
+        </div>
+    `;
+}
+
+function ttShowBrowsePreviewSection() {
+    gui.s10.insertAfter(gui.s1);
+    gui.s2.stop(true, true).addClass('ttPreviewCollapsedSection').hide();
+    gui.s3.stop(true, true).addClass('ttPreviewCollapsedSection').hide();
+    gui.s10.stop(true, true).removeClass('ttPreviewCollapsedSection').show();
+}
+
+function ttRestoreEditSections() {
+    gui.s2.stop(true, true).removeClass('ttPreviewCollapsedSection');
+    gui.s3.stop(true, true).removeClass('ttPreviewCollapsedSection');
+    gui.s10.stop(true, true).hide();
+}
+
+function renderTesteePreviewLoading() {
+    $('#testeePreviewContent').html('<div class="tmPreviewLoading">' + UILANG.m('Loading preview...') + '</div>');
+}
+
+function renderTesteePreview() {
+    if (!serverData.testLevel || selection.length !== 1 || !['testee', 'template', 'cloned'].includes(selection[0].type)) {
+        $('#testeePreviewContent').html('<div class="tmPreviewBlank">' + UILANG.m('Select a test taker to show the preview.') + '</div>');
+        return;
+    }
+    const login = serverData.testLevel;
+    const typeInfo = ttPreviewLoginTypeInfo(login);
+    const canEdit = !!(window.permList && permList[selection[0].dbId] && permList[selection[0].dbId].editSelection === true);
+    const editLabel = ttEditTesteeLabel(login, selection[0]);
+    const editAction = canEdit ? `<button type="button" id="ttPreviewEditButton" class="tmPreviewEditButton">${editLabel}</button>` : `<div class="tmPreviewReadOnly">${UILANG.m('Read only')}</div>`;
+    const html = /* html */ `
+        <div class="tmPreview ttPreview">
+            <div class="tmPreviewHeroSticky">
+            <div class="tmPreviewHero ttPreviewHero ttType-${typeInfo.typeClass}">
+                <div class="tmPreviewTypeIcon"><img src="${typeInfo.icon}" alt="" /></div>
+                <div class="tmPreviewHeroMain">
+                    <div class="tmPreviewName">${ttPreviewEscape(login.name)}</div>
+                    <div class="tmPreviewMeta">
+                        <span>ID: ${ttPreviewEscape(login.id)}</span>
+                        <span>${ttPreviewEscape(typeInfo.label)}</span>
+                    </div>
+                </div>
+                <div class="tmPreviewActions"><div class="tmPreviewActionRow">${editAction}</div></div>
+            </div>
+            </div>
+            <div class="tmPreviewBody">
+            <div class="tmPreviewGrid ttPreviewGrid">
+                <div class="tmPreviewColumn">
+                    ${ttPreviewSettingsCard()}
+                    ${ttPreviewSpecialConditionsCard()}
+                    ${ttPreviewMetaTagsCard()}
+                    ${ttPreviewPlausibilityCard()}
+                </div>
+                <div class="tmPreviewColumn ttPreviewRightColumn">
+                    ${ttPreviewResultTestsCard()}
+                    ${ttPreviewAssignmentsCard()}
+                </div>
+            </div>
+            </div>
+        </div>
+    `;
+    ttShowBrowsePreviewSection();
+    $('#testeePreviewContent').html(html);
+    $('#ttPreviewEditButton').on('click', function() { editSelection('preview'); });
+    ttPreviewAdjustAssignmentHeight();
+}
+
+function renderTemplateCloneList() {
+    const box = getTemplateCloneBox();
+    const list = box.find('#templateCloneList');
+    if (!serverData.testLevel || serverData.testLevel.template !== 'template') {
+        resetTemplateCloneBoxSizing();
+        box.detach();
+        list.empty();
+        window.requestAnimationFrame(resetTemplateCloneBoxSizing);
+        return;
+    }
+
+    if (box.parent().length === 0) box.insertAfter('#box_assignedTests');
+    box.show();
+    syncTemplateDatasetLayout();
+    window.requestAnimationFrame(syncTemplateDatasetLayout);
+    const summary = serverData.testLevel.templateCloneSummary || {};
+    updateTemplateClonePanelText(Number(summary.total || 0));
+    const clones = Array.isArray(summary.clones) ? summary.clones : [];
+    if (clones.length === 0) {
+        list.empty();
+        return;
+    }
+
+    const rows = clones.map(clone => {
+        const tests = renderTemplateCloneTestDetails(clone.tests);
+        let activityLabel;
+        if (Number(clone.activityRows || 0) > 0) {
+            activityLabel = UILANG.m('Last activity') + ': ' + ttPreviewFormatSqlDateTime(clone.lastActivity);
+        } else if (clone.createdAt) {
+            activityLabel = UILANG.m('Logged in') + ': ' + ttPreviewFormatSqlDateTime(clone.createdAt) + ' · ' + UILANG.m('Test not started');
+        } else {
+            activityLabel = UILANG.m('Login time not available') + ' · ' + UILANG.m('Test not started');
+        }
+        return /* html */ `
+            <div class="tmTemplateCloneRow" data-clone-id="${ttPreviewEscape(clone.id)}">
+                <div class="tmTemplateCloneMain">
+                    <strong>${ttPreviewEscape(clone.name)}</strong>
+                    <em>${ttPreviewEscape(activityLabel)}</em>
+                </div>
+                <div class="tmTemplateCloneStats">
+                    <div class="tmTemplateCloneTestsToggle" role="button" tabindex="0" title="${UILANG.m('Tests with data')}"><span>${UILANG.m('Tests')}</span><strong>${Number(clone.testsWithData || 0)}</strong></div>
+                    <div><span>${UILANG.m('Avg. progress')}</span><strong>${Number(clone.avgProgress || 0)}%</strong></div>
+                    <div><span>${UILANG.m('Max.')}</span><strong>${Number(clone.maxProgress || 0)}%</strong></div>
+                </div>
+                <button type="button" class="tmTemplateCloneDelete" data-clone-id="${ttPreviewEscape(clone.id)}" title="${UILANG.m('Delete')}"></button>
+                ${tests}
+            </div>
+        `;
+    }).join('');
+    list.html(rows);
+    $('.tmTemplateCloneTestsToggle').on('click keydown', function (event) {
+        if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        $(this).closest('.tmTemplateCloneRow').toggleClass('is-open');
+    });
+    $('.tmTemplateCloneDelete').on('click', function () {
+        deleteTemplateClone(Number($(this).data('clone-id')));
+    });
+}
+
+function renderTemplateCloneTestDetails(tests) {
+    const testRows = Array.isArray(tests) ? tests : [];
+    if (testRows.length === 0) {
+        return `<div class="tmTemplateCloneTestsDetails"><em>${UILANG.m('No tests with data.')}</em></div>`;
+    }
+    const rows = testRows.map(test => {
+        return /* html */ `
+            <div class="tmTemplateCloneTestItem">
+                <strong>${ttPreviewEscape(test.name || UILANG.m('Test has been deleted!'))}</strong>
+                <span>ID: ${ttPreviewEscape(test.id || '')} | ${UILANG.m('Max.')}: ${Number(test.maxProgress || 0)}% | ${UILANG.m('Last activity')}: ${ttPreviewEscape(ttPreviewFormatSqlDateTime(test.lastActivity))}</span>
+            </div>
+        `;
+    }).join('');
+    return `<div class="tmTemplateCloneTestsDetails">${rows}</div>`;
+}
+
+function getTemplateCloneBox() {
+    if (templateCloneBoxElement && templateCloneBoxElement.length > 0) return templateCloneBoxElement;
+    templateCloneBoxElement = $('#box_templateClones');
+    return templateCloneBoxElement;
+}
+
+function updateTemplateClonePanelText(datasetCount) {
+    const label = datasetCount === 1 ? UILANG.m('dataset recorded') : UILANG.m('datasets recorded');
+    getTemplateCloneBox().find('#templateClonesTbText').html(datasetCount + ' ' + label);
+    getTemplateCloneBox().find('#templateClonesDeleteAll').prop('disabled', datasetCount === 0);
+    if (selection.length === 1 && serverData.testLevel && serverData.testLevel.template === 'template') {
+        updateResetResultsAvailability(datasetCount > 0);
+    }
+}
+
+function updateResetResultsAvailability(hasResultsOverride) {
+    if (selection.length !== 1 || !serverData.testLevel || selection[0].type === 'folder') return;
+    const itemPermissions = window.permList && permList[selection[0].dbId];
+    const canResetResults = !!(itemPermissions && itemPermissions.resetResultsTestee === true);
+    const hasResults = typeof hasResultsOverride === 'boolean' ? hasResultsOverride :
+        (serverData.testLevel.template === 'template'
+            ? Number(serverData.testLevel.templateCloneSummary && serverData.testLevel.templateCloneSummary.total || 0) > 0
+            : Array.isArray(serverData.testLevel.activityData) && serverData.testLevel.activityData.length > 0);
+    if (canResetResults && hasResults) {
+        buttons.resetResultsTestee.enable();
+        buttons.resetTestee.enable();
+    } else {
+        buttons.resetResultsTestee.disable();
+        buttons.resetTestee.disable();
+    }
+}
+
+function syncTemplateDatasetLayout() {
+    if (!serverData.testLevel || serverData.testLevel.template !== 'template') return;
+    const box = getTemplateCloneBox();
+    if (box.parent().length === 0) return;
+    const passwordTitleTop = $('#title_passwords').offset() ? $('#title_passwords').offset().top : 0;
+    const assignedTitleTop = $('#title_assignedTests').offset() ? $('#title_assignedTests').offset().top : 0;
+    const boxTopMargin = Math.round(parseFloat($('#box_assignedTests').css('margin-top')) || 24);
+    const boxBottomMargin = Math.round(parseFloat($('#box_assignedTests').css('margin-bottom')) || 0);
+    const assignedHeight = Math.round(passwordTitleTop - assignedTitleTop - boxTopMargin - boxBottomMargin);
+    const passwordBoxHeight = Math.round($('#box_passwords').outerHeight() || 0);
+    if (!assignedHeight || !passwordBoxHeight || assignedHeight < 120 || passwordBoxHeight < 120) return;
+    gui.s3.css('min-height', `${assignedHeight + passwordBoxHeight + (boxTopMargin * 2)}px`);
+    $('#box_assignedTests').css({
+        'box-sizing': 'border-box',
+        flex: `0 0 ${assignedHeight}px`,
+        '-webkit-flex': `0 0 ${assignedHeight}px`,
+        height: `${assignedHeight}px`,
+        'min-height': `${assignedHeight}px`,
+        'max-height': `${assignedHeight}px`
+    });
+    box.css({
+        'box-sizing': 'border-box',
+        flex: `0 0 ${passwordBoxHeight}px`,
+        '-webkit-flex': `0 0 ${passwordBoxHeight}px`,
+        height: `${passwordBoxHeight}px`,
+        'min-height': `${passwordBoxHeight}px`,
+        'max-height': `${passwordBoxHeight}px`
+    });
+}
+
+function getLoginSettingsColumnHeight() {
+    const visibleHeight = Math.round(gui.s2.outerHeight() || 0);
+    const minHeight = parseInt(gui.s2.css('min-height'), 10) || 0;
+    let storedHeight = 0;
+    gui.s2.children('.jsFlexBox').each(function () {
+        storedHeight += Number($(this).data('height') || 0);
+    });
+    return Math.max(visibleHeight, minHeight, storedHeight, 530);
+}
+
+function resetTemplateCloneBoxSizing() {
+    const box = getTemplateCloneBox();
+    gui.boxes.assignedTests.setFlex(1);
+    gui.s3.css('min-height', `${getLoginSettingsColumnHeight()}px`);
+    $('#box_assignedTests').css({
+        'box-sizing': '',
+        height: '',
+        'min-height': '450px',
+        'max-height': ''
+    });
+    box.css({
+        'box-sizing': '',
+        flex: '0 0 0px',
+        '-webkit-flex': '0 0 0px',
+        height: '0',
+        'min-height': '0',
+        'max-height': '0'
+    });
+}
+
+function deleteTemplateClone(cloneId) {
+    if (!serverData.testLevel || serverData.testLevel.template !== 'template' || !cloneId) return;
+    const clones = serverData.testLevel.templateCloneSummary && Array.isArray(serverData.testLevel.templateCloneSummary.clones)
+        ? serverData.testLevel.templateCloneSummary.clones
+        : [];
+    const clone = clones.find(item => String(item.id) === String(cloneId));
+    const cloneName = clone && clone.name ? clone.name : cloneId;
+    const dialogData = {
+        buttons: [{
+            label: UILANG.m('cancel'), 'cancel': true, 'default': true, value: 'cancel'
+        }, {
+            label: UILANG.m('Delete'), value: 'ok'
+        }],
+        contents: '<div class="tmActionConfirm tmActionConfirm-warning">' +
+            '<strong>' + UILANG.m('Ready to delete') + '</strong>' +
+            '<span>' + UILANG.m('This recorded dataset will be deleted.') + '</span>' +
+            '<div class="tmActionConfirmMeta"><span>' + UILANG.m('dataset') + '</span>' +
+                '<strong>' + ttPreviewEscape(cloneName) + '</strong></div>' +
+            '<p class="tmActionConfirmNote">' + UILANG.m('This action is irreversible.') + '</p>' +
+        '</div>',
+        returnPromise: true,
+        width: 520,
+        title: UILANG.m('Delete dataset?'),
+        type: 'warning'
+    };
+    showDialog('deleteTemplateCloneDialog', dialogData).then((res) => {
+        if (res.button === 'ok') {
+            startAjax('deleteTemplateClone', {
+                id: serverData.testLevel.id,
+                cloneId: cloneId,
+                location: loc.folder
+            });
+        }
+    });
+}
+
+function ttPreviewAdjustAssignmentHeight() {
+    $('.ttPreviewAssignmentCard').removeClass('is-scrollable').css('height', '');
+}
+
+function startTesteePreviewPlausibilityCheck() {
+    if (!serverData.testLevel || mode !== 'browsing') return;
+    pendingPreviewCheckToken = ++ajaxRequestToken;
+    startAjax('plausibilityCheck', {
+        id: serverData.testLevel.id,
+        _requestToken: pendingPreviewCheckToken
+    });
+}
+
 function buildExampleFileCSV() {
     const writeArray = [];
     if(fileWizardType === 'student'){
-        writeArray.push(['testtaker', 'authentication', 'password', 'label', 'tag', 'test-id', 'subfolder', 'displayname', 'metakey1', 'metavalue1', 'metakey2', 'metavalue2']);
-        writeArray.push(['Tester1', 'direct', 'yk4565juia', 'English test', 'Just%20a%20test%20tag', '3001\\3005\\3008', '', 'Anne Muller' , 'School', 'ABC', 'Class', '9a']);
-        writeArray.push(['Tester2', 'SAML', '', 'English test', '', '3001', 'subfolder for tester', 'Luc Wagner' , 'School', 'DEF', 'Class', '9b']);
-        writeArray.push(['Tester3', 'LDAP', '', 'German test', 'tags%20are%20optional', '', 'subfolder for tester\\secondsubfolder', '', 'Company', 'XYZ', '', '']);
-        writeArray.push(['Tester1', 'direct', 'yk4565juia', 'French test', '', '4001\\4002', '', 'Anne Muller' , 'School', 'ABC', 'Class', '9a']);
+        writeArray.push(['testtaker', 'authentication', 'password', 'label', 'tag', 'test-id', 'subfolder', 'displayname', 'metakey1', 'metavalue1', 'metatag2']);
+        writeArray.push(['Tester1', 'direct', 'yk4565juia', 'English test', 'Just%20a%20test%20tag', '3001\\3005\\3008', '', 'Anne Muller' , 'School', 'ABC', 'NeedsReview']);
+        writeArray.push(['Tester2', 'SAML', '', 'English test', '', '3001', 'subfolder for tester', 'Luc Wagner' , 'School', 'DEF', 'NeedsReview']);
+        writeArray.push(['Tester3', 'LDAP', '', 'German test', 'tags%20are%20optional', '', 'subfolder for tester\\secondsubfolder', '', 'Company', 'XYZ', 'Remote']);
+        writeArray.push(['Tester1', 'direct', 'yk4565juia', 'French test', '', '4001\\4002', '', 'Anne Muller' , 'School', 'ABC', 'NeedsReview']);
     } else {
-        writeArray.push(['testtaker', 'password', 'tag', 'test-id', 'subfolder', 'displayname', 'metakey1', 'metavalue1', 'metakey2', 'metavalue2']);
-        writeArray.push(['Tester1', 'xyZh75f', 'Just%20a%20test%20tag', '3001\\3005\\3008', '', 'Anne Muller' , 'School', 'ABC', 'Class', '9a']);
-        writeArray.push(['Tester2', '89hgZ75', '', '3001', 'subfolder for tester', 'Luc Wagner' , 'School', 'DEF', 'Class', '9b']);
-        writeArray.push(['Tester3', 'HNBJsge7', 'tags%20are%20optional', '', 'subfolder for tester\\secondsubfolder', '', 'Company', 'XYZ', '', '']);
-        writeArray.push(['Tester1', 'xXFf736', '', '4001\\4002', '', 'Anne Muller' , 'School', 'ABC', 'Class', '9a']);
+        writeArray.push(['testtaker', 'password', 'tag', 'test-id', 'subfolder', 'displayname', 'metakey1', 'metavalue1', 'metatag2']);
+        writeArray.push(['Tester1', 'xyZh75f', 'Just%20a%20test%20tag', '3001\\3005\\3008', '', 'Anne Muller' , 'School', 'ABC', 'NeedsReview']);
+        writeArray.push(['Tester2', '89hgZ75', '', '3001', 'subfolder for tester', 'Luc Wagner' , 'School', 'DEF', 'NeedsReview']);
+        writeArray.push(['Tester3', 'HNBJsge7', 'tags%20are%20optional', '', 'subfolder for tester\\secondsubfolder', '', 'Company', 'XYZ', 'Remote']);
+        writeArray.push(['Tester1', 'xXFf736', '', '4001\\4002', '', 'Anne Muller' , 'School', 'ABC', 'NeedsReview']);
     }
     //Write data to array
     const csvString = writeArray.join("%0A");
@@ -2666,23 +4082,32 @@ function buildExampleFileCSV() {
 /* data fields */
 function fillDataFields(fillMode) {
     fillMode = fillMode || mode;
+    $('#box_assignedTests').toggleClass(
+        'tmTemplateAssignedTests',
+        fillMode === 'editTest' && serverData.testLevel && serverData.testLevel.template === 'template'
+    );
     if (fillMode === 'editTest') {
         //loginSettings
         $('#loginSettingsPanel').empty();
         $('#loginSettings').empty();
-        $('#loginSettingsPanel').css('background-color', '#E5E5E5');
+        $('#loginSettingsPanel').css({
+            'background-color': '#eaf2f7',
+            'color': '#26394a'
+        });
 
         //display name - valid for all types
         let dName;
         if (serverData.testLevel.displayName === null || serverData.testLevel.displayName === '') {
             dName = '<span class="notSet">' + UILANG.m("- No display name -") + '</span>';
         } else {
-            dName = serverData.testLevel.displayName;
+            dName = ttPreviewEscape(serverData.testLevel.displayName);
         }
 
         $('#loginSettings').append('<div class="inPutFrame"><div class="inPutText">' + dName + '</div><div id= "disName" class="inPutDesc">' + UILANG.m("Display name") + '</div></div>');
         $('#disName').on('click', editDisName);
         $('.inPutText').on('click', editDisName);
+
+        let passwordDisplayItems = serverData.testLevel.passwords;
 
         //passwords or labels display
         if (Array.isArray(serverData.testLevel.passwords)) {
@@ -2698,43 +4123,60 @@ function fillDataFields(fillMode) {
         switch (serverData.testLevel.template) {
             case 'template':
                 $('#loginSettingsPanel').html('<div id="loginSettingsPanelText">' + UILANG.m("Test taker template") + '</div>');
-                $('#loginSettingsPanelText').css('color', '#d28383');
+                $('#loginSettingsPanel').css({
+                    'background-color': '#fff7c8',
+                    'color': '#26394a'
+                });
                 buttons.changeLoginType.disable();
+                renderTemplateCloneList();
                 break;
             case 'cloned':
                 $('#loginSettingsPanel').html('<div id="loginSettingsPanelText">' + UILANG.m("Cloned from template") + '</div>');
-                $('#loginSettingsPanelText').css('color', '#aaa');
+                $('#loginSettingsPanel').css({
+                    'background-color': '#f3f5f7',
+                    'color': '#26394a'
+                });
                 $('#loginSettingsPanelText').css('font-style', 'italic');
                 buttons.changeLoginType.disable();
                 break;
             default:
+                renderTemplateCloneList();
                 buttons.changeLoginType.enable();
                 switch (serverData.testLevel.loginType) {
                     case 'directPass':
                         $('#loginSettingsPanel').html('<div id="loginSettingsPanelText">' + UILANG.m("Student login (Password)") + '</div>');
-                        $('#loginSettingsPanel').css('background-color', '#00B00D');
-                        $('#loginSettingsPanel').css('color', '#fff');
+                        $('#loginSettingsPanel').css({
+                            'background-color': '#ddf2e2',
+                            'color': '#26394a'
+                        });
                         // Create password field
-                        $('#loginSettings').append('<div class="inPutDivider"></div><div class="inPutFrame"><div class="inPutTextPwd">' + serverData.testLevel.password + '</div><div id="editDirectPassword" class="inPutDesc">'+UILANG.m("Direct password")+'</div></div>');
+                        $('#loginSettings').append('<div class="inPutDivider"></div><div class="inPutFrame"><div class="inPutTextPwd">' + ttPreviewEscape(serverData.testLevel.password) + '</div><div id="editDirectPassword" class="inPutDesc">'+UILANG.m("Direct password")+'</div></div>');
                         $('#editDirectPassword').on('click', editDirectPass);
                         $('.inPutTextPwd').on('click', editDirectPass);
-                        prepData(serverData.testLevel.passwords);
+                        passwordDisplayItems = prepData(serverData.testLevel.passwords);
                         break;
                     case 'LDAP':
                         $('#loginSettingsPanel').html('<div id="loginSettingsPanelText">' + UILANG.m("Student login (LDAP)") + '</div>');
-                        $('#loginSettingsPanel').css('background-color', '#53BBE7');
-                        $('#loginSettingsPanel').css('color', '#fff');
-                        prepData(serverData.testLevel.passwords);
+                        $('#loginSettingsPanel').css({
+                            'background-color': '#dceff8',
+                            'color': '#26394a'
+                        });
+                        passwordDisplayItems = prepData(serverData.testLevel.passwords);
                         break;
                     case 'SAML':
                         $('#loginSettingsPanel').html('<div id="loginSettingsPanelText">' + UILANG.m("Student login (SAML)") + '</div>');
-                        $('#loginSettingsPanel').css('background-color', '#C42501');
-                        $('#loginSettingsPanel').css('color', '#fff');
-                        prepData(serverData.testLevel.passwords);
+                        $('#loginSettingsPanel').css({
+                            'background-color': '#f2d4d8',
+                            'color': '#26394a'
+                        });
+                        passwordDisplayItems = prepData(serverData.testLevel.passwords);
                         break;
                     default:
                         $('#loginSettingsPanel').html('<div id="loginSettingsPanelText">' + UILANG.m("Standard login") + '</div>');
-                        $('#loginSettingsPanelText').css('color', '#666');
+                        $('#loginSettingsPanel').css({
+                            'background-color': '#eaf2f7',
+                            'color': '#26394a'
+                        });
                         prepDataStandard(serverData.testLevel.passwords);
                 }
         }
@@ -2749,20 +4191,20 @@ function fillDataFields(fillMode) {
 
         function prepData(passwords) {
             let counter = 1;
-            passwords.forEach(item => {
-                // Check if item.label is null or an empty string
-                if (item.label === null || item.label === '') {
-                    item.label = UILANG.m("Label") + ' ' + counter;
+            return passwords.map(item => {
+                const displayItem = $.extend(true, {}, item);
+                let displayLabel = displayItem.label;
+                if (displayLabel === null || displayLabel === '') {
+                    displayLabel = UILANG.m("Label") + ' ' + counter;
                     counter++;
                 }
-                // Swap the values of 'name' and 'label'
-                let temp = item.name;
-                item.name = item.label;
-                item.label = temp;
+                displayItem.name = displayLabel;
+                displayItem.label = item.name;
+                return displayItem;
             });
         }
 
-        gui.passwords.setItems(serverData.testLevel.passwords);
+        gui.passwords.setItems(ttPreparePasswordListItems(passwordDisplayItems));
         if (stuLog) {
             $('#pwTbCopy').hide();
         } else {
@@ -2771,28 +4213,24 @@ function fillDataFields(fillMode) {
         }
 
         //metatags
-        gui.metaView.clearElements(true);
         const mtags = serverData.testLevel.metatags;
-        const sortedKeys = Object.keys(mtags).sort();
-        $.each(sortedKeys, function (key, value) {
-            const objInsert = {
-                metakey: value, metavalue: mtags[value], hiddenID: key
-            };
-            //add to structure list
-            gui.metaView.addElement(objInsert, true);
-        });
-
-        if (sortedKeys.length === 1) {
-            $(metaTbText).html(sortedKeys.length + ' ' + UILANG.m('meta tag'));
-        } else {
-            $(metaTbText).html(sortedKeys.length + '  ' + UILANG.m('meta tags'));
-        }
+        const sortedKeys = Object.keys(mtags).sort((a, b) => String(a).localeCompare(String(b), undefined, {sensitivity: 'base'}));
+        gui.metaView.setItems(mtags, true);
+        updateMetaTagCounter(metaTbText, sortedKeys.length);
     }
 }
 
 function setPasswordForLabel(sender, obj) {
     let setPass = false;
-    let formCont = '<span class="sublineDialog">' + UILANG.m('Initially, the system creates a password (cannot be empty). If <strong>Activate Password</strong> is selected, the user must enter it; otherwise, the system uses it internally to open a test.') + '</span><input type="text" id="dialogField1" style="width: 100%; margin-top: 10px;margin-bottom:10px;"><br /><div id="spContainer"></div>';
+    const originalPassword = String(obj.label || '');
+    let formCont = '<div class="tmDialogForm">' +
+        '<div class="tmDialogSwitchRow" id="spContainer"></div>' +
+        '<div class="tmDialogFormField" id="spPasswordField">' +
+            '<label for="dialogField1">' + UILANG.m('Password') + '</label>' +
+            '<span class="sublineDialog">' + UILANG.m('The user must enter this password to open a test.') + '</span>' +
+            '<input type="text" id="dialogField1">' +
+        '</div>' +
+    '</div>';
 
     let dialogData = {
         buttons: [{
@@ -2820,7 +4258,7 @@ function setPasswordForLabel(sender, obj) {
                         v['metadata']['pwReq'] = setPass;
                     }
                 });
-                gui.wpasswords.setItems(wizardData.pwds);
+                gui.wpasswords.setItems(ttPreparePasswordListItems(wizardData.pwds));
                 gui.wpasswords.setSelection([obj.id]);
                 if (stuLog || selHasStudent) {
                     if (wizardData.pwds.length === 1) {
@@ -2841,6 +4279,8 @@ function setPasswordForLabel(sender, obj) {
         }
     });
 
+    ttBindAllowedCharacters('#dialogField1', false);
+
     const setPassSwitch = insertToggleswitch('#spContainer', 'tsPass', UILANG.m('Activate Password'), {
         dataId: 'activePass', changeCallback: activePass
     });
@@ -2850,9 +4290,22 @@ function setPasswordForLabel(sender, obj) {
         setPassSwitch.reset(true);
         setPass = true;
     }
+    updatePasswordFieldVisibility();
 
     function activePass(sender, state) {
         setPass = state;
+        updatePasswordFieldVisibility();
+    }
+
+    function updatePasswordFieldVisibility() {
+        const passwordField = $('#dialogField1');
+        if (!setPass && String(passwordField.val() || '').trim() === '') {
+            // An inactive password requirement still retains its password. Restore
+            // the saved value so the mandatory-field state enables Save and an
+            // empty password can never be submitted while the field is hidden.
+            passwordField.val(originalPassword).trigger('input');
+        }
+        $('#spPasswordField').toggle(setPass);
     }
 }
 
@@ -2891,7 +4344,11 @@ function changeLoginType() {
         }],
         datafields: ['dialogField1', 'dialogField2'],
         focus: 'dialogField1',
-        contents: '<p>' + UILANG.m('Current login type:') + '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<strong>' + startString + '</strong></p><p>' + UILANG.m('Change login type to:') + '<br><div id="dialogField1"></div></p><p id="pwBlock">' + UILANG.m('Password:') + '<br><span class="sublineDialog">' + UILANG.m('(Password will be auto-generated if the input field is left empty!)') + '</span><input type="text" id="dialogField2" maxlength="200" style="width: 100%; margin-top: 10px;"></p>',
+        contents: '<div class="tmDialogForm">' +
+            '<div class="tmActionConfirmMeta"><span>' + UILANG.m('Current login type') + '</span><strong>' + startString + '</strong></div>' +
+            '<div class="tmDialogFormField"><label>' + UILANG.m('Change login type to') + '</label><div id="dialogField1"></div></div>' +
+            '<div class="tmDialogFormField" id="pwBlock"><label for="dialogField2">' + UILANG.m('Password') + '</label><span class="sublineDialog">' + UILANG.m('Password will be auto-generated if the input field is left empty.') + '</span><input type="text" id="dialogField2" maxlength="200"></div>' +
+        '</div>',
         title: UILANG.m('Change login type'),
         values: {
             dialogField2: passwd
@@ -2908,9 +4365,12 @@ function changeLoginType() {
         }
     });
 
+    ttBindAllowedCharacters('#dialogField2', false);
+
     if (startType !== 'directPass') $('#pwBlock').css('visibility', 'hidden');
 
     let changeType = {
+        theme: 'backend',
         onChange: changeTypeOpt, initialValue: startType, elements: [{
             value: 'local', label: UILANG.m('Standard login')
         }, {
@@ -2955,7 +4415,9 @@ function editDisName() {
             dialogField1: [dName]
         },
         focus: 'dialogField1',
-        contents: UILANG.m('Please enter or modify the display name of the login!') + '<input type="text" id="dialogField1" maxlength="200" style="width: 100%; margin-top: 10px;">',
+        contents: '<div class="tmDialogForm">' +
+            '<div class="tmDialogFormField"><label for="dialogField1">' + UILANG.m('Display name') + '</label><input type="text" id="dialogField1" maxlength="200"></div>' +
+        '</div>',
         values: {
             dialogField1: dName
         },
@@ -2987,7 +4449,9 @@ function editDirectPass() {
             'default': true,
             value: 'save'
         }],
-        contents: UILANG.m('Please enter or modify the direct password for the student login!') + '<input type="text" id="dialogField1" maxlength="200" style="width: 100%; margin-top: 10px;">',
+        contents: '<div class="tmDialogForm">' +
+            '<div class="tmDialogFormField"><label for="dialogField1">' + UILANG.m('Direct password') + '</label><input type="text" id="dialogField1" maxlength="200"></div>' +
+        '</div>',
         title: UILANG.m('Edit direct password'),
         datafields: ['dialogField1'],
         mandatory: ['dialogField1'],
@@ -3008,6 +4472,7 @@ function editDirectPass() {
             });
         }
     });
+    ttBindAllowedCharacters('#dialogField1', false);
 }
 
 function selectListBtnNewPw() {
@@ -3024,56 +4489,224 @@ function addQuickPassword() {
     });
 }
 
-function resetTestee(sender, button) {
-    if (!button) {
-        let message;
-        if (selection.length === 1 && selection[0].type !== 'folder') {
-            message = sf('<p>' + UILANG.m('Are you sure you want to reset <strong>all</strong> results of the test taker "%@"? This action is irreversible!') + '</p>', serverData.testLevel.name);
-        } else {
-            message = '<p>' + UILANG.m('Are you sure you want to reset <strong>all</strong> results of the selected test takers? This action is irreversible!') + '</p>';
+function showResetResultsOutcomeDialog(options) {
+    const deleted = options.deleted !== false;
+    const details = Array.isArray(options.details) ? options.details.filter(Boolean) : [];
+    const contents = '<div class="tmActionConfirm ' + (deleted ? 'tmActionConfirm-success' : 'tmActionConfirm-warning') + '">' +
+        '<div class="tmActionConfirmHeading"><strong>' + (deleted ? UILANG.m('Reset complete') : UILANG.m('Nothing was deleted')) + '</strong></div>' +
+        '<span>' + options.message + '</span>' +
+        details.map((detail) => '<p class="tmActionConfirmNote">' + detail + '</p>').join('') +
+    '</div>';
+    new nxDialog('resetResultsOutcome', {
+        title: deleted ? UILANG.m('Results reset') : UILANG.m('No matching results'),
+        type: deleted ? 'success' : 'warning',
+        width: 580,
+        contents: contents,
+        buttons: [{label: UILANG.m('OK'), value: 'ok', default: true, cancel: true}]
+    });
+}
+
+function resetTestee() {
+    let description;
+    const selectedTemplate = selection.length === 1 && selection[0].type !== 'folder' &&
+        serverData.testLevel && serverData.testLevel.template === 'template';
+    const selectionHasFolder = selection.some(item => item.type === 'folder');
+    const showTemplateHelp = selectedTemplate || selectionHasFolder || selection.some(item => item.type === 'template');
+    const showRegularHelp = !selectedTemplate && (selectionHasFolder || selection.some(item => item.type !== 'template' && item.type !== 'folder'));
+    if (selection.length === 1 && selection[0].type !== 'folder') {
+        description = selectedTemplate
+            ? sf(UILANG.m('Recorded datasets of the template "%@" will be deleted.'), escapeHtml(serverData.testLevel.name))
+            : sf(UILANG.m('Results of the test taker "%@" will be reset.'), escapeHtml(serverData.testLevel.name));
+    } else {
+        description = UILANG.m('Results of the selected test takers will be reset.');
+    }
+    const now = new Date();
+    const dateNow = ('0' + now.getDate()).slice(-2) + '.' + ('0' + (now.getMonth() + 1)).slice(-2) + '.' + now.getFullYear();
+    const hourOptions = Array.from({length: 24}, (_, hour) => {
+        const value = ('0' + hour).slice(-2);
+        return '<option value="' + value + '"' + (hour === now.getHours() ? ' selected' : '') + '>' + value + '</option>';
+    }).join('');
+    const minuteOptions = Array.from({length: 60}, (_, minute) => {
+        const value = ('0' + minute).slice(-2);
+        return '<option value="' + value + '"' + (minute === now.getMinutes() ? ' selected' : '') + '>' + value + '</option>';
+    }).join('');
+    const filterControls =
+        '<div class="tmResetFilter">' +
+            '<label for="resetScope">' + UILANG.m('Delete') + '</label>' +
+            '<select id="resetScope">' +
+                '<option value="all">' + UILANG.m('Everything') + '</option>' +
+                '<option value="before">' + UILANG.m('Before date and time') + '</option>' +
+                '<option value="after">' + UILANG.m('On or after date and time') + '</option>' +
+            '</select>' +
+            '<div id="resetCutoffField" class="tmResetCutoff" hidden>' +
+                '<label for="resetCutoffDate">' + UILANG.m('Date and time') + '</label>' +
+                '<div class="tmResetDateTime">' +
+                    '<input id="resetCutoffDate" type="text" inputmode="numeric" autocomplete="off" value="' + dateNow + '">' +
+                    '<select id="resetCutoffHour" aria-label="' + UILANG.m('Hour') + '">' + hourOptions + '</select>' +
+                    '<span aria-hidden="true">:</span>' +
+                    '<select id="resetCutoffMinute" aria-label="' + UILANG.m('Minute') + '">' + minuteOptions + '</select>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    const message = '<div class="tmActionConfirm tmActionConfirm-warning">' +
+        '<div class="tmActionConfirmHeading"><strong>' + UILANG.m('Ready to reset') + '</strong><span id="resetDateHelp"></span></div>' +
+        '<span>' + description + '</span>' +
+        filterControls +
+        '<p class="tmActionConfirmNote">' + UILANG.m('This action is irreversible.') + '</p>' +
+    '</div>';
+    let resetSubmitted = false;
+    const submitReset = function (values) {
+        if (resetSubmitted) return true;
+        const resetMode = values.resetScope || 'all';
+        let resetCutoff = null;
+        if (resetMode !== 'all') {
+            let cutoff = null;
+            try {
+                cutoff = $.datepicker.parseDate('dd.mm.yy', values.resetCutoffDate);
+                cutoff.setHours(Number(values.resetCutoffHour), Number(values.resetCutoffMinute), 0, 0);
+            } catch (error) {
+                cutoff = null;
+            }
+            if (!cutoff || Number.isNaN(cutoff.getTime())) {
+                window.setTimeout(function () {
+                    new nxDialog('resetDateRequired', {
+                        buttons: [{label: UILANG.m('OK'), 'cancel': true, 'default': true, value: 'ok'}],
+                        contents: UILANG.m('Please enter a valid date and time.'),
+                        title: UILANG.m('Date and time required'),
+                        type: 'warning'
+                    });
+                }, 0);
+                return false;
+            }
+            resetCutoff = Math.floor(cutoff.getTime() / 1000);
         }
-        const resetData = {
-            buttons: [{
-                label: UILANG.m('cancel'), 'cancel': true, 'default': true, value: 'cancel'
-            }, {
-                label: UILANG.m('Delete'), value: 'ok'
-            }],
-            contents: message,
-            width: 600,
-            callback: resetTestee,
-            title: UILANG.m('Reset test taker results?'),
-            icon: "../images/warning.png",
-            iconWidth: 64
-        };
-        new nxDialog('resetDialog', resetData, arguments);
-    }
-    if (button === 'ok') {
+        resetSubmitted = true;
         startAjax('resetResultsTestee', {
-            selection: selection
+            selection: selection,
+            resetMode: resetMode,
+            resetCutoff: resetCutoff
         });
+        return true;
+    };
+    const resetData = {
+        buttons: [{
+            label: UILANG.m('cancel'), 'cancel': true, 'default': true, value: 'cancel'
+        }, {
+            label: UILANG.m('Reset'), value: 'ok'
+        }],
+        contents: message,
+        datafields: ['resetScope', 'resetCutoffDate', 'resetCutoffHour', 'resetCutoffMinute'],
+        dataFormat: 'object',
+        callback: function (button, values) {
+            if (button !== 'ok') return;
+            submitReset(values);
+        },
+        width: 600,
+        title: UILANG.m('Reset test taker results?'),
+        type: 'warning'
+    };
+    const resetDialog = new nxDialog('resetDialog', resetData);
+    $('#resetDialog_button_1').on('click.resetFallback', function (event) {
+        if (!document.documentElement.contains(this)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const submitted = submitReset({
+            resetScope: $('#resetScope').val(),
+            resetCutoffDate: $('#resetCutoffDate').val(),
+            resetCutoffHour: $('#resetCutoffHour').val(),
+            resetCutoffMinute: $('#resetCutoffMinute').val()
+        });
+        if (submitted && window.nxDialogManager.instances.resetDialog) {
+            resetDialog.dismiss();
+        }
+    });
+    $('#resetScope').on('change', function () {
+        $('#resetCutoffField').prop('hidden', this.value === 'all');
+    });
+    $('#resetCutoffDate').datepicker({
+        dateFormat: 'dd.mm.yy',
+        firstDay: 1,
+        showOtherMonths: true,
+        selectOtherMonths: true,
+        beforeShow: function () {
+            $('#ui-datepicker-div').addClass('tmResetDatePicker');
+        },
+        onClose: function () {
+            $('#ui-datepicker-div').removeClass('tmResetDatePicker');
+        },
+        onSelect: function () {
+            $(this).datepicker('hide').trigger('blur');
+        }
+    });
+    const templateHelpText = UILANG.m('Datasets are filtered by when the dataset login was created. This includes datasets whose test was never started.');
+    const regularHelpText = UILANG.m('Each complete test result and its scoring data are filtered by the last recorded activity. A test started before the selected date but continued on or after it is retained when deleting results from before that date.');
+    let helpTitle;
+    let helpContent;
+    if (showTemplateHelp && showRegularHelp) {
+        helpTitle = UILANG.m('Date filtering');
+        helpContent = OasysHelp.layout({items: [{
+            title: UILANG.m('Template datasets'), text: templateHelpText
+        }, {
+            title: UILANG.m('Regular and student logins'), text: regularHelpText
+        }]});
+    } else if (showTemplateHelp) {
+        helpTitle = UILANG.m('Date filtering for template datasets');
+        helpContent = OasysHelp.layout({lead: templateHelpText});
+    } else {
+        helpTitle = UILANG.m('Date filtering for regular and student logins');
+        helpContent = OasysHelp.layout({lead: regularHelpText});
     }
+    new OasysHelp('resetDateHelp', {
+        size: '16px',
+        maxWidth: '460px',
+        linkDecoration: 'none',
+        title: helpTitle,
+        htmlContent: helpContent
+    });
 }
 
 function resetPassword(sender, button) {
     if (!button) {
         let message;
-        if(stuLog){
-            message = sf('<p>' + UILANG.m('Are you sure you want to reset <strong>all</strong> results of the label "%@"? This action is irreversible!') + '</p>', serverData.testLevel.activePass.label);
+        if (serverData.testLevel && serverData.testLevel.template === 'template') {
+            message = sf(
+                '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                    '<strong>' + UILANG.m('Ready to reset') + '</strong>' +
+                    '<span>' + UILANG.m('Recorded template datasets for "%@" will be reset.') + '</span>' +
+                    '<p class="tmActionConfirmNote">' + UILANG.m('This action is irreversible.') + '</p>' +
+                '</div>',
+                escapeHtml(serverData.testLevel.activePass.name)
+            );
+        } else if(stuLog){
+            message = sf(
+                '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                    '<strong>' + UILANG.m('Ready to reset') + '</strong>' +
+                    '<span>' + UILANG.m('All results of the label "%@" will be reset.') + '</span>' +
+                    '<p class="tmActionConfirmNote">' + UILANG.m('This action is irreversible.') + '</p>' +
+                '</div>',
+                escapeHtml(serverData.testLevel.activePass.label)
+            );
         } else {
-            message = sf('<p>' + UILANG.m('Are you sure you want to reset <strong>all</strong> results of the password "%@"? This action is irreversible!') + '</p>', serverData.testLevel.activePass.name);
+            message = sf(
+                '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                    '<strong>' + UILANG.m('Ready to reset') + '</strong>' +
+                    '<span>' + UILANG.m('All results of the password "%@" will be reset.') + '</span>' +
+                    '<p class="tmActionConfirmNote">' + UILANG.m('This action is irreversible.') + '</p>' +
+                '</div>',
+                escapeHtml(serverData.testLevel.activePass.name)
+            );
         }
         const resetData = {
             buttons: [{
                 label: UILANG.m('cancel'), 'cancel': true, 'default': true, value: 'cancel'
             }, {
-                label: UILANG.m('Delete'), value: 'ok'
+                label: UILANG.m('Reset'), value: 'ok'
             }],
             contents: message,
             width: 600,
             callback: resetPassword,
             title: UILANG.m('Reset testee results?'),
-            icon: "../images/warning.png",
-            iconWidth: 64
+            type: 'warning'
         };
         new nxDialog('resetDialog', resetData, arguments);
     }
@@ -3122,27 +4755,51 @@ function resetTest(afId, id, fieldtype, afObject, sender, testName) {
 }
 
 function proceedTestReset(afObject, button) {
+    afObject = afObject || {};
     if (!button) {
-        const message = sf('<p>' + UILANG.m('Are you sure you want to reset <strong>all</strong> results of the test "%@"? This action is irreversible!') + '</p>', afObject.testName);
+        const message = serverData.testLevel && serverData.testLevel.template === 'template'
+            ? sf(
+                '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                    '<strong>' + UILANG.m('Ready to reset') + '</strong>' +
+                    '<span>' + UILANG.m('Recorded template datasets for the test "%@" will be reset.') + '</span>' +
+                    '<p class="tmActionConfirmNote">' + UILANG.m('This action is irreversible.') + '</p>' +
+                '</div>',
+                escapeHtml(afObject.testName)
+            )
+            : sf(
+                '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                    '<strong>' + UILANG.m('Ready to reset') + '</strong>' +
+                    '<span>' + UILANG.m('All results of the test "%@" for this user will be reset.') + '</span>' +
+                    '<p class="tmActionConfirmNote">' + UILANG.m('This action is irreversible.') + '</p>' +
+                '</div>',
+                escapeHtml(afObject.testName)
+            );
         const resetData = {
             buttons: [{
                 label: UILANG.m('cancel'), 'cancel': true, 'default': true, value: 'cancel'
             }, {
-                label: UILANG.m('Delete'), value: 'ok'
+                label: UILANG.m('Reset'), value: 'ok'
             }],
             contents: message,
             width: 600,
             callback: proceedTestReset,
             title: UILANG.m('Reset test taker results?'),
-            icon: "../images/warning.png",
-            iconWidth: 64
+            type: 'warning'
         };
         new nxDialog('resetDialog', resetData, arguments);
     }
     if (button === 'ok') {
-        startAjax('resetResultsTest', {
-            testee: selection[0].dbId, password: serverData.testLevel.activePass.id, test: afObject.testId
-        });
+        const passwordId = Number(afObject.passwordId || (serverData.testLevel.activePass && serverData.testLevel.activePass.id) || currPwId || 0);
+        if (!passwordId) {
+            gui.statusBar.setStatus(UILANG.m('Please select a password first!'), 3000, '#dd1a00');
+            return;
+        }
+        const resetData = {
+            testee: selection[0].dbId,
+            password: passwordId,
+            test: afObject.testId
+        };
+        startAjax('resetResultsTest', resetData);
     }
 
 }
@@ -3153,10 +4810,16 @@ function newPassword(sender, button, name, tag) {
         let contentTitle;
 
         if (stuLog && sender === 'selectListBtnNewPw'|| selHasStudent && sender === 'selectListBtnNewWizardPw') {
-            contentStr = '<p>' + UILANG.m('Please enter a new label for the student login:') + '<br><input type="text" id="dialogField1" style="width: 100%; margin-top: 10px;"></p><p>' + UILANG.m('Please enter a tag for the label (optional):') + '<br><input type="text" id="dialogField2" style="width: 100%; margin-top: 10px;">';
+            contentStr = '<div class="tmDialogForm">' +
+                '<div class="tmDialogFormField"><label for="dialogField1">' + UILANG.m('Label') + '</label><input type="text" id="dialogField1"></div>' +
+                '<div class="tmDialogFormField"><label for="dialogField2">' + UILANG.m('Tag') + ' (' + UILANG.m('optional') + ')</label><input type="text" id="dialogField2"></div>' +
+            '</div>';
             contentTitle = UILANG.m('New label');
         } else {
-            contentStr = '<p>' + UILANG.m('Please enter a new password for the test taker:') + '<br><input type="text" id="dialogField1" style="width: 100%; margin-top: 10px;"></p><p>' + UILANG.m('Please enter a tag for the password (optional):') + '<br><input type="text" id="dialogField2" style="width: 100%; margin-top: 10px;">';
+            contentStr = '<div class="tmDialogForm">' +
+                '<div class="tmDialogFormField"><label for="dialogField1">' + UILANG.m('Password') + '</label><input type="text" id="dialogField1"></div>' +
+                '<div class="tmDialogFormField"><label for="dialogField2">' + UILANG.m('Tag') + ' (' + UILANG.m('optional') + ')</label><input type="text" id="dialogField2"></div>' +
+            '</div>';
             contentTitle = UILANG.m('New password');
         }
         const dialogData = {
@@ -3175,20 +4838,8 @@ function newPassword(sender, button, name, tag) {
         };
         new nxDialog('newTestDialog', dialogData, arguments);
 
-        //check for invalid chars (only for passwords not for labels)
-        if (!stuLog && sender === 'selectListBtnNewPw'|| !selHasStudent && sender === 'selectListBtnNewWizardPw') {
-            $('#dialogField1').on('keyup', function () {
-                const start = this.selectionStart, end = this.selectionEnd;
-                const thisInput = $(this);
-                thisInput.val(thisInput.val().replace(/[^\w.(){}\[\]-]/ig, function (str) {
-                    if (str === ' ') str = '{SPACE}';
-                    if (!$('#veil_Message').length) showMessage(UILANG.m('You typed :') + ' ' + str + ' \n\n<br />Please use only valid characters: Letters & numbers plus ( ){ } [ ] . _ -');
-                    $('#dialogField1').trigger('blur');
-                    return '';
-                }));
-                this.setSelectionRange(start, end);
-            });
-        }
+        // Passwords use the strict character set; labels may contain spaces.
+        ttBindAllowedCharacters('#dialogField1', !(!stuLog && sender === 'selectListBtnNewPw' || !selHasStudent && sender === 'selectListBtnNewWizardPw'));
         $('#dialogField2').on('keyup', function () {
             const start = this.selectionStart, end = this.selectionEnd;
             const thisInput = $(this);
@@ -3231,7 +4882,7 @@ function newPassword(sender, button, name, tag) {
                     };
                 }
                 wizardData.pwds.push(fill);
-                gui.wpasswords.setItems(wizardData.pwds);
+                gui.wpasswords.setItems(ttPreparePasswordListItems(wizardData.pwds));
                 if (!stuLog && !selHasStudent) $('#wPasswords_button_setPassword').hide();
                 gui.wpasswords.setSelection([wizardId]);
                 wizardSelectionChanged(gui.wpasswords.getSelection());
@@ -3319,7 +4970,11 @@ function wizardSelectionChanged(sel) {
             $('#wStructureTbText').show();
             if (structureItems && structureItems.length > 0) {
                 $.each(structureItems, function (key, value) {
-                    value.ID = value.hiddenID;
+                    value = Object.assign(
+                        {testType: bulkTestType(value)},
+                        value,
+                        {ID: value.hiddenID, testType: bulkTestType(value)}
+                    );
                     gui.wStructureView.addElement(value, true);
                 });
                 if (structureItems.length === 1) {
@@ -3426,20 +5081,21 @@ function deletePassword(sel, button) {
     if (!button) {
         let message;
         let title;
+        const itemList = sf('<ul class="deleteList"><li>%@</li></ul>', sel.name);
         if (sel.dataPresent === true) {
             if (stuLog) {
-                message = sf('<p>' + UILANG.m('Are you sure you want to delete the label <strong>%@</strong>?') + '</p><p class="red"><strong>' + UILANG.m('Warning:') + '</strong>&nbsp;&nbsp;    ' + UILANG.m('For this label user data has already been collected!') + '</p>', sel.name);
+                message = '<div class="deleteConfirm"><div class="deleteConfirmText"><p>' + UILANG.m('Are you sure you want to delete the following label?') + '</p></div>' + itemList + '<p class="deleteConfirmWarning"><strong>' + UILANG.m('Warning:') + '</strong> ' + UILANG.m('For this label user data has already been collected!') + '</p></div>';
                 title = UILANG.m('Delete label?');
             } else {
-                message = sf('<p>' + UILANG.m('Are you sure you want to delete the password <strong>%@</strong>?') + '</p><p class="red"><strong>' + UILANG.m('Warning:') + '</strong>&nbsp;&nbsp;    ' + UILANG.m('For this password user data has already been collected!') + '</p>', sel.name);
+                message = '<div class="deleteConfirm"><div class="deleteConfirmText"><p>' + UILANG.m('Are you sure you want to delete the following password?') + '</p></div>' + itemList + '<p class="deleteConfirmWarning"><strong>' + UILANG.m('Warning:') + '</strong> ' + UILANG.m('For this password user data has already been collected!') + '</p></div>';
                 title = UILANG.m('Delete password?');
             }
         } else {
             if (stuLog || selHasStudent) {
-                message = sf('<p>' + UILANG.m('Are you sure you want to delete the label <strong>%@</strong>?') + '</p>', sel.name);
+                message = '<div class="deleteConfirm"><div class="deleteConfirmText"><p>' + UILANG.m('Are you sure you want to delete the following label?') + '</p></div>' + itemList + '</div>';
                 title = UILANG.m('Delete label?');
             } else {
-                message = sf('<p>' + UILANG.m('Are you sure you want to delete the password <strong>%@</strong>?') + '</p>', sel.name);
+                message = '<div class="deleteConfirm"><div class="deleteConfirmText"><p>' + UILANG.m('Are you sure you want to delete the following password?') + '</p></div>' + itemList + '</div>';
                 title = UILANG.m('Delete password?');
             }
         }
@@ -3453,8 +5109,7 @@ function deletePassword(sel, button) {
             width: 600,
             callback: deletePassword,
             title: title,
-            icon: "../images/warning.png",
-            iconWidth: 64
+            type: 'warning'
         };
         new nxDialog('deleteDialog', dialogData, arguments);
     }
@@ -3470,7 +5125,7 @@ function deletePassword(sel, button) {
                 }
                 return true;
             });
-            gui.wpasswords.setItems(wizardData.pwds);
+            gui.wpasswords.setItems(ttPreparePasswordListItems(wizardData.pwds));
             if (stuLog || selHasStudent) {
                 if (wizardData.pwds.length === 1) {
                     $(wpasswordsTbText).html(wizardData.pwds.length + ' ' + UILANG.m('label'));
@@ -3494,6 +5149,7 @@ function editPassword(sel, button, name, tag) {
     //handles both passwords and labels!
     if (!sel) return;
     if (!button) {
+        const nameLabel = (stuLog || selHasStudent) ? UILANG.m('Label') : UILANG.m('Password');
         const dialogData = {
             buttons: [{
                 label: UILANG.m('cancel'), 'cancel': true, value: 'cancel'
@@ -3510,28 +5166,17 @@ function editPassword(sel, button, name, tag) {
             values: {
                 dialogField1: sel.name, dialogField2: sel.tag
             },
-            contents: '<p>' + UILANG.m('Please enter a new name:') + '<br><input type="text" id="dialogField1" style="width: 100%; margin-top: 10px;"></p><p>' + UILANG.m('Current tag:') + '<br><input type="text" id="dialogField2" style="width: 100%; margin-top: 10px;"></p>',
+            contents: '<div class="tmDialogForm">' +
+                '<div class="tmDialogFormField"><label for="dialogField1">' + nameLabel + '</label><input type="text" id="dialogField1"></div>' +
+                '<div class="tmDialogFormField"><label for="dialogField2">' + UILANG.m('Tag') + '</label><input type="text" id="dialogField2"></div>' +
+            '</div>',
             title: UILANG.m('Rename'),
             width: 400,
             callback: editPassword
         };
         new nxDialog('renameDialog', dialogData, arguments);
 
-        // Only for passwords, not for labels
-        if (!stuLog && !selHasStudent) {
-            //check for invalid chars
-            $('#dialogField1').on('keyup', function () {
-                const start = this.selectionStart, end = this.selectionEnd;
-                const thisInput = $(this);
-                thisInput.val(thisInput.val().replace(/[^\w.(){}\[\]-]/ig, function (str) {
-                    if (str === ' ') str = '{SPACE}';
-                    if (!$('#veil_Message').length) showMessage(UILANG.m('You typed :') + ' ' + str + ' \n\n<br />' + UILANG.m('only_valid_chars') + ' ( ){ } [ ] . _ -');
-                    $('#dialogField1').trigger('blur');
-                    return '';
-                }));
-                this.setSelectionRange(start, end);
-            });
-        }
+        ttBindAllowedCharacters('#dialogField1', stuLog || selHasStudent);
 
         $('#dialogField2').on('keyup', function () {
             const start = this.selectionStart, end = this.selectionEnd;
@@ -3572,7 +5217,7 @@ function editPassword(sel, button, name, tag) {
                         tId = v['id'];
                     }
                 });
-                gui.wpasswords.setItems(wizardData.pwds);
+                gui.wpasswords.setItems(ttPreparePasswordListItems(wizardData.pwds));
                 gui.wpasswords.setSelection([tId]);
                 if (stuLog || selHasStudent) {
                     if (wizardData.pwds.length === 1) {
@@ -3610,7 +5255,9 @@ function newFolder(sender, button, name) {
             datafields: ['dialogField1'],
             mandatory: ['dialogField1'],
             focus: 'dialogField1',
-            contents: '<p>' + UILANG.m('Please enter a name for the folder:') + '<br><input type="text" maxlength="200" id="dialogField1" style="width: 100%; margin-top: 10px;"></p>',
+            contents: '<div class="tmDialogForm">' +
+                '<div class="tmDialogFormField"><label for="dialogField1">' + UILANG.m('Folder name') + '</label><input type="text" maxlength="200" id="dialogField1"></div>' +
+            '</div>',
             title: UILANG.m('New folder'),
             width: 400,
             callback: newFolder
@@ -3634,13 +5281,14 @@ function newFolder(sender, button, name) {
 
 function newTest(sender, button, name) {
     if (!button) {
-        let userTask, userTaskHd;
+        let userTaskHd;
+        let nameLabel;
         if (sender === 'bNewTesteeTemplate') {
-            userTask = UILANG.m('Please enter a name for the template:');
             userTaskHd = UILANG.m('New template');
+            nameLabel = UILANG.m('Template name');
         } else {
-            userTask = UILANG.m('Please enter a name for the test taker (login):');
             userTaskHd = UILANG.m('New standard login');
+            nameLabel = UILANG.m('Login name');
         }
         const dialogData = {
             buttons: [{
@@ -3651,30 +5299,22 @@ function newTest(sender, button, name) {
             datafields: ['dialogField1'],
             mandatory: ['dialogField1'],
             focus: 'dialogField1',
-            contents: '<p>' + userTask + '<span id="loginHelp"></span><br><input type="text" id="dialogField1" style="width: 100%; margin-top: 10px;"></p>',
+            contents: '<div class="tmDialogForm">' +
+                '<div class="tmDialogFormField"><label for="dialogField1">' + nameLabel + '<span id="loginHelp"></span></label><input type="text" id="dialogField1"></div>' +
+            '</div>',
             title: userTaskHd,
             width: 400,
             callback: newTest
         };
         new nxDialog('newTestDialog', dialogData, arguments);
-        //check for invalid chars
-        $('#dialogField1').on('keyup', function () {
-            const start = this.selectionStart, end = this.selectionEnd;
-            const thisInput = $(this);
-            thisInput.val(thisInput.val().replace(/[^\w\s.(){}\[\]-]/ig, function (str) {
-                if (!$('#veil_Message').length) showMessage(UILANG.m('You typed :') + ' ' + str + ' \n\n<br />' + UILANG.m('only_valid_chars') + ' ( ){ } [ ] . _ -');
-                $('#dialogField1').trigger('blur');
-                return '';
-            }));
-            this.setSelectionRange(start, end);
-        });
+        ttBindAllowedCharacters('#dialogField1', true);
 
         //show online help
         let loginHelpHtml;
         let loginHelpTitle;
 
         if (sender === 'bNewTesteeTemplate') {
-            loginHelpHtml = UILANG.m('<p>A test taker template in OASYS is a reusable login that can be connected to one or more passwords and linked to one or more tests. Each time a user logs in with a template, OASYS automatically clones this template in the background to create a standard login. These cloned logins are displayed in the test taker manager, allowing for easy tracking and management.</p><p>This functionality enables the ability to track results from questionnaires and tests efficiently in the results manager, as each login instance is uniquely identified and recorded.</p>');
+            loginHelpHtml = UILANG.m('<p>A test taker template in OASYS is a reusable login that can be connected to one or more passwords and linked to one or more tests. Each time a user logs in with a template, OASYS stores the recorded dataset as a hidden clone linked back to the template.</p><p>The datasets are listed on the template itself, so results can be tracked without filling the file manager with cloned test takers.</p>');
             loginHelpTitle = UILANG.m('Reusable Login (Template)');
         } else {
             loginHelpHtml = standardLoginHtml;
@@ -3716,7 +5356,11 @@ function newStudentLogin(sender, button) {
         datafields: ['dialogField1', 'dialogField2', 'dialogField3'],
         mandatory: ['dialogField1'],
         focus: 'dialogField1',
-        contents: '<p>' + UILANG.m('Please enter a name for the student login:') + '<span id="studentHelp"></span><br /><input type="text" id="dialogField1" maxlength="200" style="width: 100%; margin-top: 10px;"></p><p>' + UILANG.m('Authentication type:') + '<span id="authHelp"></span><br><div id="dialogField2"></div></p><p id="pwBlock">' + UILANG.m('Password:') + '<br><span class="sublineDialog">' + UILANG.m('(Password will be auto-generated if the input field is left empty!)') + '</span><input type="text" id="dialogField3" maxlength="200" style="width: 100%; margin-top: 10px;"></p>',
+        contents: '<div class="tmDialogForm">' +
+            '<div class="tmDialogFormField"><label for="dialogField1">' + UILANG.m('Login name') + '<span id="studentHelp"></span></label><input type="text" id="dialogField1" maxlength="200"></div>' +
+            '<div class="tmDialogFormField"><label>' + UILANG.m('Authentication type') + '<span id="authHelp"></span></label><div id="dialogField2"></div></div>' +
+            '<div class="tmDialogFormField" id="pwBlock"><label for="dialogField3">' + UILANG.m('Password') + '</label><span class="sublineDialog">' + UILANG.m('Password will be auto-generated if the input field is left empty.') + '</span><input type="text" id="dialogField3" maxlength="200"></div>' +
+        '</div>',
         title: UILANG.m('New student login'),
         returnPromise: true,
         width: 400
@@ -3747,36 +5391,18 @@ function newStudentLogin(sender, button) {
     const authHelpHtml=UILANG.m('<p>When logging in as a student, there are three available authentication methods:</p><ul><li><strong>Direct Password</strong>: A password is set here within the OASYS system. Students will use this password to log in directly.</li><li><strong>SAML</strong>: This method uses SAML (Security Assertion Markup Language) authentication. It\'s typically used for single sign-on (SSO) across different systems. The student’s identity is authenticated by an external identity provider.</li><li><strong>LDAP</strong>: LDAP (Lightweight Directory Access Protocol) is used for authentication via an LDAP directory. This method allows students to log in using their LDAP credentials, which are usually managed by an organization\'s central directory.</li></ul><p>Please select the appropriate authentication method for your institution\'s needs.</p>');
     new OasysHelp('authHelp', {
         htmlContent: authHelpHtml,
+        maxHeight: '560px',
+        maxWidth: '520px',
         title: UILANG.m('Student Login Authentication Methods')
     });
 
 
-    //check for invalid chars
-    $('#dialogField1').on('keyup', function () {
-        const start = this.selectionStart, end = this.selectionEnd;
-        const thisInput = $(this);
-        thisInput.val(thisInput.val().replace(/[^\w\s.(){}\[\]-]/ig, function (str) {
-            if (!$('#veil_Message').length) showMessage(UILANG.m('You typed :') + ' ' + str + ' \n\n<br />' + UILANG.m('only_valid_chars') + ' ( ){ } [ ] . _ -');
-            $('#dialogField1').trigger('blur');
-            return '';
-        }));
-        this.setSelectionRange(start, end);
-    });
-
-    $('#dialogField3').on('keyup', function () {
-        const start = this.selectionStart, end = this.selectionEnd;
-        const thisInput = $(this);
-        thisInput.val(thisInput.val().replace(/[^\w.(){}\[\]-]/ig, function (str) {
-            if (str === ' ') str = '{SPACE}';
-            if (!$('#veil_Message').length) showMessage(UILANG.m('You typed :') + ' ' + str + ' \n\n<br />Please use only valid characters: Letters & numbers plus ( ){ } [ ] . _ -');
-            $('#dialogField1').trigger('blur');
-            return '';
-        }));
-        this.setSelectionRange(start, end);
-    });
+    ttBindAllowedCharacters('#dialogField1', true);
+    ttBindAllowedCharacters('#dialogField3', false);
 
 
     let AuthTypeOpt = {
+        theme: 'backend',
         onChange: authTypeChg, initialValue: 'Direct password', elements: [{
             value: 'directPass', label: 'Direct password'
         }, {
@@ -3797,7 +5423,6 @@ function newStudentLogin(sender, button) {
     }
 }
 
-/* deletion */
 function deleteSelection() {
     if (mode !== 'browsing') {
         return;
@@ -3810,6 +5435,14 @@ function deleteSelection() {
         if (obj.type === 'folder') {
             foldersInSelection = true;
             type = 'folder';
+        } else if (obj.loginType === 'directPass') {
+            type += ' typetestee-direct';
+        } else if (obj.loginType === 'LDAP') {
+            type += ' typetestee-ldap';
+        } else if (obj.loginType === 'SAML') {
+            type += ' typetestee-saml';
+        } else {
+            type += ' typetestee-standard';
         }
         if (obj.type === 'template') {
             type = 'typetemplate';
@@ -3817,10 +5450,11 @@ function deleteSelection() {
         message += sf('<li class="%@">%@</li>', type, obj.label);
     }
     message += '</ul>';
-    message = '<p>' + UILANG.m('Are you sure you want to delete the following test takers(s)/folder(s)? This action is irreversible!') + '</p>' + message + '<p class="red">' + UILANG.m('Warning:') + ' ' + UILANG.m('Recorded data for the chosen test takers will also be deleted.') + '</p>';
+    message = '<div class="deleteConfirm"><div class="deleteConfirmText"><p>' + UILANG.m('Are you sure you want to delete the following test takers(s)/folder(s)? This action is irreversible!') + '</p></div>' + message + '<p class="deleteConfirmWarning">' + UILANG.m('Warning:') + ' ' + UILANG.m('Recorded data for the chosen test takers will also be deleted.') + '</p>';
     if (foldersInSelection) {
-        message += '<p class="red">' + UILANG.m('Warning:') + ' ' + UILANG.m('If the selected folder(s) contain files or subfolders, they will be deleted as well.') + '</p>';
+        message += '<p class="deleteConfirmWarning">' + UILANG.m('Warning:') + ' ' + UILANG.m('If the selected folder(s) contain files or subfolders, they will be deleted as well.') + '</p>';
     }
+    message += '</div>';
     let dialogData = {
         buttons: [{
             label: UILANG.m('cancel'), 'cancel': true, 'default': true, value: 'cancel'
@@ -3831,8 +5465,7 @@ function deleteSelection() {
         returnPromise: true,
         width: 640,
         title: UILANG.m('Delete selection?'),
-        icon: "../images/warning.png",
-        iconWidth: 64
+        type: 'warning'
     };
     showDialog('deleteDialog', dialogData).then((res) => {
         if (res.button === 'ok') {
@@ -3853,7 +5486,7 @@ function duplicate() {
 
 //search functionality
 function clickSearch() {
-    gui.library.filerSearch();
+    gui.library.filerSearch('', {metaSearch: true});
 }
 
 function correctData() {
@@ -3873,6 +5506,12 @@ function plausibilityCheck() {
 //rename
 function rename(sender, button, name) {
     if (!button) {
+        let nameLabel = UILANG.m('Login name');
+        if (selection[0]['type'] === 'folder') {
+            nameLabel = UILANG.m('Folder name');
+        } else if (selection[0]['type'] === 'template') {
+            nameLabel = UILANG.m('Template name');
+        }
         const dialogData = {
             buttons: [{
                 label: UILANG.m('cancel'), 'cancel': true, value: 'cancel'
@@ -3888,7 +5527,9 @@ function rename(sender, button, name) {
             values: {
                 dialogField1: selection[0]['name']
             },
-            contents: '<p>' + UILANG.m('Please enter a new name (login):') + '<br><input type="text" id="dialogField1" style="width: 100%; margin-top: 10px;"></p>',
+            contents: '<div class="tmDialogForm">' +
+                '<div class="tmDialogFormField"><label for="dialogField1">' + nameLabel + '</label><input type="text" id="dialogField1"></div>' +
+            '</div>',
             title: UILANG.m('Rename'),
             width: 400,
             callback: rename
@@ -3901,18 +5542,7 @@ function rename(sender, button, name) {
                 return /^[^\\]*$/.test(value);
             });
         }
-        if (selection[0]['type'] === 'testee') {
-            $('#dialogField1').on('keyup', function () {
-                const start = this.selectionStart, end = this.selectionEnd;
-                const thisInput = $(this);
-                thisInput.val(thisInput.val().replace(/[^\w\s.(){}\[\]-]/ig, function (str) {
-                    if (!$('#veil_Message').length) showMessage(UILANG.m('You typed :') + ' ' + str + ' \n\n<br />' + UILANG.m('only_valid_chars') + ' ( ){ } [ ] . _ -');
-                    $('#dialogField1').trigger('blur');
-                    return '';
-                }));
-                this.setSelectionRange(start, end);
-            });
-        }
+        if (selection[0]['type'] === 'testee') ttBindAllowedCharacters('#dialogField1', true);
     }
     if (button === 'ok' && !name.match(/^\s*$/) && name !== selection[0]['name']) {
 
@@ -3928,11 +5558,23 @@ function rename(sender, button, name) {
 
 /* adding meta tags */
 function addMetaTag() {
-    addMetaTagFunc('editMode');
+    startAjax('fetchMetaTagSuggestions', {})
+        .then(function(res) {
+            if (res && !res.error && gui.metaView) {
+                gui.metaView.setSuggestions(res.suggestions || {});
+            }
+            gui.metaView.openNewDialog();
+        });
 }
 
 function wAddMetaTag() {
-    addMetaTagFunc('wizardMode');
+    startAjax('fetchMetaTagSuggestions', {})
+        .then(function(res) {
+            if (res && !res.error && gui.wMetaView) {
+                gui.wMetaView.setSuggestions(res.suggestions || {});
+            }
+            gui.wMetaView.openNewDialog();
+        });
 }
 
 function addMetaTagFunc(sender, button, mkey, mvalue) {
@@ -3947,7 +5589,10 @@ function addMetaTagFunc(sender, button, mkey, mvalue) {
             datafields: ['dialogField1', 'dialogField2'],
             mandatory: ['dialogField1', 'dialogField2'],
             focus: 'dialogField1',
-            contents: '<p>' + UILANG.m('Please enter a new meta tag for the test taker.') + '<br /><br />' + UILANG.m('Meta-key (e.g. "Class"):') + '<br /><input class="amt" type="text" id="dialogField1" maxlength="200" style="width: 100%; margin-top: 10px;"><br /><br />' + UILANG.m('Meta-value (e.g. "9a"):') + '<br /><input class="amt" type="text" id="dialogField2" maxlength="200" style="width: 100%; margin-top: 10px;"></p>',
+            contents: '<div class="tmDialogForm">' +
+                '<div class="tmDialogFormField"><label for="dialogField1">' + UILANG.m('Meta-key') + '</label><input class="amt" type="text" id="dialogField1" maxlength="200" placeholder="Class"></div>' +
+                '<div class="tmDialogFormField"><label for="dialogField2">' + UILANG.m('Meta-value') + '</label><input class="amt" type="text" id="dialogField2" maxlength="200" placeholder="9a"></div>' +
+            '</div>',
             title: UILANG.m('New meta-tag'),
             width: 400,
             callback: addMetaTagFunc
@@ -3965,11 +5610,14 @@ function addMetaTagFunc(sender, button, mkey, mvalue) {
                     }, {
                         label: UILANG.m('Overwrite'), value: 'ok'
                     }],
-                    contents: '<p>' + UILANG.m('A meta tag with the key "') + mkey + UILANG.m('" already exists. The current value is "') + wizardData.metaTags[mkey] + '". <br />' + UILANG.m('Do you want to overwrite it with "') + mvalue + '"?</p>',
+                    contents: '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                        '<strong>' + UILANG.m('Meta tag already exists') + '</strong>' +
+                        '<span>' + sf(UILANG.m('The key "%@" already has the value "%@".'), escapeHtml(mkey), escapeHtml(wizardData.metaTags[mkey])) + '</span>' +
+                        '<div class="tmActionConfirmMeta"><span>' + UILANG.m('New value') + '</span><strong>' + escapeHtml(mvalue) + '</strong></div>' +
+                    '</div>',
                     title: UILANG.m('Warning'),
                     width: 500,
-                    icon: "../images/warning.png",
-                    iconWidth: 64,
+                    type: 'warning',
                     callback: writeWizardMetaTag
                 };
                 args = [];
@@ -3990,11 +5638,14 @@ function addMetaTagFunc(sender, button, mkey, mvalue) {
                     }, {
                         label: UILANG.m('Overwrite'), value: 'ok'
                     }],
-                    contents: '<p>' + UILANG.m('A meta tag with the key "') + mkey + '"' + UILANG.m('" already exists. The current value is "') + mtags[mkey] + '". <br />' + UILANG.m('Do you want to overwrite it with "') + mvalue + '"?</p>',
+                    contents: '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                        '<strong>' + UILANG.m('Meta tag already exists') + '</strong>' +
+                        '<span>' + sf(UILANG.m('The key "%@" already has the value "%@".'), escapeHtml(mkey), escapeHtml(mtags[mkey])) + '</span>' +
+                        '<div class="tmActionConfirmMeta"><span>' + UILANG.m('New value') + '</span><strong>' + escapeHtml(mvalue) + '</strong></div>' +
+                    '</div>',
                     title: UILANG.m('Warning'),
                     width: 500,
-                    icon: "../images/warning.png",
-                    iconWidth: 64,
+                    type: 'warning',
                     callback: writeMetaTag
                 };
                 args = [];
@@ -4019,27 +5670,18 @@ function addMetaTagFunc(sender, button, mkey, mvalue) {
     function writeWizardMetaTag(mkey, mvalue, button) {
         if (button === 'cancel') return;
         wizardData.metaTags[mkey] = mvalue;
-        const sortedKeys = Object.keys(wizardData.metaTags).sort();
-        gui.wMetaView.clearElements(true);
-        $.each(sortedKeys, function (key, value) {
-            const objInsert = {
-                metakey: value, metavalue: wizardData.metaTags[value], hiddenID: key
-            };
-            //add to structure list
-            gui.wMetaView.addElement(objInsert, true);
-        });
-        if (sortedKeys.length === 1) {
-            $('#wMetaTbText').html(sortedKeys.length + ' ' + UILANG.m('meta tag'));
-        } else {
-            $('#wMetaTbText').html(sortedKeys.length + ' ' + UILANG.m('meta tags'));
-        }
+        const sortedKeys = Object.keys(wizardData.metaTags).sort((a, b) => String(a).localeCompare(String(b), undefined, {sensitivity: 'base'}));
+        gui.wMetaView.setItems(wizardData.metaTags, true);
+        updateMetaTagCounter('#wMetaTbText', sortedKeys.length);
     }
 }
 
 /* adding tests to password */
 function addTests() {
     let dialogData;
-    if ((mode === 'wizard' && wizardData.currentPwId === 0) || (mode === 'add2selected' && wizardData.currentPwId === 0)) {
+    if ((mode === 'wizard' && wizardData.currentPwId === 0)
+        || (mode === 'add2selected' && wizardData.currentPwId === 0)
+        || mode === 'modifyselected') {
         dialogData = {
             buttons: [{
                 label: UILANG.m('cancel'), 'cancel': true, value: 'cancel'
@@ -4048,7 +5690,7 @@ function addTests() {
             }, {
                 label: UILANG.m('Add to selected & close'), 'default': true, disabled: true, value: 'add'
             }],
-            contents: "<div style='height:550px;' id='TCHOOSER'></div>",
+            contents: "<div class='tmTestAssignDialog' id='TCHOOSER'></div>",
             title: UILANG.m('Assign test'),
             width: 950,
             callback: addTestToStructureList
@@ -4066,7 +5708,7 @@ function addTests() {
             }, {
                 label: UILANG.m('Add to selected & close'), 'default': true, disabled: true, value: 'add'
             }],
-            contents: "<div style='height:550px;' id='TCHOOSER'></div>",
+            contents: "<div class='tmTestAssignDialog' id='TCHOOSER'></div>",
             title: UILANG.m('Assign test'),
             width: 950,
             callback: addTestToStructureList
@@ -4074,12 +5716,20 @@ function addTests() {
     }
     window.testsBrowser = new nxDialog('addItemsDialog', dialogData);
 
-    gui.extra1 = createFlexSection('TCHOOSER', 'extra001', 905, 905);
+    gui.extra1 = createFlexSection('TCHOOSER', 'extra001', 905, 905, 0, 'tmTestAssignSection');
     gui.boxes.tests = createFlexBox(gui.extra1, 'testChooser', {
-        title: UILANG.m('Tests'), minHeight: 500, flex: 1, noPadding: true
+        minHeight: 500, flex: 1, noPadding: true
     });
 
-    $('#testChooser').append("<table style='border:0;border-spacing:0;'><tr><td><div id='testsBrowserContainer' ></div></td><td style='background:#e8e8e8;'><div id='testsContainerToolBar' ></div><div id='igPreviewZone'></div></td></tr></table>");
+    $('#testChooser').append(
+        "<div class='tmTestAssignLayout'>" +
+            "<div class='tmTestAssignFileColumn'><div id='testsBrowserContainer'></div></div>" +
+            "<div class='tmTestAssignRightColumn'>" +
+                "<div id='testsContainerToolBar'></div>" +
+                "<div id='igPreviewZone'><div class='tmTestAssignEmptyState'>" + UILANG.m('Select a test to preview its structure.') + "</div></div>" +
+            "</div>" +
+        "</div>"
+    );
     $('#extra001').css('padding', '0');
     $('#extra001>.jsFlexBox').css('box-shadow', 'none');
     $('#testChooser').css('overflow', 'hidden');
@@ -4109,10 +5759,19 @@ function addTests() {
         cutItems: false,
         cutMultiple: false
     };
-    gui.library2 = new fileMgr("#testsBrowserContainer", "_tests", [], testbreadcrumbs, testsOpPermissions, false, testsLibraryEvent);
+    gui.library2 = new FileManager("#testsBrowserContainer", "_tests", [], testbreadcrumbs, testsOpPermissions, false, testsLibraryEvent);
 
     function clickSearch() {
-        gui.library2.filerSearch();
+        gui.library2.filerSearch('', {metaSearch: true});
+    }
+
+    function clearTestSelectionState() {
+        testSelection = null;
+        testPresent = false;
+        testsBrowser.disableButton('add');
+        testsBrowser.disableButton('add2all');
+        testsBrowser.disableButton('add2');
+        testsBrowser.disableButton('add2all2');
     }
 
     //get library contents
@@ -4126,11 +5785,7 @@ function addTests() {
             case 'clear':
                 $('#igPreviewZone').empty();
                 if (testsBrowser) {
-                    testPresent = false;
-                    testsBrowser.disableButton('add');
-                    testsBrowser.disableButton('add2all');
-                    testsBrowser.disableButton('add2');
-                    testsBrowser.disableButton('add2all2');
+                    clearTestSelectionState();
                 }
                 break;
             case 'getSelect':
@@ -4203,6 +5858,9 @@ function addTests() {
                     searchString: data
                 });
                 break;
+            case 'onMetaSearchRequest':
+                startAjax('testsSearch', {...data, searchMode: 'meta'});
+                break;
             case 'onSearchItemClick':
                 oldigLoc = cloneObj(igLoc);
                 igLoc.folder = data.pid.replace(/^\D*/i, '');
@@ -4226,6 +5884,7 @@ function addTests() {
                             add2allFlag = true;
                         }
                         let objInsert = {
+                            testType: bulkTestType(testSelection[0]),
                             name: testSelection[0].name,
                             ID: testSelection[0].dbId,
                             actionField: {},
@@ -4237,15 +5896,19 @@ function addTests() {
                         } else {
                             gui.structureView.addElement(objInsert, false);
                         }
-                        if (serverData.testLevel.template === 'template') gui.structureView.killActionFields();
                         gui.library2.clearSelection();
+                        clearTestSelectionState();
                     }
                     break;
                 case 'wizard':
                 case 'add2selected':
+                case 'modifyselected':
                     if (testSelection) {
                         let objInsert = {
-                            name: testSelection[0].name, ID: testSelection[0].dbId, hiddenID: testSelection[0].dbId
+                            testType: bulkTestType(testSelection[0]),
+                            name: testSelection[0].name,
+                            ID: testSelection[0].dbId,
+                            hiddenID: testSelection[0].dbId
                         };
                         if (btnClicked === 'add2all' || btnClicked === 'add2all2') {
                             //add to structure list
@@ -4274,6 +5937,7 @@ function addTests() {
                             if (testPresent !== true) gui.wStructureView.addElement(objInsert, false);
                         }
                         gui.library2.clearSelection();
+                        clearTestSelectionState();
                     }
                     break;
             }
@@ -4284,16 +5948,15 @@ function addTests() {
 function editOverrides() {
     const orSetgs = serverData.testLevel.overrides;
 
-    //Due to bug OA-1172 data might not be correct in the database, this cleans it up
     if (orSetgs['true']) delete orSetgs['true'];
 
     const dialogData = {
         buttons: [{
-            label: UILANG.m('cancel'), 'cancel': true, value: 'cancel'
+            label: UILANG.m('cancel'), cancel: true, value: 'cancel'
         }, {
-            label: UILANG.m('Save'), 'default': true, disabled: true, value: 'add'
+            label: UILANG.m('Save'), default: true, disabled: true, value: 'add'
         }],
-        contents: "<div style='height:140px;' id='overridesForm'></div>",
+        contents: "<div style='height:230px;' id='overridesForm'></div>",
         title: UILANG.m('Override settings - Tests assigned to "') + serverData.testLevel.name + '"',
         width: 560,
         callback: saveOverrides
@@ -4302,62 +5965,222 @@ function editOverrides() {
 
     const orContainer = $('#overridesForm');
     const overrides = {};
+
     overrides.disableTimer = insertToggleswitch(orContainer, 'tsDisableTimer', UILANG.m('Disable Timer'), {
         dataId: 'disableTimer', changeCallback: orChanged
     });
 
     overrides.additionalTime = insertSpinner(orContainer, 'tsAdditionalTime', UILANG.m('Additional time (%)'), {
-        dataId: 'additionalTime', range: '0..100', step: 1, height: 20, width: 33, onChange: orChanged
+        dataId: 'additionalTime', range: '0..100', step: 1, height: 20, width: 33,
+        onChange: function (sender, value) {
+            orChanged(sender, value, null, 'additionalTime');
+        }
     });
 
     overrides.disableSaving = insertToggleswitch(orContainer, 'tsDisableSaving', UILANG.m('Disable saving'), {
         dataId: 'disableSaving', changeCallback: orChanged
     });
+
     overrides.allowNavigation = insertToggleswitch(orContainer, 'tsAllowNavigation', UILANG.m('Disable navigation limitation'), {
         dataId: 'allowNavigation', changeCallback: orChanged
     });
+
     overrides.demoMode = insertToggleswitch(orContainer, 'tsDemoMode', UILANG.m('Demo Mode'), {
         dataId: 'demoMode', changeCallback: orChanged
     });
 
+    //login forwarding toggle
+    overrides.loginForwarding = insertToggleswitch(
+        orContainer,
+        'tsLoginForwarding',
+        UILANG.m('Forward login to other OASYS'),
+        { dataId: 'loginForwarding', changeCallback: orChanged }
+    );
+
+    //forward URL input Test button (shown only when loginForwarding === true)
+    const forwardUrlWrap = $(`
+        <div id="tsForwardUrlWrap"
+             style="
+                display:none;
+                margin-top:10px;
+                padding:8px 10px;
+                background:#f3f3f3;
+                border:1px solid #ddd;
+                border-radius:4px;
+                font-size:12px;
+             ">
+            <div style="margin-bottom:4px; color:#555;">
+                ${UILANG.m('Forward URL')}
+            </div>
+    
+            <div style="display:flex; gap:6px; align-items:center;">
+                <input id="tsForwardUrl"
+                       type="text"
+                       placeholder="https://example.org/oasys"
+                       style="
+                            flex:1;
+                            height:24px;
+                            font-size:12px;
+                            box-sizing:border-box;
+                       "
+                />
+                <button id="tsForwardUrlTest"
+                        type="button"
+                        class="nxButton"
+                        style="height:24px; padding:0 10px;">
+                    ${UILANG.m('Test')}
+                </button>
+            </div>
+    
+            <div id="tsForwardUrlStatus"
+                 style="
+                    margin-top:6px;
+                    font-size:11px;
+                    min-height:14px;
+                 "></div>
+        </div>
+    `);
+
+
+    orContainer.append(forwardUrlWrap);
+
+    // Keep a deep copy for changes
     serverData.testLevel.overridesChanged = $.extend(true, {}, orSetgs);
     const saveOverridesChanged = serverData.testLevel.overridesChanged;
 
+    // Initialize controls from stored settings
     $.each(orSetgs, function (key, value) {
         if (key === 'disableTimer') {
-            if (value === true) {
-                overrides.additionalTime.hide(0);
-            } else {
-                overrides.additionalTime.show(0);
+            if (value === true) overrides.additionalTime.hide(0);
+            else overrides.additionalTime.show(0);
+        }
+
+        if (key === 'loginForwarding') {
+            if (value === true) $('#tsForwardUrlWrap').show(0);
+            else {
+                $('#tsForwardUrlWrap').hide(0);
+                setTestStatus('');
             }
         }
-        overrides[key].reset(value);
+
+        if (key === 'forwardUrl') {
+            $('#tsForwardUrl').val(value || '');
+            return;
+        }
+
+        if (overrides[key] && typeof overrides[key].reset === 'function') {
+            overrides[key].reset(value);
+        }
     });
+
+    // If loginForwarding is true but forwardUrl not present, still show input
+    if (orSetgs.loginForwarding === true) {
+        $('#tsForwardUrlWrap').show(0);
+    }
+
+    // URL input change handling -> save into overridesChanged
+    $('#tsForwardUrl').on('input change', function () {
+        overridesSaver.enableButton('add');
+        saveOverridesChanged.forwardUrl = $(this).val();
+        setTestStatus('');
+    });
+
+    // Test button -> server-side validation; result comes back via ajaxSuccess()
+    $('#tsForwardUrlTest').on('click', function () {
+        const url = normalizeBaseUrl($('#tsForwardUrl').val());
+
+        if (!url) {
+            setTestStatus(UILANG.m('Please enter a URL.'));
+            return;
+        }
+        if (!/^https?:\/\//i.test(url)) {
+            setTestStatus(UILANG.m('Please enter a full URL including http:// or https://'));
+            return;
+        }
+
+        $('#tsForwardUrlTest').prop('disabled', true);
+        setTestStatus(UILANG.m('Checking OASYS instance...'));
+
+        // Call backend
+        startAjax('checkForwardUrl', { url: url });
+    });
+
+    // Provide a hook for ajaxSuccess(res) to update THIS dialog instance.
+    // In ajaxSuccess, call: if (window._forwardUrlTestCb) window._forwardUrlTestCb(res);
+    window._forwardUrlTestCb = function (res) {
+        try {
+            if (!res || res.action !== 'checkForwardUrl') return;
+
+            if (res.ok === true && res.version) {
+                const msg = res.statusText || ('OASYS v=' + res.version + ' ' + UILANG.m('found'));
+                const level = (res.supported === true) ? 'ok' : 'err';   // unsupported should be red
+                setTestStatus(msg, level);
+            } else {
+                const msg = res.reason || UILANG.m('Reached URL, but no OASYS found');
+                setTestStatus(msg, 'err');
+            }
+        } finally {
+            $('#tsForwardUrlTest').prop('disabled', false);
+        }
+    };
+
+
 
     function saveOverrides(btnClicked) {
         if (btnClicked === 'add') {
-            //save changes to database
             startAjax('saveOverrides', {
-                overrides: saveOverridesChanged, id: serverData.testLevel.id
+                overrides: saveOverridesChanged,
+                id: serverData.testLevel.id
             });
         }
     }
 
-    // Callbacks ToggleSwitches
+    // Callbacks ToggleSwitches + Spinner
     function orChanged(sender, value, dummy, dataId) {
         if (sender === 'tsDisableTimer' && value === true) {
             overrides.additionalTime.hide(200);
-        } else {
+        } else if (sender === 'tsDisableTimer') {
             overrides.additionalTime.show(200);
         }
+
+        if (sender === 'tsLoginForwarding') {
+            if (value === true) {
+                $('#tsForwardUrlWrap').show(200);
+                saveOverridesChanged.forwardUrl = $('#tsForwardUrl').val() || saveOverridesChanged.forwardUrl || '';
+            } else {
+                $('#tsForwardUrlWrap').hide(200);
+                setTestStatus('');
+            }
+        }
+
         overridesSaver.enableButton('add');
         saveOverridesChanged[dataId] = value;
     }
+
+    function normalizeBaseUrl(url) {
+        if (!url) return '';
+        return ('' + url).trim().replace(/\/+$/, '');
+    }
+
+    function setTestStatus(msg, level) {
+        const $el = $('#tsForwardUrlStatus');
+        $el.text(msg)
+            .removeClass('oasysStatusOk oasysStatusErr')
+            .addClass(level === 'ok' ? 'oasysStatusOk' : 'oasysStatusErr');
+    }
 }
+
 
 //CallbackHandling Tests assigned to password (sortableTable)
 function wtestsChanged(deleted, id, currValue) {
     wizardData.structure[wizardData.currentPwId] = currValue;
+    if (mode === 'modifyselected') {
+        $('#tmBulkModifyTestsSummary').text(
+            currValue.length === 1
+                ? '1 ' + UILANG.m('test selected')
+                : currValue.length + ' ' + UILANG.m('tests selected')
+        ).prop('disabled', currValue.length === 0);
+    }
     if (wizardData.structure[wizardData.currentPwId].length === 1) {
         $(wStructureTbText).html(wizardData.structure[wizardData.currentPwId].length + ' ' + UILANG.m('test assigned'));
     } else {
@@ -4379,12 +6202,8 @@ function wMetaChanged(deleted, id, currValue) {
     $.each(currValue, function (index, value) {
         wizardData.metaTags[value.metakey] = value.metavalue;
     });
-    const sortedKeys = Object.keys(wizardData.metaTags).sort();
-    if (sortedKeys.length === 1) {
-        $('#wMetaTbText').html(sortedKeys.length + ' ' + UILANG.m('meta tag'));
-    } else {
-        $('#wMetaTbText').html(sortedKeys.length + ' ' + UILANG.m('meta tags'));
-    }
+    const sortedKeys = Object.keys(wizardData.metaTags).sort((a, b) => String(a).localeCompare(String(b), undefined, {sensitivity: 'base'}));
+    updateMetaTagCounter('#wMetaTbText', sortedKeys.length);
 }
 
 function testsChanged(deleted, id, currValue, dirty, dataId, deletedHiddenData) {
@@ -4413,7 +6232,14 @@ function testsChanged(deleted, id, currValue, dirty, dataId, deletedHiddenData) 
 function confirmDeletingTestWithData(currValue, currPwId, deleted, button) {
 
     if (!button) {
-        const message = sf('<p>' + UILANG.m('This test has data recorded. Are you sure you want to remove this test ID<strong>%@</strong>? Recorded data will be deleted!') + '</p>', deleted);
+        const message = sf(
+            '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                '<strong>' + UILANG.m('Ready to remove test') + '</strong>' +
+                '<span>' + UILANG.m('This test has recorded data. Removing test ID %@ will also delete the recorded data.') + '</span>' +
+                '<p class="tmActionConfirmNote">' + UILANG.m('This action is irreversible.') + '</p>' +
+            '</div>',
+            escapeHtml(deleted)
+        );
         const resetData = {
             buttons: [{
                 label: UILANG.m('cancel'), 'cancel': true, 'default': true, value: 'cancel'
@@ -4424,8 +6250,7 @@ function confirmDeletingTestWithData(currValue, currPwId, deleted, button) {
             width: 600,
             callback: confirmDeletingTestWithData,
             title: UILANG.m('Confirm removing test'),
-            icon: "../images/warning.png",
-            iconWidth: 64
+            type: 'warning'
         };
         new nxDialog('resetDialog', resetData, arguments);
     }
@@ -4692,7 +6517,7 @@ function showMessage(msg) {
     const dialogData = {
         buttons: [{
             label: UILANG.m('OK'), 'default': true, cancel: true, value: 'ok'
-        }], contents: msg, width: 600, title: UILANG.m("Error"), icon: "../images/error.png", iconWidth: 64
+        }], contents: formatActionErrorMessage(msg), width: 600, title: UILANG.m("Error"), type: 'error'
     };
     new nxDialog('Message', dialogData);
 }
@@ -4722,10 +6547,10 @@ function csvToArray(text, delimiter) {
     return ret;
 }
 
-function showMsgNoSrchResults(msg, searchTerm, component) {
+function showMsgNoSrchResults(msg, searchTerm, component, searchOptions) {
     function showMsgNoSrchResultsCB(button) {
         if (button === 'new') {
-            component.filerSearch(searchTerm);
+            component.filerSearch(searchTerm, searchOptions || {});
         }
     }
 
@@ -4739,29 +6564,45 @@ function showMsgNoSrchResults(msg, searchTerm, component) {
         width: 500,
         callback: showMsgNoSrchResultsCB,
         title: UILANG.m("No search results"),
-        icon: "../images/warning.png",
-        iconWidth: 64
+        type: 'warning'
     };
     new nxDialog('Message', dialogData);
 }
 
 /* server communication */
-async function startAjax(action, data) {
+function startAjax(action, data) {
     waitDialog.show();
+    const requestToken = data && data._requestToken;
+    const payload = data ? Object.assign({}, data) : {};
+    delete payload._requestToken;
     const params = {
-        action: action, data: JSON.stringify(data)
+        action: action, data: JSON.stringify(payload)
     };
     return $.ajax({
-        data: params
+        data: params,
+        success: function(res) {
+            if (typeof requestToken !== 'undefined') res._requestToken = requestToken;
+            ajaxSuccess(res);
+        }
     });
 }
 
 function ajaxError(jqXHR, textStatus, errorThrown) {
+    if (textStatus === 'abort') {
+        waitDialog.hide();
+        return;
+    }
     waitDialog.hide();
+    const jsonError = jqXHR.responseJSON && jqXHR.responseJSON.fatalError;
+    const responseText = typeof jqXHR.responseText === 'string' ? jqXHR.responseText.trim() : '';
+    const errorMessage = jsonError
+        ? jsonError
+        : '<strong>' + UILANG.m('The server returned an invalid response.') + '</strong>' +
+          (responseText ? '<br><code class="tinyCode">' + escapeHtml(responseText) + '</code>' : '');
     const dialogData = {
         buttons: [{
             label: UILANG.m('OK'), 'default': true, cancel: true, value: 'ok'
-        }], contents: jqXHR.responseJSON.fatalError, title: 'Error: ' + errorThrown, width: 500
+        }], contents: errorMessage, title: 'Error: ' + errorThrown, width: 500
     };
     new nxDialog('ajaxError', dialogData);
 }
@@ -4818,7 +6659,7 @@ function ajaxSuccess(res) {
             buttons: [{
                 label: UILANG.m('OK'), 'default': true, cancel: true, value: 'ok'
             }],
-            contents: '<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br />' + res.fatalError,
+            contents: formatActionErrorMessage('<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br />' + res.fatalError),
             title: UILANG.m("Error"),
             icon: "../images/error.png",
             iconWidth: 64,
@@ -4863,7 +6704,7 @@ function ajaxSuccess(res) {
             buttons: [{
                 label: UILANG.m('OK'), 'default': true, cancel: true, value: 'ok'
             }],
-            contents: '<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br />' + res.error + '<br>' + errorDetails,
+            contents: formatActionErrorMessage('<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br />' + res.error + '<br>' + errorDetails),
             title: UILANG.m("Error"),
             icon: "../images/error.png",
             iconWidth: 64,
@@ -4900,6 +6741,10 @@ function ajaxSuccess(res) {
         return;
     }
     switch (res.action) {
+        case 'checkForwardUrl':
+            if (window._forwardUrlTestCb) window._forwardUrlTestCb(res);
+            if (window._wizardForwardUrlTestCb) window._wizardForwardUrlTestCb(res);
+            break;
         case 'deleteSelection':
             gui.statusBar.setStatus(UILANG.m('Deletion successful!'), 3000, '#0A0');
             //deliberate fallthrough
@@ -4923,14 +6768,27 @@ function ajaxSuccess(res) {
             loc.folder = res.data.loc;
             loc.path = res.data.path;
             updateLibrary(res.data.list, res.data.path);
+            window.permList = res.permList; // used for selective button enabling
+            setLibPerms();
             if (res.data.select) {
                 gui.library.setSelection([{
                     id: res.data.select
-                }]);
-                //gui.library.getSelect();
+                }], {
+                    preserveScroll: preserveLibraryScrollOnNextSelection
+                });
+                if (mode === 'browsing' &&
+                    refreshPreviewAfterLibraryForTesteeId !== null &&
+                    normalizeTestTakerSelectionId(res.data.select) === refreshPreviewAfterLibraryForTesteeId) {
+                    const selectedItem = findLibraryItemBySelectionId(res.data.list, res.data.select);
+                    refreshPreviewAfterLibraryForTesteeId = null;
+                    if (selectedItem) {
+                        librarySelection([selectedItem], true);
+                    } else {
+                        gui.library.getSelect();
+                    }
+                }
             }
-            window.permList = res.permList; // used for selective button enabling
-            setLibPerms();
+            preserveLibraryScrollOnNextSelection = false;
             break;
         case 'fetchPreSelect':
             let selected = res.preFix + res.data.id;
@@ -4960,44 +6818,41 @@ function ajaxSuccess(res) {
             }
 
             if (res.data.structure.type === 'fluid') {
-                $('#testID').html('<div class="tm_fluid">' + UILANG.m('fluid test') + '<br />ID: ' + res.data.id + '</div>');
-                //$('#testID').append('<h3>Test-ID: ' + res.data.id + '</h3>');
-                $('#testStrucDisplayHTML').append("<tr style='background-color:#ddd;border-bottom:1px solid #bbb;'><th style='width:476px'>" + UILANG.m('Name fluid testblock') + "</th><th style='width:60px'>" + UILANG.m('Pages') + "</tr>");
+                $('#testID').html('<div class="tmTestAssignPreviewType is-fluid"><span>' + UILANG.m('fluid test') + '</span><span>ID: ' + res.data.id + '</span></div>');
+                $('.tmTestAssignPreviewTableHead thead').append("<tr><th>" + UILANG.m('Name fluid testblock') + "</th><th>" + UILANG.m('Pages') + "</th></tr>");
                 $.each(res.data.structure.items, function (key, value) {
                     let html;
                     if (value.name === 'Invalid testblock!') {
-                        html = sf("<tr style='border-bottom:1px dotted #ccc;'><td style='color:#DD1A00;'>%@</td><td>%@</td></tr>", value.name, value.numberOfItems);
+                        html = sf("<tr class='is-invalid'><td>%@</td><td>%@</td></tr>", value.name, value.numberOfItems);
                     } else {
-                        html = sf("<tr style='border-bottom:1px dotted #ccc;'><td>%@</td><td>%@</td></tr>", value.name, value.numberOfItems);
+                        html = sf("<tr><td>%@</td><td>%@</td></tr>", value.name, value.numberOfItems);
                     }
-                    $('#testStrucDisplayHTML').append(html);
+                    $('#testStrucDisplayHTML tbody').append(html);
                 })
             } else if (res.data.structure.type === 'mutation') {
-                $('#testID').html('<div class="tm_mutation">' + UILANG.m('mutation test') + '<br />ID: ' + res.data.id + '</div>');
-                //$('#testID').append('<h3>Test-ID: ' + res.data.id + '</h3>');
-                $('#testStrucDisplayHTML').append("<tr style='background-color:#ddd;border-bottom:1px solid #bbb;'><th style='width:476px'>" + UILANG.m('Name linear test') + "</th><th style='width:60px'>" + UILANG.m('Pages') + "</tr>");
+                const mutationTestLabel = UILANG.m('mutation test') === 'mutation test' ? 'Mutation Test' : UILANG.m('mutation test');
+                $('#testID').html('<div class="tmTestAssignPreviewType is-mutation"><span>' + mutationTestLabel + '</span><span>ID: ' + res.data.id + '</span></div>');
+                $('.tmTestAssignPreviewTableHead thead').append("<tr><th>" + UILANG.m('Name linear test') + "</th><th>" + UILANG.m('Pages') + "</th></tr>");
                 $.each(res.data.structure.items, function (key, value) {
                     let html;
                     if (value.name === 'Invalid test!') {
-                        html = sf("<tr style='border-bottom:1px dotted #ccc;'><td style='color:#DD1A00;'>%@</td><td>%@</td></tr>", value.name, value.structCount);
+                        html = sf("<tr class='is-invalid'><td>%@</td><td>%@</td></tr>", value.name, value.structCount);
                     } else {
-                        html = sf("<tr style='border-bottom:1px dotted #ccc;'><td>%@</td><td>%@</td></tr>", value.name, value.structCount);
+                        html = sf("<tr><td>%@</td><td>%@</td></tr>", value.name, value.structCount);
                     }
-                    $('#testStrucDisplayHTML').append(html);
+                    $('#testStrucDisplayHTML tbody').append(html);
                 })
             } else {
-                $('#testID').html('<div class="tm_linear">' + UILANG.m('linear test') + '<br />ID: ' + res.data.id + '</div>');
-                //$('#testID').append('<h3>Test-ID: ' + res.data.id + '</h3>');
-                $('#testStrucDisplayHTML').append("<tr style='background-color:#ddd;border-bottom:1px solid #bbb;'><th style='width:262px'>" + UILANG.m('Name test page') + "</th><th style='width:102px'>" + UILANG.m('Code') + "</th></tr>");
+                $('#testID').html('<div class="tmTestAssignPreviewType is-linear"><span>' + UILANG.m('linear test') + '</span><span>ID: ' + res.data.id + '</span></div>');
+                $('.tmTestAssignPreviewTableHead thead').append("<tr><th>" + UILANG.m('Name test page') + "</th><th>" + UILANG.m('Code') + "</th></tr>");
                 $.each(res.data.structure.items, function (key, value) {
                     let html;
                     if (value.name === 'Invalid test page!') {
-                        //L10Ncheck: UILANG.m('Invalid test page!')
-                        html = sf("<tr style='border-bottom:1px dotted #ccc;'><td style='color:#DD1A00;'>%@</td><td>%@</td></tr>", UILANG.m(value.name), value.code);
+                        html = sf("<tr class='is-invalid'><td>%@</td><td>%@</td></tr>", UILANG.m('Invalid test page!'), value.code);
                     } else {
-                        html = sf("<tr style='border-bottom:1px dotted #ccc;'><td>%@</td><td>%@</td></tr>", UILANG.e(value.name), value.code);
+                        html = sf("<tr><td>%@</td><td>%@</td></tr>", UILANG.e(value.name), value.code);
                     }
-                    $('#testStrucDisplayHTML').append(html);
+                    $('#testStrucDisplayHTML tbody').append(html);
                 })
             }
             break;
@@ -5012,10 +6867,17 @@ function ajaxSuccess(res) {
             window.permList = res.permList; // used for selective button enabling
             setLibPerms();
             updateLibrary(res.data.list, res.data.path);
-            gui.library.setSelection([{
-                id: res.data.id
-            }]);
-            gui.library.getSelect();
+            if (res.action === 'newTest') {
+                gui.library.setSelection([{
+                    id: res.data.id
+                }], true);
+                gui.library.getSelectDblclick();
+            } else {
+                gui.library.setSelection([{
+                    id: res.data.id
+                }]);
+                gui.library.getSelect();
+            }
             break;
         case 'fetchFolder':
             serverData.testLevel = res.data;
@@ -5025,11 +6887,45 @@ function ajaxSuccess(res) {
             }
             break;
         case 'fetchTest':
+            {
+                const responseTestId = res.data && (res.data.dbId || res.data.id);
+                if (mode === 'browsing' && typeof res._requestToken !== 'undefined' &&
+                    (res._requestToken !== pendingTestLevelToken ||
+                        String(responseTestId) !== String(pendingTestLevelId) ||
+                        selection.length !== 1 ||
+                        !['testee', 'template', 'cloned'].includes(selection[0].type) ||
+                        String(selection[0].dbId) !== String(responseTestId))) {
+                    return;
+                }
+            }
             serverData.testLevel = res.data;
             serverData.testLevel.passwords = res.passwords;
             serverData.testLevel.activityData = res.activityData;
+            serverData.testLevel.previewResultStats = res.previewResultStats || {};
+            serverData.testLevel.templateCloneSummary = res.templateCloneSummary || null;
+            updateResetResultsAvailability();
             switchMessage(res.passwords.length);
             correctData();
+            if (mode === 'browsing' && !editOnData) {
+                let suppressPreviewPlausibility = false;
+                if (suppressPreviewPlausibilityForTesteeId !== null && suppressPreviewPlausibilityRemaining > 0) {
+                    suppressPreviewPlausibility = String(suppressPreviewPlausibilityForTesteeId) === String(serverData.testLevel.id);
+                    if (suppressPreviewPlausibility) {
+                        suppressPreviewPlausibilityRemaining -= 1;
+                    } else {
+                        suppressPreviewPlausibilityRemaining = 0;
+                    }
+                    if (suppressPreviewPlausibilityRemaining <= 0) {
+                        suppressPreviewPlausibilityForTesteeId = null;
+                    }
+                }
+                previewPlausibilityResult = suppressPreviewPlausibility ? {skipped: true} : null;
+                renderTesteePreview();
+                if (!suppressPreviewPlausibility) {
+                    startTesteePreviewPlausibilityCheck();
+                }
+                break;
+            }
             fillDataFields('editTest');
             if (editOnData) {
                 editSelection('dblclick');
@@ -5066,14 +6962,21 @@ function ajaxSuccess(res) {
             if (res.data.list.length > 0) {
                 gui.library.searchShow(res.data.list, res.data.searchString);
             } else {
-                showMsgNoSrchResults(UILANG.m('no_search_results'), res.data.searchString, gui.library);
+                showMsgNoSrchResults(UILANG.m('no_search_results'), res.data.searchString, gui.library, {metaSearch: true});
+            }
+            break;
+        case 'metaSearch':
+            if (res.data.list.length > 0) {
+                gui.library.searchShow(res.data.list, res.data.searchString);
+            } else {
+                showMsgNoSrchResults(UILANG.m('no_search_results'), res.data.searchString, gui.library, {metaSearch: true});
             }
             break;
         case 'testsSearch':
             if (res.data.list.length > 0) {
                 gui.library2.searchShow(res.data.list, res.data.searchString);
             } else {
-                showMsgNoSrchResults(UILANG.m('no_search_results'), res.data.searchString, gui.library2);
+                showMsgNoSrchResults(UILANG.m('no_search_results'), res.data.searchString, gui.library2, {metaSearch: true});
             }
             break;
         case 'newPassword':
@@ -5112,6 +7015,17 @@ function ajaxSuccess(res) {
             fillDataFields('editTest');
             selectionChanged();
             break;
+        case 'deleteTemplateClone':
+            gui.statusBar.setStatus(UILANG.m('Dataset deleted!'), 3000, '#0A0');
+            serverData.testLevel = res.data;
+            serverData.testLevel.passwords = res.passwords;
+            serverData.testLevel.activityData = res.activityData;
+            serverData.testLevel.previewResultStats = res.previewResultStats || {};
+            serverData.testLevel.templateCloneSummary = res.templateCloneSummary || null;
+            correctData();
+            fillDataFields('editTest');
+            renderTemplateCloneList();
+            break;
         case 'editPassword':
         case 'editLabel':
         case 'setPassword':
@@ -5125,7 +7039,27 @@ function ajaxSuccess(res) {
             selectionChanged(gui.passwords.getSelection());
             break;
         case 'resetResultsTestee':
-            gui.statusBar.setStatus(UILANG.m('Results of the test taker deleted!'), 3000, '#0A0');
+            if (Number(res.deletedRecords || 0) === 0) {
+                showResetResultsOutcomeDialog({
+                    deleted: false,
+                    message: res.resetMode && res.resetMode !== 'all'
+                        ? UILANG.m('No results matched the selected date criteria, so no result data was deleted.')
+                        : UILANG.m('No result data was available to delete.')
+                });
+            } else {
+                showResetResultsOutcomeDialog({
+                    deleted: true,
+                    message: res.resetMode && res.resetMode !== 'all'
+                        ? UILANG.m('All result data matching the selected date criteria was deleted.')
+                        : UILANG.m('All selected result data was deleted.')
+                });
+            }
+            if (serverData.testLevel && serverData.testLevel.template === 'template') {
+                startAjax('fetchTest', {
+                    dbId: serverData.testLevel.id, location: loc.folder
+                });
+                break;
+            }
             if (currPwId != null) {
                 startAjax('fetchTestsAssigned', {
                     id: currPwId, testee: selection[0].dbId
@@ -5133,13 +7067,31 @@ function ajaxSuccess(res) {
             }
             break;
         case 'resetResultsPassword':
-            gui.statusBar.setStatus(UILANG.m('Results of the tests deleted!'), 3000, '#0A0');
+            showResetResultsOutcomeDialog({
+                deleted: true,
+                message: UILANG.m('All result data associated with the selected password or label was deleted.')
+            });
             startAjax('fetchTestsAssigned', {
                 id: currPwId, testee: selection[0].dbId
             });
             break;
         case 'resetResultsTest':
-            gui.statusBar.setStatus(UILANG.m('Results of the test deleted!'), 3000, '#0A0');
+            showResetResultsOutcomeDialog({
+                deleted: true,
+                message: UILANG.m('The result data for the selected test and user was deleted.')
+            });
+            if (serverData.testLevel && serverData.testLevel.template === 'template') {
+                if (currPwId != null) {
+                    startAjax('fetchTestsAssigned', {
+                        id: currPwId, testee: selection[0].dbId
+                    });
+                } else {
+                    startAjax('fetchTest', {
+                        dbId: serverData.testLevel.id, location: loc.folder
+                    });
+                }
+                break;
+            }
             startAjax('fetchTestsAssigned', {
                 id: currPwId, testee: selection[0].dbId
             });
@@ -5156,6 +7108,14 @@ function ajaxSuccess(res) {
             break;
         case 'fetchTestsAssigned':
             serverData.testLevel.activePass = res.password;
+            if (typeof res.hasAnyResults !== 'undefined' && serverData.testLevel.template !== 'template') {
+                updateResetResultsAvailability(Boolean(res.hasAnyResults));
+            }
+            if (typeof res.templateCloneSummary !== 'undefined') {
+                serverData.testLevel.templateCloneSummary = res.templateCloneSummary || null;
+                serverData.testLevel.previewResultStats = res.previewResultStats || {};
+                renderTemplateCloneList();
+            }
             const structureItems = res.password.structure;
             gui.structureView.clearElements(true);
             if (structureItems && structureItems.length > 0) {
@@ -5166,17 +7126,28 @@ function ajaxSuccess(res) {
                 $('#testPanelList').show();
                 $('#structureTbText').show();
                 structureTbButtons.copyLink.enable();
-                if ((serverData.testLevel.template === 'testee' || serverData.testLevel.template === 'cloned') && res.dataFlag === true) {
+                if (serverData.testLevel.template === 'testee' && res.dataFlag === true) {
+                    structureTbButtons.resetPass.show();
                     structureTbButtons.resetPass.enable();
                 } else {
                     structureTbButtons.resetPass.disable();
+                    if (serverData.testLevel.template === 'template') {
+                        structureTbButtons.resetPass.hide();
+                    } else {
+                        structureTbButtons.resetPass.show();
+                    }
                 }
 
-                if (serverData.testLevel.template === 'template') gui.structureView.killActionFields();
             } else {
                 $('#noAssignmentMsg').show();
                 $('#testPanelList').hide();
                 structureTbButtons.copyLink.disable();
+                structureTbButtons.resetPass.disable();
+                if (serverData.testLevel && serverData.testLevel.template === 'template') {
+                    structureTbButtons.resetPass.hide();
+                } else {
+                    structureTbButtons.resetPass.show();
+                }
             }
             if (structureItems && structureItems.length === 1) {
                 $(structureTbText).html(structureItems.length + ' ' + UILANG.m('test assigned'));
@@ -5185,6 +7156,13 @@ function ajaxSuccess(res) {
             }
             break;
         case 'plausibilityCheck':
+            if (typeof res._requestToken !== 'undefined' && res._requestToken === pendingPreviewCheckToken) {
+                if (mode === 'browsing') {
+                    previewPlausibilityResult = res;
+                    renderTesteePreview();
+                }
+                break;
+            }
             // Show results of plausibility check
             if ($("#pCheckErrorDiv").length === 0) {
                 $('body').append('<div id="pCheckErrorDiv" style="display:none;"></div>')
@@ -5195,7 +7173,11 @@ function ajaxSuccess(res) {
             if(stuLog){
                 // No errors found
                 if (!res.noPws && !res.pwsWithoutTests && !res.pwsWithDeletedTests) {
-                    pbCheckHtml.append('<div class="pCheckSuccessDiv"><h3>' + UILANG.m('Plausibility check completed successfully!') + '</h3>' + UILANG.m('No issues found for this test taker:') + '<br /><ul class="pCheckUl"><li><img alt="" src="../images/ok.png" height="15px;" />&nbsp;' + UILANG.m('Labels have been created.') + '</li><li><ul class="pCheckUl"><li><img alt="" src="../images/ok.png" height="15px;" />&nbsp;' + UILANG.m('All labels have one or more tests assigned.') + '</li><li><ul class="pCheckUl"><li><img alt="" src="../images/ok.png" height="15px;" />&nbsp;' + UILANG.m('All assigned tests are still present in the database.') + '</li></ul></div>');
+                    pbCheckHtml.append(ttPCheckSuccessHtml(UILANG.m('No issues found for this test taker:'), [
+                        UILANG.m('Labels have been created.'),
+                        UILANG.m('All labels have one or more tests assigned.'),
+                        UILANG.m('All assigned tests are still present in the database.')
+                    ]));
                 }
                 // Passwords with no assigned tests found
                 if (res.noPws) {
@@ -5212,7 +7194,11 @@ function ajaxSuccess(res) {
             } else {
                 // No errors found
                 if (!res.noPws && !res.pwsWithoutTests && !res.pwsWithDeletedTests) {
-                    pbCheckHtml.append('<div class="pCheckSuccessDiv"><h3>' + UILANG.m('Plausibility check completed successfully!') + '</h3>' + UILANG.m('No issues found for this test taker:') + '<br /><ul class="pCheckUl"><li><img alt="" src="../images/ok.png" height="15px;" />&nbsp;' + UILANG.m('Passwords have been created.') + '</li><li><ul class="pCheckUl"><li><img alt="" src="../images/ok.png" height="15px;" />&nbsp;' + UILANG.m('All passwords have one or more tests assigned.') + '</li><li><ul class="pCheckUl"><li><img alt="" src="../images/ok.png" height="15px;" />&nbsp;' + UILANG.m('All assigned tests are still present in the database.') + '</li></ul></div>');
+                    pbCheckHtml.append(ttPCheckSuccessHtml(UILANG.m('No issues found for this test taker:'), [
+                        UILANG.m('Passwords have been created.'),
+                        UILANG.m('All passwords have one or more tests assigned.'),
+                        UILANG.m('All assigned tests are still present in the database.')
+                    ]));
                 }
                 // Passwords with no assigned tests found
                 if (res.noPws) {
@@ -5235,7 +7221,7 @@ function ajaxSuccess(res) {
                     buttons: [{
                         label: UILANG.m('Close'), 'default': false, disabled: false, value: 'ok'
                     }, {
-                        label: UILANG.m('Edit test taker'), 'default': true, disabled: false, value: 'edit'
+                        label: ttEditTesteeLabel(serverData.testLevel, selection[0]), 'default': true, disabled: false, value: 'edit'
                     }],
                     contentId: 'pCheckErrorDiv',
                     title: UILANG.m('Plausibility check'),
@@ -5262,52 +7248,124 @@ function ajaxSuccess(res) {
             }
             const add2selDiv = $('#add2selDiv');
             add2selDiv.empty();
-            //Build HTML for message
-            add2selDiv.append('<div id="add2selInfoBox"></div>');
-            const add2selInfoBox = $('#add2selInfoBox');
+            const add2selChanges = res.changes || [];
+            const add2selWarnings = res.warnings || [];
+            const add2selChangeCount = $(add2selChanges).length;
+            const add2selWarningCount = $(add2selWarnings).length;
+            const add2selContent = $('<div/>', {'class': 'add2selDialog'}).appendTo(add2selDiv);
+            const add2selInfoBox = $('<div/>', {
+                id: 'add2selInfoBox',
+                'class': 'add2selSummary'
+            }).appendTo(add2selContent);
 
-            add2selInfoBox.append('<h3>' + UILANG.m('Operation completed!') + '</h3>');
+            $('<div/>', {'class': 'add2selSummaryTitle', text: UILANG.m('Operation completed!')}).appendTo(add2selInfoBox);
 
-            if ($(res.changes).length > 1) {
-                add2selInfoBox.append('<strong>' + UILANG.m('Tasks:') + '</strong><br />');
-            } else {
-                add2selInfoBox.append('<strong>' + UILANG.m('Task:') + '</strong><br />');
-            }
+            const add2selTaskPanel = $('<div/>', {'class': 'add2selPanel'}).appendTo(add2selContent);
+            $('<div/>', {
+                'class': 'add2selPanelHeader',
+                text: add2selChangeCount > 1 ? UILANG.m('Tasks:') : UILANG.m('Task:')
+            }).appendTo(add2selTaskPanel);
+            const add2selTaskList = $('<ul/>', {'class': 'add2selList add2selTaskList'}).appendTo(add2selTaskPanel);
 
-            $.each(res.changes, function (k, v) {
-                add2selInfoBox.append(v + '<br />');
+            $.each(add2selChanges, function (k, v) {
+                $('<li/>').html(v).appendTo(add2selTaskList);
             });
-            add2selInfoBox.append('<br />');
-            //Show warnings
 
-            if ($(res.warnings).length > 0) {
-                add2selDiv.append('<br /><div class="add2selError">' + UILANG.m('Warning:') + ' ' + UILANG.m('The following issues have been detected:') + '</div>');
+            if (add2selWarningCount > 0) {
+                $('<div/>', {
+                    'class': 'add2selNotice is-warning',
+                    text: UILANG.m('Warning:') + ' ' + UILANG.m('The following issues have been detected:')
+                }).appendTo(add2selContent);
+                const add2selWarningPanel = $('<div/>', {'class': 'add2selPanel add2selWarningPanel'}).appendTo(add2selContent);
+                $('<div/>', {'class': 'add2selPanelHeader', text: UILANG.m('Warning:')}).appendTo(add2selWarningPanel);
+                const add2selWarningList = $('<ul/>', {'class': 'add2selList'}).appendTo(add2selWarningPanel);
+                $.each(add2selWarnings, function (k, v) {
+                    $('<li/>').html(v.message || v).appendTo(add2selWarningList);
+                });
             } else {
-                add2selDiv.append('<br /><div class="add2selSuccessDiv">' + UILANG.m('All tasks completed successfully. No issues found!') + '</div>');
+                $('<div/>', {
+                    'class': 'add2selNotice is-success',
+                    text: UILANG.m('All tasks completed successfully. No issues found!')
+                }).appendTo(add2selContent);
             }
-            add2selDiv.append('<br />');
-            // Display Warnings
-            $.each(res.warnings, function (k, v) {
-                add2selDiv.append(v.message + '<hr class="add2selHR" />');
-            });
 
             const add2selMsg = {
                 buttons: [{
-                    label: UILANG.m('Close'), 'default': true, disabled: false
+                    label: UILANG.m('Close'), 'default': true, disabled: false, value: 'close'
                 }], contentId: 'add2selDiv', title: UILANG.m('Add to selected test takers'), width: 700
             };
             new nxDialog('add2selMsgBox', add2selMsg);
 
             break;
+        case 'bulkModifyExisting':
+            if (res.bulkResult) {
+                const result = res.bulkResult;
+                const modifiedEntryName = bulkModifyContext && bulkModifyContext.analysis.kind === 'student'
+                    ? UILANG.m('label')
+                    : UILANG.m('password');
+                const modifiedEntriesLabel = bulkModifyContext && bulkModifyContext.analysis.kind === 'student'
+                    ? UILANG.m('Labels updated')
+                    : UILANG.m('Passwords updated');
+                mode = 'browsing';
+                bulkModifyContext = null;
+                selHasStudent = false;
+                gui.statusBar.setStatus(UILANG.m('Bulk modification completed successfully!'), 3000, '#0A0');
+                startAjax('fetchLibrary', {
+                    location: res.id || loc.folder,
+                    showBlocked: showBlocked
+                });
+                let completionContents =
+                    '<div class="tmActionConfirm">' +
+                        '<strong>' + UILANG.m('Changes saved successfully') + '</strong>' +
+                        '<div class="tmActionConfirmMeta"><span>' + modifiedEntriesLabel + '</span><strong>' + result.matched + '</strong></div>';
+                if (result.missing) {
+                    completionContents +=
+                        '<div class="tmActionConfirmMeta"><span>' +
+                            sf(UILANG.m('Selected test takers without this %@'), modifiedEntryName) +
+                        '</span><strong>' + result.missing + '</strong></div>';
+                }
+                completionContents += '</div>';
+                new nxDialog('bulkModifyExistingComplete', {
+                    buttons: [{
+                        label: UILANG.m('OK'), 'default': true, cancel: true, value: 'ok'
+                    }],
+                    contents: completionContents,
+                    title: UILANG.m('Bulk modification completed'),
+                    width: 500
+                });
+            }
+            break;
         case 'wizardCreate':
         case 'wizardCreateFromFile':
             abortEditing();
-            startAjax('fetchLibrary', {
-                location: res.id, showBlocked: showBlocked
-            });
-            gui.statusBar.setStatus(UILANG.m('Your test takers (logins) have been created successfully!'), 3000, '#0A0');
+            if (res.importSummary && Number(res.importSummary.imported || 0) === 0) {
+                gui.statusBar.setStatus(UILANG.m('No test takers were imported.'), 3000, '#A60');
+            } else {
+                gui.statusBar.setStatus(UILANG.m('Your test takers (logins) have been created successfully!'), 3000, '#0A0');
+            }
+            if (res.importSummary && Number(res.importSummary.skipped || 0) > 0) {
+                let skipHtml = '<p>' + UILANG.m('Some test takers were skipped because one or more referenced test IDs do not exist or are not accessible for your account.') + '</p><ul>';
+                $.each(res.importSummary.skippedDetails || [], function(k, v) {
+                    let details = [];
+                    if (v.missing && v.missing.length > 0) details.push(UILANG.m('missing test IDs') + ': ' + v.missing.join(', '));
+                    if (v.denied && v.denied.length > 0) details.push(UILANG.m('inaccessible test IDs') + ': ' + v.denied.join(', '));
+                    skipHtml += '<li><strong>' + escapeHtml(v.name || '') + '</strong> (' + UILANG.m('line') + ' ' + (v.lines || []).join(', ') + '): ' + escapeHtml(details.join('; ')) + '</li>';
+                });
+                skipHtml += '</ul>';
+                new nxDialog('csvImportWarnings', {
+                    buttons: [{label: UILANG.m('OK'), 'default': true, cancel: true, value: 'ok'}],
+                    contents: '<div class="tmValidationMessage"><div class="tmValidationBody">' + skipHtml + '</div></div>',
+                    title: UILANG.m('Import completed with warnings'),
+                    type: 'warning',
+                    width: 650
+                });
+            }
             break;
         case 'exportCSV':
+            if(res.CSVArray.length<1){
+                showMessage(UILANG.m('No list was generated because your selection contains no test takers, or the selected folders are empty.'));
+                break;
+            }
             //Exporting list of test takers for test admins
             //Creating header line CSV
             const writeArray = [];

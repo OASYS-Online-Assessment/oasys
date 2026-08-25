@@ -1,0 +1,52 @@
+#-------------------------------------------------------------------------------#
+#               Qodana analysis is configured by qodana.yaml file               #
+#             https://www.jetbrains.com/help/qodana/qodana-yaml.html            #
+#-------------------------------------------------------------------------------#
+version: "1.0"
+
+#Specify inspection profile for code analysis
+profile:
+  path: qodana/profiles/default.yaml
+
+exclude:
+  - name: All
+    paths:
+      - inc/domPDF
+      - inc/phpmailer
+      - inc/mejs
+      - inc/math-php
+      - inc/results_reporter/TBS
+      - inc/mathjax
+      - inc/js/he.js
+      - inc/tinymce
+      - modules/inl/editor/js/vfs_fonts.js
+      - modules/inl/editor/js/pdfmake.min.js
+      - inc/jquery_colorpicker
+      - inc/jquery_contextmenu
+      - inc/jquery_hover_intent
+      - inc/jquery-ui-1.12.1
+      - inc/vendor
+      - inc/raphael
+
+php:
+  version: "8.3" #(Applied in CI/CD pipeline)
+
+#Execute shell command before Qodana execution (Applied in CI/CD pipeline)
+#bootstrap: sh ./prepare-qodana.sh
+
+#download jQuery and jQuery UI before Qodana execution so as to avoid false positives
+bootstrap: |
+  npm install jquery jquery-ui
+
+#Install IDE plugins before Qodana execution (Applied in CI/CD pipeline)
+#plugins:
+#  - id: <plugin.id> #(plugin id can be found at https://plugins.jetbrains.com)
+
+#Specify Qodana linter for analysis (Applied in CI/CD pipeline)
+linter: jetbrains/qodana-php:latest
+
+#script:
+#  name: php-migration
+#  parameters:
+#    fromLevel: 8.0
+#    toLevel: 8.3

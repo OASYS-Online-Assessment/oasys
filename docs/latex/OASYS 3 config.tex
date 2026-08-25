@@ -1,0 +1,280 @@
+\documentclass[12pt]{article} % Default font size is 12pt, it can be changed here
+\usepackage{fontspec}
+%Ligatures=TexOff disable the Tex specific ligatures which converst quotes into typographic quotes
+\setmainfont{OpenSans}[Ligatures=TeXOff, Path=fonts/,Extension=.ttf, UprightFont=*-Regular, ItalicFont=*-Italic, BoldFont=*-Bold, BoldItalicFont=*-BoldItalic]
+\usepackage{microtype}
+
+%\usepackage{tabulary}
+\usepackage{tabu} %span tables over multiple pages while still wrapping text inside cells
+\usepackage{longtable} %needed by tabu package
+\usepackage{geometry}
+\geometry{a4paper, total={170mm,257mm}, left=20mm, top=20mm, }
+
+\usepackage{graphicx} % Required for including pictures
+\usepackage{tikz}
+\usepackage{float} % Allows putting an [H] in \begin{figure} to specify the exact location of the figure
+\usepackage{wrapfig} % Allows in-line images such as the example fish picture
+\usepackage{lipsum} % Used for inserting dummy 'Lorem ipsum' text into the template
+\usepackage{xparse} % Used for defining new commands with arguments
+\usepackage{enumitem}
+
+\newcommand{\sectionbreak}{\clearpage}
+
+\graphicspath{{../graphics/}} % Specifies the directory where pictures are stored 
+
+\usepackage{tcolorbox}
+\tcbuselibrary{skins}
+
+\usepackage{listings} % Code listings
+\usepackage{color}
+\definecolor{lightgray}{rgb}{.9,.9,.9}
+\definecolor{darkgray}{rgb}{.4,.4,.4}
+\definecolor{purple}{rgb}{0.65, 0.12, 0.82}
+\definecolor{orange}{rgb}{1, 0.4, 0.0}
+
+\lstdefinelanguage{JavaScript}{
+    keywords={typeof, new, true, false, catch, function, return, null, catch, switch, var, if, in, while, do, else, case, break},
+    keywordstyle=\color{blue}\bfseries,
+    ndkeywords={class, export, boolean, throw, implements, import, this},
+    ndkeywordstyle=\color{darkgray}\bfseries,
+    identifierstyle=\color{black},
+    sensitive=false,
+    comment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    commentstyle=\color{orange}\ttfamily,
+    stringstyle=\color{purple}\ttfamily,
+    morestring=[b]',
+    morestring=[b]"
+}
+
+\lstset{
+    language=JavaScript,
+    backgroundcolor=\color{blue!5},
+    extendedchars=true,
+    basicstyle=\scriptsize\ttfamily,
+    showstringspaces=false,
+    showspaces=false,
+    tabsize=4,
+    breaklines=true,
+    showtabs=false,
+    captionpos=b,
+    frame=leftline,
+    rulecolor=\color{blue!20},
+    framerule=2pt
+}
+\setlength{\parindent}{0pt} % removes the default indentation of first lines
+\setlength{\tabcolsep}{12pt}
+
+\newenvironment{mono}{\ttfamily}{\par}
+\newenvironment{keyword}{\leavevmode\color{magenta}\ttfamily}{}
+\newenvironment{keywordpurple}{\leavevmode\color{purple}}{}
+\newenvironment{examplecomment}{\leavevmode\color{magenta!60!white}}{}
+\newenvironment{code}{\begin{mdframed}[linewidth=4pt, linecolor=blue!40, topline=false, bottomline=false, rightline=false, backgroundcolor=blue!10]
+                          \begin{mono}}{\end{mono}
+\end{mdframed}}
+
+\newenvironment{properties}
+{
+    \footnotesize\renewcommand{\arraystretch}{1.30}
+    \renewcommand{\tabcolsep}{0pt}
+    \begin{longtable}{>{\begin{keyword}}p{3.1cm}<{\end{keyword}}p{13.9cm}}
+        \hline
+        }
+        {
+        \hline
+    \end{longtable}\vspace{5mm}
+}
+
+\newenvironment{parameters}
+{
+    \footnotesize\renewcommand{\arraystretch}{1.30}
+    \renewcommand{\tabcolsep}{0pt}
+    \begin{longtable}{>{\begin{keyword}}p{3cm}<{\end{keyword}}>{\begin{em}}p{1.5cm}<{\end{em}}p{12.5cm}}
+        \hline
+        }
+        {
+        \hline
+    \end{longtable}\scriptsize\vspace{-5mm}*mandatory parameters\vspace{5mm}
+}
+
+\NewDocumentEnvironment{variable_properties}{mm} % two mandatory args
+{
+    \footnotesize\renewcommand{\arraystretch}{1.30}
+    \renewcommand{\tabcolsep}{0pt}
+    \begin{longtable}{>{\begin{keyword}}p{#1}<{\end{keyword}}p{#2}}
+        \hline
+        }{
+        \hline
+    \end{longtable}\vspace{5mm}
+}
+
+\newtcolorbox{exampleResultBox}[2][]{
+    skin=bicolor,colback=magenta!10!white,
+    fonttitle=\bfseries,
+    colbacktitle=magenta,
+    bottomtitle=2mm,
+    toptitle=2mm,
+    colbacklower=black!10!white,
+    title=#2,#1,
+    boxrule=0mm,
+    middle=0mm,
+    boxsep=0mm,
+    left=5mm,
+    right=5mm,
+    bottom=5mm,
+    top=5mm,
+    after upper={\hyphenpenalty=10000\raggedright\vskip 5mm\null},
+    subtitle style={colback=black,left=5mm,right=5mm,bottom=2mm,top=2mm}
+}
+
+\newtcolorbox{exampleBox}[2][]{
+    colback=magenta!10!white,
+    fonttitle=\bfseries,
+    colbacktitle=magenta,
+    boxrule=0mm,
+    title=#2,#1
+}
+
+\newtcolorbox{resultBox}[2][]{
+    colback=black!20!white,
+    fonttitle=\bfseries,
+    colbacktitle=black,
+    boxrule=0mm,
+    title=#2,#1
+}
+
+\newtcolorbox{advancedBox}[2][]{
+    colback=purple!10!white,
+    fonttitle=\bfseries,
+    colbacktitle=purple,
+    boxrule=0mm,
+    title=#2,#1
+}
+
+\newtcbox{\tokenbox}{
+    on line,
+    colback=magenta,
+    coltext=white,
+    boxrule=0pt,
+    arc=5pt,
+    boxsep=1pt,
+    left=3pt, right=3pt,
+    top=1pt, bottom=1pt,
+    tcbox raise base,
+    enhanced,
+    before=\hspace{2pt}, % space before box
+    after=\hspace{2pt}, % space after box
+}
+
+\newcommand{\token}[1]{\tokenbox{\MakeUppercase{#1}}}
+
+\setlength{\parskip}{-0.2cm}
+\setlist{noitemsep} % needs enumitem package
+
+\DeclareTextFontCommand{\kw}{\keyword}
+\DeclareTextFontCommand{\kwp}{\keywordpurple}
+
+\begin{document}
+    \small
+
+%----------------------------------------------------------------------------------------
+%	TITLE PAGE
+%----------------------------------------------------------------------------------------
+
+    \begin{titlepage}
+
+        \newcommand{\HRule}{\rule{\linewidth}{0.5mm}} % Defines a new command for the horizontal lines, change thickness here
+
+        \center % Center everything on the page
+
+        \begin{tikzpicture}[remember picture,overlay]
+            \node[anchor=north west,inner sep=1cm] at (current page.north west){\includegraphics[width=3cm]{logos/UniLogo}};
+        \end{tikzpicture}
+
+        \begin{tikzpicture}[remember picture,overlay]
+            \node[anchor=north east,inner sep=1cm] at (current page.north east){\includegraphics[width=6cm]{logos/LUCET}};
+        \end{tikzpicture}\\[6cm]
+
+        {\large OASYS v3.5.0}\\[0.5cm] % Software version this document applies to
+
+        \HRule \\[0.4cm]
+        { \huge \bfseries Configuration}\\[0.4cm] % Title of document
+        \HRule \\[1.5cm]
+
+        \large
+        \textit{Author:} Eric J. FRANCOIS % Your name
+        \begin{tikzpicture}[remember picture,overlay]
+            \node[anchor=south,inner sep=2cm] at (current page.south){\large \today};
+        \end{tikzpicture}
+
+    \end{titlepage}
+
+    \newpage
+
+
+    \section{database credentials}\label{sec:db_credentials}
+    OASYS uses a MariaDB database to store its data. Be aware that MariaDB is no longer fully compatible with MySQL, so a MySQL database cannot be used.\\
+
+    During the installation of OASYS, the database credentials are defined and stored in a configuration file.\\
+
+    If OASYS is installed in the typical way, via the official installer, the database configuration file is located in: \kw{<root folder>/inc/php/db\_credentials.php}\\
+
+    In case the database credentials need to be changed, this file can be edited with a text editor.\\
+
+    However for extra security, OASYS also supports the use of environment variables to define the database credentials.\\
+
+    If the following environment variables are defined, they will override the values in the configuration file:
+    \begin{itemize}
+        \item \kw{db\_oasys\_host} - the database
+        \item \kw{db\_oasys\_name} - the database name
+        \item \kw{db\_oasys\_user} - the database user
+        \item \kw{db\_oasys\_pass} - the database password
+    \end{itemize}
+    \vspace{0.3cm}
+
+    For servers that are running multiple instances of OASYS, it is possible to define custom names for these variables.\\
+
+    You can do so by editing the file \kw{<root folder>/conf/env.ini} and changing the values as you see fit.\\
+
+    \section{encryption}\label{sec:encryption}
+    For security reasons, OASYS encrypts sensitive data before storing it in the database.\\
+
+    While backend user logins will have hashed passwords, for highest security, other sensitive data such as the password to an LDAP server are encrypted using the OpenSSL library.\\
+
+    Also the passwords for test takers are encrypted before being stored in the database. Since these need to be editable in the editor, respectively exportable, they cannot be hashed.\\
+
+    After installation, no encryption key is defined, and OASYS will generate a random key the first time it tries to read the configuration.\\
+
+    For this reason it is imperative, that the directory \kw{<root folder>/conf/} is writable by the web server user.\\
+
+    Be aware that you should backup the file \kw{<root folder>/conf/crypt.ini} after it has been generated. Without it, parts of your database will be useless and OASYS will not be able to function properly.\\
+
+    Alternatively, you can also define your encryption key in environment variables, by defining the following variables:
+    \begin{itemize}
+        \item \kw{oasys\_aes\_key} - the key (32 bit) written in hexadecimal
+        \item \kw{oasys\_aes\_iv} - the iv (16 bit) written in hexadecimal
+    \end{itemize}
+    \vspace{0.3cm}
+
+    As with the database credentials, you can also define custom names for these variables by editing the file \kw{<root folder>/conf/env.ini} and changing the values as you see fit.\\
+
+%\section{xxx}\label{sec:xxx}
+%
+%Syntax:\hspace{0.5cm}\kw{[@XX ... @]}
+%
+%\begin{properties}
+%\hline
+%ID & this defines the variable name for the results of the XXX; if omitted, the fields will be autonamed: XX\_1, XX\_2, ... etc.\\
+%\hline
+%\end{properties}
+%\vspace{0.1cm}
+%
+%\begin{exampleBox}{Example}
+%	xxx:\\
+%	\kw{[@XXX \ldots@]}
+%\end{exampleBox}
+
+\end{document}
+
+
+

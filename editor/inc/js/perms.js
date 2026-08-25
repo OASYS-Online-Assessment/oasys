@@ -11,8 +11,12 @@ let oMasterList = [];
 let ugMasterList = [];
 let m_opts = {};
 let m_inheritOpts = null;
+let m_rootInheritanceDropdown = null;
 let m_recursOpts = null;
 let m_owner_recursOpts = null;
+let recursivePermissionsAvailable = false;
+let targetHasSubfolders = false;
+let ownerRecursionIntent = false;
 let permFldParent = null;
 let permMultiSel = false;
 // list of users with access to itemgroup global variable
@@ -29,6 +33,48 @@ let editPermDialog;
 let newOwner = null;
 let oldOwner = null;
 
+function updateRecursivePermissionsVisibility() {
+    const editedGroupIds = new Set(
+        Object.values(eTsListObj)
+            .filter((entry) => entry.getDataId().edited === true)
+            .map((entry) => String(entry.getDataId().userGroup))
+    );
+
+    $('#eUgList ul li').removeClass('permissionsModified');
+    editedGroupIds.forEach((groupId) => {
+        $(`#eUgList_${groupId}`).addClass('permissionsModified');
+    });
+
+    recursivePermissionsAvailable = editedGroupIds.size > 0;
+    $('#perm_reucurs_check').toggleClass('isAvailable', !ihLocalState && recursivePermissionsAvailable && targetHasSubfolders);
+}
+
+function updateOwnerRecursionVisibility(ownerChanged = false) {
+    const controls = $('#ownerBox_controls');
+    const canOfferRecursion = Boolean(isSuper && targetHasSubfolders && m_owner_recursOpts);
+    const available = canOfferRecursion && ownerChanged;
+
+    controls.toggleClass('isAvailable', available);
+    if (!canOfferRecursion) {
+        ownerRecursionIntent = false;
+        if (m_owner_recursOpts) {
+            m_opts.m_opt_owner_recurs = false;
+            m_owner_recursOpts.lock();
+        }
+        controls.hide();
+        return;
+    }
+
+    if (available) {
+        m_owner_recursOpts.unlock();
+    } else {
+        ownerRecursionIntent = false;
+        m_opts.m_opt_owner_recurs = false;
+        m_owner_recursOpts.lock();
+    }
+    controls.css('display', $('#oList_id').is(':visible') ? 'flex' : 'none');
+}
+
 // Edit Permissions dialog box which shows access allowance, inherit properties, ownership options, etc.
 function editPermDiag(sender, uid, multi = false, button) {
 
@@ -38,7 +84,7 @@ function editPermDiag(sender, uid, multi = false, button) {
     if (sender === 'ctxMenu_curFld') {
         // permission request source = current folder (non-selection)
         permFldSels = parseInt(loc.folder);
-        permFldParent = loc.path[loc.path.length - 2].id;
+        permFldParent = parseInt(loc.path[loc.path.length - 2].id, 10);
         fldNames = loc.path[loc.path.length - 1].name
 
     } else {
@@ -58,6 +104,8 @@ function editPermDiag(sender, uid, multi = false, button) {
 
         // reset our change data variable upon reloading the nxDialog
         permChanged = false;
+        recursivePermissionsAvailable = false;
+        targetHasSubfolders = false;
 
         let dialogData = {
             buttons: [{
@@ -84,10 +132,17 @@ function editPermDiag(sender, uid, multi = false, button) {
                         <span id="ownerLabel" class="ownerTitle">${UILANG.m("Owner")}:</span>
                         <span id='owner_name'></span> 
                         <span id='new_owner'></span>
-                        <span><a href="#" id="editOwnerButton">${UILANG.m("Edit Owner")}</a></span>
+                        <button type="button" id="editOwnerButton">${UILANG.m("Edit Owner")}</button>
                     </div>
                     <div id="ownerList_container"></div>
                     <div id="ownerBox_controls"></div>
+                    <div id="ownerAccessLossWarning" class="permsDialogWarningMessage" role="alert" aria-live="polite">
+                        <span class="ownerAccessLossWarningIcon" aria-hidden="true">!</span>
+                        <span>
+                            <strong>${UILANG.m("You may lose permission access")}</strong>
+                            <span>${UILANG.m("After saving this owner change, you will no longer be able to edit this folder's permissions because none of your user groups has Edit Permissions access.")}</span>
+                        </span>
+                    </div>
                 </div>
                 ${(multi) ? /* html */`<div id="perm_warn_msg">
                 <button id="b_cl_warn"></button>
@@ -95,7 +150,7 @@ function editPermDiag(sender, uid, multi = false, button) {
                 <img src="../images/warning.png">
                 <div id="multipermsWarnTexts">
                 <h3>${UILANG.m("WARNING: YOU ARE IN THE BULK PERMISSIONS EDITOR MODE!!!")}</h3>
-                <div>${UILANG.m("You must manually configure each usergroup permission values you wish to update. Any untouched usergroup configurations (marked with an &quot;M&quot;) will retain their original access settings.")}</div>
+                <div>${UILANG.m("You must manually configure each usergroup permission values you wish to update. Any usergroup configuration marked as &quot;Unmodified&quot; will retain its original access settings.")}</div>
                 <div>${UILANG.m("It is strongly recommended to perform a system backup prior to saving any changes.")}</div>
                 </div>
                 </div>
@@ -144,8 +199,8 @@ function editPermDiag(sender, uid, multi = false, button) {
         editPermDialog = new nxDialog('EPD', dialogData, [sender, uid, multi]);
         $('#EPD').hide();
 
-        // hide inheritance option when in the root folder
-        if (permFldParent === 1) $('#up_actions_section').hide();
+        // Superadmins use the dedicated footer. Direct children of Home cannot inherit.
+        if (permFldParent === 1 || isSuper) $('#up_actions_section').hide();
 
         /* special options for multiselect */
 
@@ -157,8 +212,20 @@ function editPermDiag(sender, uid, multi = false, button) {
             m_opt_fld_recurs_do: false,
             m_opt_owner_recurs: false
         };
+        ownerRecursionIntent = false;
 
         if (multi || isSuper) {
+
+            $('#plContainer').after("<div id='multi_footer_opts'></div>");
+
+            $('#multi_footer_opts').append(/* html */ `
+                <div id="inheritanceChoiceRows">
+                    <div id="inheritanceEnabledRow" class="permissionOptionRow"></div>
+                    <div id="inheritanceDisabledRow" class="permissionOptionRow"></div>
+                    <div id="inheritanceRecursiveRow" class="permissionOptionRow"></div>
+                    <div id="rootInheritanceModeRow" class="permissionOptionRow"></div>
+                </div>
+            `);
 
             function updateMopts(stub, optData) {
 
@@ -176,32 +243,61 @@ function editPermDiag(sender, uid, multi = false, button) {
                 ihToggleActions();
             }
 
-            $('#plContainer').after("<div id='multi_footer_opts'></div>");
-
             m_inheritOpts = new jsMultipleChoice('multi_inherit', {
                 type: 'rb',
                 onChange: (_a, data) => updateMopts("m_opt_inh", data),
                 height: '15px',
-                elPrefix: /* html */ `<div class="multiPermOptionBlock">`,
-                lbPostfix: "</div>",
                 elements: [{
-                    elementParent: 'multi_footer_opts',
-                    labelParent: 'multi_footer_opts',
+                    elementParent: 'inheritanceEnabledRow',
+                    labelParent: 'inheritanceEnabledRow',
                     value: 'm_opt_inh_enabled',
                     label: UILANG.m("Inheritance enabled"),
                 }, {
-                    elementParent: 'multi_footer_opts',
-                    labelParent: 'multi_footer_opts',
+                    elementParent: 'inheritanceDisabledRow',
+                    labelParent: 'inheritanceDisabledRow',
                     value: 'm_opt_inh_disabled',
                     label: UILANG.m("Inheritance disabled"),
                 }]
             });
 
+            m_rootInheritanceDropdown = new jsDropList($('#rootInheritanceModeRow'), 'rootInheritanceMode', {
+                theme: 'backend',
+                width: 120,
+                initialValue: 'm_opt_inh_enabled',
+                elements: [{
+                    value: 'm_opt_inh_enabled',
+                    label: UILANG.m('Enabled')
+                }, {
+                    value: 'm_opt_inh_disabled',
+                    label: UILANG.m('Disabled')
+                }],
+                onChange: (_id, value) => {
+                    m_opts.m_opt_inh_enabled = value === 'm_opt_inh_enabled';
+                    m_opts.m_opt_inh_disabled = value === 'm_opt_inh_disabled';
+                    permChanged = true;
+                    editPermDialog.enableButton('save');
+                }
+            });
+            m_rootInheritanceDropdown.lock();
+
             const m_inhRecursBox = new jsMultipleChoice('m_opt_inh_recurs', {
                 type: 'cb',
                 onChange: function(cbName, _b, value) {
                     m_opts[cbName] = value;
-                    if (permFldParent === 1 || permMultiSel) {
+                    if (permFldParent === 1) {
+                        if (value) {
+                            m_rootInheritanceDropdown.unlock();
+                            const inheritanceMode = m_rootInheritanceDropdown.getValue();
+                            m_opts.m_opt_inh_enabled = inheritanceMode === 'm_opt_inh_enabled';
+                            m_opts.m_opt_inh_disabled = inheritanceMode === 'm_opt_inh_disabled';
+                            permChanged = true;
+                            editPermDialog.enableButton('save');
+                        } else {
+                            m_rootInheritanceDropdown.lock();
+                            m_opts.m_opt_inh_enabled = false;
+                            m_opts.m_opt_inh_disabled = false;
+                        }
+                    } else if (permMultiSel) {
                         m_inheritOpts.unlock();
                     } else {
                         permChanged = true;
@@ -216,12 +312,10 @@ function editPermDiag(sender, uid, multi = false, button) {
                     if (permFldParent === 1 && !permMultiSel && permChanged === false) editPermDialog.disableButton('save');
                 },
                 height: '15px',
-                elPrefix: /* html */ `<div style='display: block; margin-bottom: 8px;'>`,
-                lbPostfix: "</div>",
                 // initialValue: "",
                 elements: [{
-                    elementParent: 'multi_footer_opts',
-                    labelParent: 'multi_footer_opts',
+                    elementParent: 'inheritanceRecursiveRow',
+                    labelParent: 'inheritanceRecursiveRow',
                     value: 'm_opt_inh_recurs',
                     label: UILANG.m("Recursively update inheritance flag")
                 }]
@@ -235,23 +329,22 @@ function editPermDiag(sender, uid, multi = false, button) {
                     editPermDialog.enableButton('save');
                 },
                 height: '15px',
-                elPrefix: /* html */ `<div style='display: block; margin-bottom: 8px;'>`,
-                lbPostfix: "</div>",
                 readOnly: true,
                 elements: [{
                     elementParent: 'perm_reucurs_check',
                     labelParent: 'perm_reucurs_check',
                     value: 'm_opt_fld_recurs_do',
-                    label: UILANG.m("Recursively update permissions")
+                    label: UILANG.m("Apply changes to subfolders")
                 }]
             });
-
-            $('#multi_footer_opts').append( /* html */ `<div id='m_opts_sep'></div>`);
+            updateRecursivePermissionsVisibility();
 
             m_owner_recursOpts = new jsMultipleChoice('m_opt_owner_recurs', {
                 type: 'cb',
-                onChange: function(cbName, _b, value) {
-                    m_opts[cbName] = value;
+                onChange: function(cbName, values) {
+                    ownerRecursionIntent = values.includes(cbName);
+                    m_opts[cbName] = ownerRecursionIntent;
+                    permChanged = true;
                     editPermDialog.enableButton('save');
                 },
                 height: '15px',
@@ -263,6 +356,17 @@ function editPermDiag(sender, uid, multi = false, button) {
                     label: UILANG.m("Recursively update owners")
                 }]
             });
+
+            document.getElementById('ownerBox_controls').addEventListener('pointerdown', function(event) {
+                if (!$(this).hasClass('isAvailable')) return;
+                if ($(event.target).closest('.jsMultipleChoice_button, .jsMultipleChoice_label').length === 0) return;
+
+                const button = $(this).find('.jsMultipleChoice_button');
+                ownerRecursionIntent = button.attr('data-status') !== 'checked';
+                m_opts.m_opt_owner_recurs = ownerRecursionIntent;
+                permChanged = true;
+                editPermDialog.enableButton('save');
+            }, true);
         }
 
         /* action on input for usergroup filter box */
@@ -336,7 +440,10 @@ function editPermDiag(sender, uid, multi = false, button) {
         function checkSafeClose() {
             if (permChanged) {
                 let confPermExit = new nxDialog('CPE', {
-                    contents: UILANG.m("You have not saved your permisison changes! Do you wish to continue editing, or exit?"),
+                    contents: '<div class="tmActionConfirm tmActionConfirm-warning">' +
+                        '<strong>' + UILANG.m("Exit without Saving") + '</strong>' +
+                        '<span>' + UILANG.m("You have not saved your permisison changes! Do you wish to continue editing, or exit?") + '</span>' +
+                    '</div>',
                     buttons: [{
                         label: UILANG.m("Close without Saving"),
                         'cancel': false,
@@ -348,6 +455,7 @@ function editPermDiag(sender, uid, multi = false, button) {
                         value: 'cont'
                     }],
                     title: UILANG.m("Exit without Saving"),
+                    type: 'warning',
                     width: 500,
                     callback: function(button) {
                         if (button === 'cont') {
@@ -477,6 +585,10 @@ function editPermDiag(sender, uid, multi = false, button) {
 
     // load our permission group content
     if (button === 'save') {
+        if (m_owner_recursOpts) {
+            m_opts.m_opt_owner_recurs = Boolean(isSuper && targetHasSubfolders && ownerRecursionIntent);
+        }
+
         // reset permission changed beacon
         permChanged = false;
 
@@ -539,6 +651,22 @@ function displayPerms(loadGroup, acArray, ownerInfo, ugStructInfo, multi = false
     };
 
     ownerIdVal = ownerInfo.oId; // set the current owner value
+    targetHasSubfolders = Boolean(ownerInfo.hasSubfolders);
+
+    const currentUserGroupIds = new Set((ownerInfo.currentUserGroupIds || []).map(String));
+    const updateOwnerAccessLossWarning = () => {
+        const matchingEditPermissionEntries = Object.values(eTsListObj).filter((entry) => {
+            const entryData = entry.getDataId();
+            return entryData.permKeyName === 'Edit Permissions' && currentUserGroupIds.has(String(entryData.userGroup));
+        });
+        const hasIndependentPermission = matchingEditPermissionEntries.length > 0
+            ? matchingEditPermissionEntries.some((entry) => entry.getDataId().permVal === true)
+            : Boolean(ownerInfo.currentUserCanEditPermissionsWithoutOwnership);
+        const ownerChangesAwayFromCurrentUser = Boolean(ownerInfo.currentUserIsOwner)
+            && String(ownerIdVal) !== String(ownerInfo.currentUserId);
+
+        $('#ownerAccessLossWarning').toggleClass('isVisible', !isSuper && ownerChangesAwayFromCurrentUser && !hasIndependentPermission);
+    };
 
     let noOwner = false;
     if (ownerIdVal === null || ownerIdVal.length === 0) {
@@ -585,9 +713,11 @@ function displayPerms(loadGroup, acArray, ownerInfo, ugStructInfo, multi = false
         selectionCallback: function(idSelObj) {
             newOwner = idSelObj.username; //set new  owner username
             editPermDialog.enableButton('save');
-            if (isSuper) m_owner_recursOpts.unlock();
+            const ownerChanged = multi || ownerInfo.oId === null || String(ownerInfo.oId) !== String(idSelObj.id);
+            updateOwnerRecursionVisibility(ownerChanged);
             permChanged = true;
             ownerIdVal = parseInt(idSelObj.id); // update the current owner value to new value for sendback post
+            updateOwnerAccessLossWarning();
 
             if (oldOwner !== newOwner) { //if ownwer was changed cross out the old shoice
                 $('#new_owner').html(newOwner);
@@ -606,13 +736,13 @@ function displayPerms(loadGroup, acArray, ownerInfo, ugStructInfo, multi = false
 
     // initial hide of owner list box
     $('#oList_id').hide();
-    $('#ownerBox_controls').hide();
+    updateOwnerRecursionVisibility(false);
 
 
     // add elements to select list
     ownerTable.setItems(oMasterList);
 
-    let onFilter = `<div id ="onHolder"><span id="ownLabel">${UILANG.m("List of users")}</span> <input id='oFilter' placeholder='${UILANG.m("Filter users")}'/></div>`;
+    let onFilter = `<div id="onHolder"><span id="ownLabel">${UILANG.m("List of users")}</span><input id="oFilter" type="text" placeholder="${UILANG.m("Filter users")}" /></div>`;
     $("#oList_id").prepend(onFilter);
 
     // owner name filter handler
@@ -633,7 +763,7 @@ function displayPerms(loadGroup, acArray, ownerInfo, ugStructInfo, multi = false
     $('#editOwnerButton').on("click", function() {
         if ($("#oList_id").css("display") === "none") {
             $("#oList_id").slideDown("slow");
-            $("#ownerBox_controls").show();
+            $('#ownerBox_controls').css('display', isSuper && targetHasSubfolders && m_owner_recursOpts ? 'flex' : 'none');
         } else {
             $("#oList_id").slideUp("slow");
             $("#ownerBox_controls").hide();
@@ -683,7 +813,7 @@ function displayPerms(loadGroup, acArray, ownerInfo, ugStructInfo, multi = false
         let acdDisp = /* html */ `
             <span style="display: none;" class="unmodClass" id="unmodMsg_${theItem.id}">Unmodified</span>
             <span id='qkPerm_${theItem.id}'>
-                <span class='rAccess bubBtn'></span><div class='bubble_spacer'></div><span class='wAccess bubBtn'></span><div class='bubble_spacer'></div><span class='aAccess bubBtn'></span>
+                <span class='rAccess bubBtn'></span><span class='wAccess bubBtn'></span><span class='aAccess bubBtn'></span>
             </span>
             `;
 
@@ -952,12 +1082,17 @@ function displayPerms(loadGroup, acArray, ownerInfo, ugStructInfo, multi = false
                             }
 
                             // trigger option changed conditions
-                            if (isSuper) m_recursOpts.unlock();
+                            if (isSuper) {
+                                m_recursOpts.unlock();
+                                recursivePermissionsAvailable = true;
+                                updateRecursivePermissionsVisibility();
+                            }
                             editPermDialog.enableButton('save');
                             permChanged = true;
 
                             // update quick perm view block
                             updQkPerms(iCode, entType);
+                            updateOwnerAccessLossWarning();
                         }
                     });
                 }
@@ -1055,7 +1190,7 @@ function displayPerms(loadGroup, acArray, ownerInfo, ugStructInfo, multi = false
 
         // inheritance warning message toggle
         (!ihLocalState) ? $('#inh_warning').hide() : $('#inh_warning').show();
-        (!ihLocalState) ? $('#perm_reucurs_check').show() : $('#perm_reucurs_check').hide();
+        updateRecursivePermissionsVisibility();
 
         if (permMultiSel) $('#inh_warning').hide();
 
@@ -1093,7 +1228,7 @@ function displayPerms(loadGroup, acArray, ownerInfo, ugStructInfo, multi = false
             // $('#ulHolder').before(/* html */`<input id='mFilter'  placeholder='${UILANG.m("Filter users")}' />`)
 
             $('#usr_label').html(/* html */`${UILANG.m("Users in selected group")}`);
-            $('#u_btn_area').html(/* html */`   <input id='mFilter'  placeholder='${UILANG.m("Filter users")}' />`);
+            $('#u_btn_area').html(/* html */`<input id='mFilter' type='text' placeholder='${UILANG.m("Filter users")}' />`);
 
             $('#mFilter').off('input');
             $('#mFilter').on('input', function() {
@@ -1113,25 +1248,22 @@ function displayPerms(loadGroup, acArray, ownerInfo, ugStructInfo, multi = false
 
     $('#p_btn_area').html('');
     let enAllObj = new nxButton($('#p_btn_area'), 'enAllBtn', {
-        // label: UILANG.m("Enable All"),
+        tooltip: UILANG.m("Enable All"),
         value: true,
-        icon: '../images/ic_acceptAllSwitches.png',
-        iconWidth: 23,
-        style: {
-            'margin-top': '25px'
-        },
+        icon: '../images/selectAll.png',
+        iconWidth: 24,
+        style: {},
         callback: function() {
             allGrpPermToggle(true);
         }
     });
 
     let disAllObj = new nxButton($('#p_btn_area'), 'disAllBtn', {
-        // label: UILANG.m("Disable All"),
-        // tooltip: "Disable all Permissions for Group",
+        tooltip: UILANG.m("Disable All"),
         value: true,
+        icon: '../images/deSelectAll.png',
+        iconWidth: 24,
         style: {},
-        icon: '../images/ic_rejectAllSwitches.png',
-        iconWidth: 23,
         callback: function() {
             allGrpPermToggle(false);
         }
@@ -1156,12 +1288,24 @@ function displayPerms(loadGroup, acArray, ownerInfo, ugStructInfo, multi = false
             }
         } // end for loop
         // enable our save button, and make edit state dirty
-        if (isSuper) m_recursOpts.unlock();
+        if (isSuper) {
+            m_recursOpts.unlock();
+            recursivePermissionsAvailable = true;
+            updateRecursivePermissionsVisibility();
+        }
         editPermDialog.enableButton('save');
         permChanged = true;
 
         updQkPerms(lastKey, 'full', val); // update the quick perm access view
+        updateOwnerAccessLossWarning();
     } // end perm toggle function
+
+    // Reapply the selected group after inheritance reloads rebuild the permission lists.
+    const restoredGroup = permInitObj.find((group) => String(group.id) === String(loadGroup));
+    if (restoredGroup) {
+        eUgSelList.setSelection([restoredGroup.id]);
+        eUgSelList.triggerSelectionCallback();
+    }
 
     // control enable/disable all perm btns based on condition inheritance
     if (multi) return;
@@ -1182,6 +1326,8 @@ function displayPerms(loadGroup, acArray, ownerInfo, ugStructInfo, multi = false
             element.unlock();
         }
     }
+
+    updateOwnerAccessLossWarning();
 }
 
 //parse a single JSON string with fallback on empty object if null and exception handling
@@ -1237,6 +1383,7 @@ function igp_return(res, _srcName) {
         // check and set inheritance activation value
         permMultiSel = res.data.isMulti;
         ihServerState = res.data.ihActive;
+        targetHasSubfolders = Boolean(res.data.hasSubfolders);
         if (ihLocalState === null) ihLocalState = ihServerState;
 
         // do not force inheritance flag when multisel (it stays dormant until selection is actively made)
@@ -1256,15 +1403,26 @@ function igp_return(res, _srcName) {
 
                 if (permFldParent === 1) {
                     $('#multi_footer_opts').prepend(/* html */ `
-                        <div class='permsDialogWarningMessage'>${UILANG.m("Subfolders directly under Home folder do not have any permissions to inherit.")}<br>
-                        ${UILANG.m("Selecting an inheritance option here will only apply to subfolders after the \"recursive\" checkbox is enabled, and an inheritance option is selected.")}<br></div>
+                        <div class='permsDialogWarningMessage'>${UILANG.m("Subfolders directly under Home folder do not have any permissions to inherit.")}</div>
                     `);
 
-                    m_inheritOpts.lock();
+                    m_opts.m_opt_inh_enabled = false;
+                    m_opts.m_opt_inh_disabled = false;
+                    m_opts.m_opt_inh_recurs = false;
+                    $('#inheritanceChoiceRows').toggle(targetHasSubfolders).addClass('isRootInheritance');
+                    $('#inheritanceRecursiveRow').prependTo('#inheritanceChoiceRows');
+                    $('#inheritanceEnabledRow, #inheritanceDisabledRow').hide();
+                    $('#rootInheritanceModeRow').show().appendTo('#inheritanceChoiceRows');
+                    m_rootInheritanceDropdown.reset('m_opt_inh_enabled');
+                    m_rootInheritanceDropdown.lock();
 
                     $('#permLabel').html(`${UILANG.m("PERMISSIONS")} (${UILANG.m("INHERITANCE NOT APPLICABLE")})`);
 
                 } else {
+                    $('#inheritanceChoiceRows').show().removeClass('isRootInheritance');
+                    $('#inheritanceRecursiveRow').toggle(targetHasSubfolders).appendTo('#inheritanceChoiceRows');
+                    $('#inheritanceEnabledRow, #inheritanceDisabledRow').show();
+                    $('#rootInheritanceModeRow').hide();
                     if (permMultiSel) {
                         $('#permLabel').html(`${UILANG.m("PERMISSIONS")} (${UILANG.m("INHERITANCE NOT APPLICABLE")})`);
                     } else {
@@ -1276,7 +1434,7 @@ function igp_return(res, _srcName) {
 
             case false:
                 let edsnip = (ihLocalState) ? UILANG.m("DISABLE") : UILANG.m("ENABLE");
-                iBtnObj.setLabel(`<strong>${edsnip}</strong> ` + UILANG.m('Inheritance of Parent Permissions'));
+                iBtnObj.setLabel(`${edsnip} ${UILANG.m('Inheritance of Parent Permissions')}`);
                 do_ih_labeling();
 
                 break;
@@ -1289,7 +1447,15 @@ function igp_return(res, _srcName) {
         }
 
         // direct function based on multiedit or not
-        displayPerms(res.data.loadGroup, res.data.ig_targets, { oId: res.data.ownerId, oList: res.data.ownerList }, res.data.ugList, res.data.isMulti, res.data.permStruct);
+        displayPerms(res.data.loadGroup, res.data.ig_targets, {
+            oId: res.data.ownerId,
+            oList: res.data.ownerList,
+            hasSubfolders: res.data.hasSubfolders,
+            currentUserId: res.data.currentUserId,
+            currentUserIsOwner: res.data.currentUserIsOwner,
+            currentUserGroupIds: res.data.currentUserGroupIds,
+            currentUserCanEditPermissionsWithoutOwnership: res.data.currentUserCanEditPermissionsWithoutOwnership
+        }, res.data.ugList, res.data.isMulti, res.data.permStruct);
     }
     // otherwise, show label indicating there are no user entries for this ig
     else {
@@ -1309,7 +1475,7 @@ function igp_return(res, _srcName) {
 function up_return(_res, _srcName) {
     gui.statusBar.setStatus(UILANG.m("Permission data successfully updated!"), 3000, '#0A0');
 
-    perms_startAjax('fetchLibrary', {
+    startAjax('fetchLibrary', {
         location: loc.folder,
         showBlocked: showBlocked
     });

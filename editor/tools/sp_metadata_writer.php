@@ -5,7 +5,7 @@
 //     exit(1);
 // }
 
-require_once __DIR__ . '/../../inc/php/settings.php';
+require_once __DIR__ . '/../../inc/php/initSettings.php';
 $ssodata = parse_ini_file(__DIR__ . "/../../conf/ssodata.ini", true);
 
 # --------------------------------- #

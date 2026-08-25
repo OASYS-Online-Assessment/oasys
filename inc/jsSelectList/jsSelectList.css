@@ -10,12 +10,18 @@
 }
 
 .jsSelectList ul > li {
-	padding: 2px 5px;
+	margin: 2px 0;
+	padding: 4px 7px;
 	position: relative;
+	border: 1px solid transparent;
+	border-radius: 5px;
+	transition: background .12s ease, border-color .12s ease;
+	line-height: 18px;
 }
 
 .jsSelectList:not(.disabled) ul > li:hover {
-	background: #ffddac;
+	border-color: #bad5e7;
+	background: #eef7fc;
 }
 
 span.jsSelectList-Prefix {
@@ -37,7 +43,24 @@ span.jsSelectList-Prefix:empty, span.jsSelectList-Postfix:empty {
 }
 
 .jsSelectList:not(.disabled)  li.selected {
-	background: #ffc268;
+	border-color: #87bed8;
+	background: #dff1fa;
+	color: #43586d;
+	font-weight: 700;
+}
+
+.jsSelectList:not(.disabled) li.jsSelectListItemDisabled,
+.jsSelectList:not(.disabled) li.jsSelectListItemDisabled:hover {
+	border-color: #e4d8d8;
+	background: #f6eeee;
+	color: #8a6a6a;
+	cursor: not-allowed;
+	font-weight: 600;
+}
+
+.jsSelectList:not(.disabled) li.jsSelectListItemDisabled.selected {
+	border-color: #e4d8d8;
+	background: #f6eeee;
 }
 
 div.jsSelectListStorage {
@@ -53,7 +76,8 @@ div.jsSelectListStorage {
 }
 
 .jsSelectListSectionUl:not(:empty) {
-	border-top: 1px solid #333;
+	border-top: 1px solid #d8e3ed;
+	padding-top: 4px;
 }
 
 .jsSelectListSectionHeader, .jsSelectListHeader {

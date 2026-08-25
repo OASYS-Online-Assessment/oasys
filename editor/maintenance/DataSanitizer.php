@@ -5,9 +5,7 @@
 	use OasysActivity;
 	use rixPDO;
 
-	require_once(__DIR__ . "/../../inc/php/rixPDO.php");
-	require_once(__DIR__ . "/../../inc/php/database.php");
-	require_once(__DIR__ . "/../../inc/php/settings.php");
+	require_once __DIR__ . "/../inc/php/initBackend.php";
 	require_once __DIR__ . "/../../inc/php/OasysActivity.php";
 
 	class DataSanitizer
@@ -18,11 +16,11 @@
 
 		public function __construct(&$returnData)
 		{
-			global $sql_host, $sql_password, $sql_user, $sql_db, $uiLang, $myAuth, $settings;
+			global $app;
 			$this->returnData = &$returnData;
 
 			//init database connections
-			$this->db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/../../logs/dataSanitizer.txt', 1, $this->returnData, 'error');
+			$this->db = $app->getDatabaseInstance();
 		}
 
 		public function check($options): void

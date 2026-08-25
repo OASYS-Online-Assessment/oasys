@@ -1,24 +1,25 @@
 <!DOCTYPE html>
 
 <?Php
-# ----------------------- #
-# Authentication Includes #
-# ----------------------- #
-$pageName = "tests"; // set to the related 'editor button' string name (e.g., 'items')
-$isSubMod = false; // set true if a module page in a subdirectory
-$isActionFile = false; // set true if an "xxxActions.php" file
-require_once 'inc/php/authCommonFunctions.php'; // required for authentication inclusion
-require_once 'inc/php/cacheIncludes.php'; // required for cache handling
+    # ----------------------- #
+    # Authentication Includes #
+    # ----------------------- #
+    $pageName = "tests"; // set to the related 'editor button' string name (e.g., 'items')
+    $isSubMod = false; // set true if a module page in a subdirectory
+    $isActionFile = false; // set true if an "xxxActions.php" file
+    require_once __DIR__ . "/inc/php/initBackend.php";
+    require_once 'inc/php/authCommonFunctions.php'; // required for authentication inclusion
+    require_once 'inc/php/cacheIncludes.php'; // required for cache handling
 ?>
 
 <html lang="en">
 
 <head>
-	<meta charset="utf-8" />
-	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-	<title>OASYS tests</title>
-	<link rel="icon" href="images/favicon.png">
-    
+    <meta charset="utf-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+    <title>OASYS tests</title>
+    <link rel="icon" href="images/favicon.png">
+
     <?php
         includeCSS("../inc/jquery_contextmenu/jquery.contextMenu.css");
         includeCSS("../inc/filer/filez.css");
@@ -29,6 +30,7 @@ require_once 'inc/php/cacheIncludes.php'; // required for cache handling
         includeCSS("../inc/nxButton/nxButton.css");
         includeCSS("../inc/jsSelectList/jsSelectList.css");
         includeCSS("../inc/jquery_colorpicker/spectrum.css");
+        includeCSS("../inc/jquery_colorpicker/oasys-spectrum.css");
         includeCSS("../inc/jsLink/jsLink.css");
         includeCSS("../inc/jsGUI/jsGUI.css");
         includeCSS("../inc/jsTabs/jsTabs.css");
@@ -38,11 +40,14 @@ require_once 'inc/php/cacheIncludes.php'; // required for cache handling
         includeCSS("../inc/jsToggleswitch/jsToggleswitch.css");
         includeCSS("../inc/jsDropList/jsDropList.css");
         includeCSS("../inc/jsMultipleChoice/jsMultipleChoice.css");
+        includeCSS("../inc/jsMediaPlugin/jsMediaPlugin.css");
         includeCSS("inc/css/interface.css");
+        includeCSS("../inc/jsTagEditor/jsTagEditor.css");
         includeJS("../inc/js/jquery-3.2.1.min.js");
         includeJS("../inc/jquery-ui-1.12.1/jquery-ui.min.js");
         includeJS("../inc/tinymce/js/tinymce/tinymce.min.js");
-        includeJS("../inc/tinymcePlugins/mediabrowser.js");
+        includeJS("../inc/tinymcePlugins/tabindent.js");
+        includeJS("../inc/tinymcePlugins/tmimagebrowser.js");
         includeJS("../inc/jsButton2/jsButton2.js");
         includeJS("../inc/js/he.js");
         includeJS("../inc/jsSelectList/jsSelectList.js");
@@ -60,6 +65,7 @@ require_once 'inc/php/cacheIncludes.php'; // required for cache handling
         includeJS("../inc/nxDialog/nxDialog.js");
         includeJS("../inc/jsToggleswitch/jsToggleswitch.js");
         includeJS("../inc/jsSortableTable/jsSortableTable.js");
+        includeJS("../inc/jsTagEditor/jsTagEditor.js");
         includeJS("../inc/jsNumberInput/jsNumberInput.js");
         includeJS("../inc/js/rixTools.js");
         includeJS("../inc/js/jsKeyboardHandler.js");
@@ -67,20 +73,22 @@ require_once 'inc/php/cacheIncludes.php'; // required for cache handling
         includeJS("../inc/jquery_contextmenu/jquery.contextMenu.js");
         includeJS("../inc/jquery_hover_intent/jquery.hoverIntent.minified.js");
         includeJS("../inc/mejs/mediaelement-and-player.min.js");
+        includeJS("inc/nxUploader/nxUploader.js");
+        includeJS("../inc/jsMediaPlugin/jsMediaPlugin.js");
         includeJS("../inc/jsDropList/jsDropList.js");
         includeJS("../inc/jsMultipleChoice/jsMultipleChoice.js");
         includeJS("inc/js/interface.js");
         includeJS("../images/svgIcons.js");
-    
+
         //permission handling include
         includeJS("inc/js/perms.js");
-    
+
         //main tests script
         includeJS("inc/js/tests.js");
-    
+
         //settings
         include_once 'inc/php/settings2JS.php';
-	?>
+    ?>
 
     <script type="text/javascript">
         window.preSelect = '<?=$_GET['id'] ?? null ?>';
@@ -89,9 +97,9 @@ require_once 'inc/php/cacheIncludes.php'; // required for cache handling
 </head>
 
 <body data-managerid="tests">
-	<div id="svgMainMenuSymbols" class="svgSymbols">
-		<?php echo file_get_contents("../images/mainMenuIcons/symbols.svg"); ?>
-	</div>
+<div id="svgMainMenuSymbols" class="svgSymbols">
+    <?php echo file_get_contents("../images/mainMenuIcons/symbols.svg"); ?>
+</div>
 </body>
 
 </html>

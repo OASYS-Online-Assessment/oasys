@@ -2,6 +2,7 @@
 
 	//the JSON output will happen, even if a fatal error prevents the script from finishing
 	register_shutdown_function('outputJSON');
+	require_once __DIR__ . "/inc/php/initBackend.php";
 
 	//action is a string that defines what action to perform
 	$action = filter_input(INPUT_POST, 'action');
@@ -19,9 +20,6 @@
 		$data = array();
 	}
 
-	require_once 'inc/php/database.php'; //contains the database connection credentials
-	require_once '../inc/php/rixPDO.php'; //wrapper around PDO functions (c.f. docs folder for manual)
-
 	//all data that is returned by this script will be put into $returnData array which is sent back in JSON encoded form
 	$returnData = array();
 	$returnData['action'] = $action; //when returning we must specify which action was performed
@@ -36,7 +34,7 @@
 	require_once 'inc/php/authCommonFunctions.php'; // required for authentication inclusion
 
 	//make a connection to the database and define the log file in which database errors are to be recorded
-	$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, '../logs/l10nManager_errors.txt', 1, $returnData, 'error');
+	$db = $config->getDatabaseInstance();
 
 	# ------------------------------------------- #
 	# Inclusion of permission authenticator class #
@@ -50,6 +48,7 @@
 	$returnData = $permAuth->returnData;
 	if ($letMePass === true) {
 		// preset the returnData var with anything the authenticator may have alraedy loaded in prior to sending to action
+		if (oasysRejectUnknownAction(__FILE__, $action, $returnData)) exit;
 		$action($data, $db, $returnData);
 	}
 
@@ -57,14 +56,14 @@
 	 * actions
 	 */
 	function fetchContextAreas($data, &$db, &$returnData) {
-		$dir = '../text';
-		$scanDir = array_diff(scandir($dir), array('..', '.'));
-		foreach ($scanDir as $k => $v) {
-			$value = substr($v, 0, strrpos($v, '.'));
-			$scanDir[$k] = new stdClass();
-			$scanDir[$k]->context = $value;
+		$contextFiles = glob('../text/*.json') ?: array();
+		$contexts = array();
+		foreach ($contextFiles as $file) {
+			$context = new stdClass();
+			$context->context = pathinfo($file, PATHINFO_FILENAME);
+			$contexts[] = $context;
 		}
-		$returnData['data'] = $scanDir;
+		$returnData['data'] = $contexts;
 	}
 
 	function loadLanguages($data, &$db, &$returnData) {
@@ -172,29 +171,39 @@
 		$returnData['context'] = $context;
 	}
 
-	function saveLocChanges($data, &$db, &$returnData) {
-		checkParams($data, array('clickVariable', 'clickContext', 'locData'));
-		$context = $data['clickContext'];
-		$variable = $data['clickVariable'];
-		$varObj = $data['locData'];
-		//read context file
-		$strJson = file_get_contents("../text/" . $context . ".json");
-		$data = json_decode($strJson ?? '', true);
+    function saveLocChanges($data, &$db, &$returnData) {
+        checkParams($data, array('clickVariable', 'clickContext', 'locData'));
+        $context  = $data['clickContext'];
+        $variable = $data['clickVariable'];
+        $varObj   = $data['locData'];
 
-		foreach ($varObj as $key => $value) {
-			//check if string is default
-			$lang = explode("_", $key);
-			if (isset($data[$variable][$lang[0]]) && $value === $data[$variable][$lang[0]]) {
-				//write to database
-				$db->prepare('DELETE FROM l10n WHERE variable=? AND language=? AND context=?');
-				$db->executePrepared(array($variable, $lang[0], $context));
-			} else {
-				//if not default create or update db entry
-				$db->prepare('INSERT INTO l10n (variable, language, context, text) VALUES(?, ?, ?, ?) ON DUPLICATE KEY UPDATE text=?');
-				$db->executePrepared(array($variable, $lang[0], $context, $value, $value));
-			}
-		}
-	}
+        // Read context defaults
+        $strJson = @file_get_contents("../text/" . $context . ".json");
+        $ctxData = json_decode($strJson ?: '{}', true) ?: [];
+
+        foreach ($varObj as $key => $value) {
+            // Normalize language key (e.g., "en_US" -> "en")
+            $langCode = explode("_", (string)$key)[0];
+
+            // If empty value => clear any existing override (DELETE)
+            if (!isset($value) || (is_string($value) && trim($value) === '')) {
+                $db->prepare('DELETE FROM l10n WHERE variable=? AND language=? AND context=?');
+                $db->executePrepared([$variable, $langCode, $context]);
+                continue;
+            }
+
+            // If equals default => delete override, else upsert override
+            $hasDefault = isset($ctxData[$variable][$langCode]);
+            if ($hasDefault && $value === $ctxData[$variable][$langCode]) {
+                $db->prepare('DELETE FROM l10n WHERE variable=? AND language=? AND context=?');
+                $db->executePrepared([$variable, $langCode, $context]);
+            } else {
+                $db->prepare('INSERT INTO l10n (variable, language, context, text) VALUES(?, ?, ?, ?) 
+                              ON DUPLICATE KEY UPDATE text=?');
+                $db->executePrepared([$variable, $langCode, $context, $value, $value]);
+            }
+        }
+    }
 
 	function reset2Defaults($data, &$db, &$returnData) {
 		checkParams($data, array('clickVariable', 'clickContext'));
@@ -204,66 +213,77 @@
 		$db->executePrepared(array($variable, $context));
 	}
 
-	function search($data, &$db, &$returnData) {
-		checkParams($data, array('searchstring'));
-		$searchString = $data['searchstring'];
-		//re-fetch context areas
-		$dir = '../text';
-		$scanDir = array_diff(scandir($dir), array('..', '.'));
+function search($data, &$db, &$returnData) {
+    checkParams($data, array('searchstring'));
+    $searchString = $data['searchstring'];
 
-		foreach ($scanDir as $k => $v) {
-			$value = substr($v, 0, strrpos($v, '.'));
-			$scanDir[$k] = new stdClass();
-			$scanDir[$k]->context = $value;
-		}
-		$returnData['contextAreas'] = $scanDir;
+    // Only JSON files are valid localization contexts.
+    $contextFiles = glob('../text/*.json') ?: array();
+    $contexts = array();
+    foreach ($contextFiles as $file) {
+        $ctxObj = new stdClass();
+        $ctxObj->context = pathinfo($file, PATHINFO_FILENAME);
+        $contexts[]     = $ctxObj;
+    }
+    $returnData['contextAreas'] = $contexts;
 
-		$collectedData = new stdClass();
-		foreach ($scanDir as $key => $value) {
+    $collectedData = new stdClass();
 
-			//Read json files
-			$strJson = file_get_contents("../text/" . $value->context . ".json");
-			$contextCont = json_decode($strJson ?? '', true);
+    foreach ($contexts as $ctx) {
+        $contextName = $ctx->context;
 
-			foreach ($contextCont as $k => $v) {
-				if (str_contains($k, $searchString)) {
-					$collectedData->$k = ['content' => $v, 'context' => $value->context];
-				}
-				foreach ($v as $vKey => $vVal) {
-					//Check for override
-					$searchStringDB = '%' . preg_replace('/%/', $searchString, '\\%') . '%';
-					$query = "SELECT text FROM l10n WHERE variable=? AND context=? AND language=? AND text LIKE ?";
-					$parameters = array($k, $value->context, $vKey, $searchStringDB);
-					$res = $db->fetchRow($query, $parameters);
-					if ($res['rows'] !== 0) {
-						$collectedData->$k = ['content' => $v, 'context' => $value->context];
-					} else {
-						if (str_contains($vVal, $searchString)) {
-							$collectedData->$k = ['content' => $v, 'context' => $value->context];
-						}
-					}
-				}
-			}
-			//Apply override strings to results
-			foreach ($collectedData as $k => $v) {
-				foreach ($v['content'] as $key => $val) {
-					$query = "SELECT text FROM l10n WHERE variable=? AND context=? AND language=?";
-					$parameters = array($k, $value->context, $key);
-					$res = $db->fetchRow($query, $parameters);
-					if ($res['rows'] !== 0) {
-						$collectedData->$k['content'][$key] = $res['data']['text'];
-					}
-				}
-			}
-		}
+        $strJson     = @file_get_contents("../text/" . $contextName . ".json");
+        $contextCont = json_decode($strJson ?? '', true);
+        if (!is_array($contextCont)) {
+            $contextCont = array();
+        }
 
-		$returnData['data'] = $collectedData;
-		$returnData['searchstring'] = $data['searchstring'];
-	}
+        $query = "SELECT variable, language, text FROM l10n WHERE context=?";
+        $res   = $db->fetchColumn($query, array($contextName), 'variable', 'language');
+        if (!empty($res['data'])) {
+            foreach ($res['data'] as $variable => $values) {
+                foreach ($values as $lng => $value) {
+                    if ($value !== '') {
+                        if (!isset($contextCont[$variable])) {
+                            $contextCont[$variable] = array();
+                        }
+                        $contextCont[$variable][$lng] = $value;
+                    }
+                }
+            }
+        }
 
-	/*
-	 * helper functions
-	 */
+        foreach ($contextCont as $varName => $langMap) {
+            $match = false;
+
+            if (str_contains($varName, $searchString)) {
+                $match = true;
+            } else {
+                foreach ($langMap as $textVal) {
+                    if (is_string($textVal) && str_contains($textVal, $searchString)) {
+                        $match = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($match) {
+                $collectedData->$varName = array(
+                    'content' => $langMap,
+                    'context' => $contextName
+                );
+            }
+        }
+    }
+
+    $returnData['data']         = $collectedData;
+    $returnData['searchstring'] = $searchString;
+}
+
+
+/*
+ * helper functions
+ */
 	//checks if a variable is empty, also if there are just spaces or tabs
 	function blank($String): bool {
 		if (!isset($String)) {

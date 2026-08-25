@@ -1,8 +1,8 @@
 <?php
 
 /*
-	editTestTaker V1.0
-	by Eric J. FRANCOIS 2024
+	editTestTaker V1.1
+	by Eric J. FRANCOIS 2026
 
 	This API allows an application to edit the activity of a test taker as well as the login name itself.
 
@@ -26,13 +26,11 @@
 */
 
 	register_shutdown_function('outputJSON');
-	require_once '../../inc/php/database.php'; //contains the database connection credentials
-	require_once '../../inc/php/rixPDO.php'; //wrapper around PDO functions (c.f. docs folder for manual)
-	require_once '../../inc/php/rixTools.php';
-	require_once '../../inc/php/helperRoutines.php';
-	require_once '../../inc/php/settings.php';
-	require_once '../../inc/php/Crypt.php';
-	require_once '../../inc/php/apiRoutines.php';
+	require_once __DIR__ . '/../../editor/inc/php/initBackend.php';
+	require_once __DIR__ . '/../../inc/php/rixTools.php';
+	require_once __DIR__ . '/../../inc/php/helperRoutines.php';
+	require_once __DIR__ . '/../../inc/php/Crypt.php';
+	require_once __DIR__ . '/../../inc/php/apiRoutines.php';
 
 	$apiName = 'editTestTaker';
 	$returnData = ['error' => false];
@@ -44,12 +42,7 @@
 		die();
 	}
 
-	$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/../../logs/API_editTestTaker.txt', 1, $returnData, 'error');
-	$results = $db->results();
-	if ($results['error']) {
-		$returnData['error'] = 'mySQL connection error';
-		die();
-	}
+	$db = $config->getDatabaseInstance();
 
 	clearApiRequests($db);
 

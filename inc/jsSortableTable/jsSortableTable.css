@@ -1,5 +1,60 @@
 @charset "UTF-8";
 /* CSS Document */
+
+:root {
+    --st-text: #26394a;
+    --st-muted: #6f8192;
+    --st-border: #dbe5ee;
+    --st-border-strong: #c9d7e2;
+    --st-surface: #ffffff;
+    --st-surface-soft: #f5f8fb;
+    --st-surface-hover: #f4f9fc;
+    --st-surface-selected: #e6f3fa;
+    --st-accent: #227daa;
+    --st-accent-dark: #175978;
+    --st-warning: #a95c00;
+    --st-warning-border: #f3bd52;
+    --st-warning-soft: #fff7e6;
+    --st-error: #b42318;
+    --st-error-border: #f2aaa3;
+    --st-error-soft: #fff1f0;
+}
+
+.jsSortableTableFilterBar {
+    display: flex;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 0 6px;
+}
+
+.jsSortableTableFilter {
+    width: 100%;
+    height: 32px;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 6px 10px;
+    border: 1px solid var(--st-border-strong);
+    border-radius: 6px;
+    outline: none;
+    background: #fff;
+    color: var(--st-text);
+    font: inherit;
+    font-size: 13px;
+    line-height: 18px;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, .04);
+    transition: border-color .12s ease, box-shadow .12s ease;
+}
+
+.jsSortableTableFilter::placeholder {
+    color: #8b98a7;
+    opacity: 1;
+}
+
+.jsSortableTableFilter:focus {
+    border-color: var(--st-accent);
+    box-shadow: 0 0 0 2px rgba(34, 125, 170, .14), inset 0 1px 2px rgba(15, 23, 42, .04);
+}
+
 .sTableReadonly {
     filter: url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\'><filter id=\'grayscale\'><feColorMatrix type=\'matrix\' values=\'0.6666 0.6666 0.3333 0 0 0.6666 0.6666 0.6666 0 0 0.6666 0.6666 0.6666 0 0 0 0 0 0.5 0\'/></filter></svg>#grayscale"); /* Firefox 10+, Firefox on Android */
     filter: contrast(60%) brightness(120%) grayscale(100%); /* Current draft standard */
@@ -8,39 +63,62 @@
     -ms-filter: contrast(60%) brightness(120%) grayscale(100%);
     -o-filter: contrast(60%) brightness(120%) grayscale(100%);
     filter: gray();
-    color: #000;
+    color: var(--st-text);
 }
 
-.ui-state-highlight {
-    background-color: #AFCCF3;
+table[id^=sortableTable] .ui-state-highlight {
+    height: 30px;
+    border: 1px dashed #9fc9df;
+    background-color: var(--st-surface-selected);
 }
 
-.stHover:hover {
-    background-color: #eeeeee !important;
+table[id^=sortableTable] .stHover:hover {
+    background-color: var(--st-surface-hover) !important;
+}
+
+table[id^=sortableTable] .stHover:hover td {
+    border-top-color: transparent !important;
+    border-bottom-color: #d7e4ef !important;
 }
 
 td[id^=deleteLink_] {
     background-image: none;
-    background-size: 85%;
+    background-size: 16px 16px;
     background-repeat: no-repeat;
     background-position: center;
-    /*cursor:pointer !important;*/
+    opacity: .74;
+    transition: background-color .12s ease, opacity .12s ease;
+}
+
+td[id^=deleteLink_]:hover {
+    background-color: #fdecea;
+    opacity: 1;
 }
 
 td[data-abid^=actionButton_] {
     background-image: none;
-    background-size: 85%;
+    background-size: 18px 18px;
     background-repeat: no-repeat;
     background-position: center;
     cursor: pointer !important;
+    transition: background-color .12s ease, opacity .12s ease;
+}
+
+td[data-abid^=actionButton_]:hover {
+    background-color: #eef4f8;
 }
 
 td[data-fpid^=fixedPosition_] {
     background-image: none;
-    background-size: 85%;
+    background-size: 18px 18px;
     background-repeat: no-repeat;
     background-position: center;
     cursor: pointer !important;
+    transition: background-color .12s ease, opacity .12s ease;
+}
+
+td[data-fpid^=fixedPosition_]:hover {
+    background-color: #eef4f8;
 }
 
 td[data-pfid^=progressField_] {
@@ -48,47 +126,96 @@ td[data-pfid^=progressField_] {
     background-image: url(images/progressbar.jpg);
     background-repeat: repeat-y;
     text-align: center;
-    font-weight: 600;
-    color:#333333;
+    font-weight: 700;
+    color: var(--st-text);
     cursor: pointer !important;
-    font-weight: bolder;
+    border-radius: 3px;
 }
 
 .consno {
     background-image: url(images/handle.png);
-    background-size: auto 25px;
+    background-size: auto 20px;
     background-repeat: no-repeat;
-    background-position: left center;
-    font-weight: 600;
-    color: #bebebe;
+    background-position: 5px center;
+    font-weight: 700;
+    color: #9aa8b5;
     text-align: right;
     font-size: 11px !important;
-    padding-right: 4px;
+    padding-right: 6px !important;
 }
 
-th {
+table[id^=sortableTable] th {
     text-align: left;
-    font-size: 14px;
-    background-color: #175978!important;
-    color: white;
-    font-weight: normal;
-    padding: 3px !important;
+    vertical-align: middle;
+    font-size: 12px;
+    background-color: #227DAA !important;
+    color: #ffffff;
+    font-weight: 600;
+    padding: 4px 9px !important;
+    border-top: 0;
+    border-bottom: 0;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-transform: uppercase;
+    white-space: nowrap;
 }
 
-td {
+table[id^=sortableTable] th:first-child {
+    border-left: 0;
+    border-top-left-radius: 0;
+    box-shadow: -1px 0 0 #227DAA;
+}
+
+table[id^=sortableTable] th:last-child {
+    border-right: 0;
+    border-top-right-radius: 0;
+    box-shadow: 1px 0 0 #227DAA;
+}
+
+table[id^=sortableTable] td {
     font-size: 14px;
     vertical-align: middle;
+    color: var(--st-text);
+    padding: 5px 7px !important;
+    border-top: 1px solid transparent !important;
+    border-bottom: 1px solid var(--st-border) !important;
+    line-height: 18px;
+    transition: background-color .12s ease, border-color .12s ease, box-shadow .12s ease;
 }
 
-.ui-state-disabled {
-    opacity: 0.8 !important;
+table[id^=sortableTable] th.jsSortableTableIconHead {
+    padding-right: 0 !important;
+    padding-left: 0 !important;
 }
 
-.sTableWarningImg {
-    height: 17px;
-    margin: 0px;
-    margin-right: 5px;
-    padding: 0px;
+table[id^=sortableTable] td.jsSortableTableIconCell {
+    padding-right: 0 !important;
+    padding-left: 0 !important;
+}
+
+table[id^=sortableTable] td.jsSortableTableIconCell + td {
+    padding-left: 5px !important;
+}
+
+table[id^=sortableTable] tr td:first-child {
+    border-left: 1px solid transparent !important;
+}
+
+table[id^=sortableTable] tr td:last-child {
+    border-right: 1px solid transparent !important;
+}
+
+table[id^=sortableTable] tr.stHover:hover td:first-child {
+    border-left-color: var(--st-border) !important;
+    box-shadow: inset 3px 0 0 var(--st-accent);
+}
+
+table[id^=sortableTable] tr.stHover:hover td:last-child {
+    border-right-color: var(--st-border) !important;
+}
+
+table[id^=sortableTable] .ui-state-disabled {
+    opacity: 1 !important;
 }
 
 .stGrab {
@@ -101,26 +228,14 @@ td {
 }
 
 div[id^=tt_] {
-    font-size: 12px;
     display: none;
     z-index: 9999;
     position: absolute;
-    background-color: #fff;
-    margin-left: -10px;
-    padding: 5px;
-    /*-webkit-box-shadow: 10px 10px 50px #333;*/
-    /*-moz-box-shadow: 10px 10px 50px #333;*/
-    /*box-shadow: 10px 10px 50px #333;*/
-
-    -webkit-box-shadow: 0 2px 5px rgba(0, 0, 0, .3);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, .3);
-    border: none;
-    max-height: 300px;
-    overflow-y: auto;
 }
 
 .sTableClickable {
-    color: #4E6CAB;
+    color: var(--st-accent-dark) !important;
+    font-weight: 600;
 }
 
 .sTableClickable:hover {
@@ -134,6 +249,12 @@ span.actionButtonsSpan{
     font-size: 18px;
     text-decoration: none;
     opacity: 1.0;
+    margin-left: 4px;
+    border-radius: 3px;
+    transition: background-color .12s ease, opacity .12s ease;
+}
+span.actionButtonsSpan.sTableClickable:hover {
+    background-color: #eef4f8;
 }
 .actionButtonsTD{
     text-align: right;
@@ -144,8 +265,12 @@ span.greish {
     zoom: 1; /* needed to trigger "hasLayout" in IE if no width or height is set */
 
 }
-.stSelectedRow{
-    background-color: rgba(0, 0, 0, 0.3);
+table[id^=sortableTable] .stSelectedRow{
+    background-color: var(--st-surface-selected);
+}
+
+table[id^=sortableTable] .stSelectedRow td:first-child {
+    box-shadow: inset 3px 0 0 var(--st-accent);
 }
 
 .actionbuttonsicon{
@@ -162,34 +287,169 @@ span.greish {
 .actionbuttonsicon-active{
     background-color: #0F0;
 }
+
+.jsSortableTableFrame {
+    box-sizing: border-box;
+    width: 100%;
+    overflow: hidden;
+    border: 0;
+    border-radius: 8px;
+    background: var(--st-surface);
+    box-shadow: inset 0 0 0 1px #d8e3ed;
+}
+
 table[id^=sortableTable] {
-    width:100% !important;
-    word-break: break-word !important;;
+    width: 100% !important;
+    word-break: break-word !important;
+    border-collapse: collapse !important;
+    border-spacing: 0 !important;
+    color: var(--st-text);
+    background: transparent;
+    border: 0 !important;
+    border-radius: 0;
+    overflow: visible;
+}
+
+table[id^=sortableTable] tbody {
+    background: transparent;
+}
+
+table[id^=sortableTable] tr:last-child td {
+    border-bottom-color: transparent !important;
 }
 
 .dot0 {
     aspect-ratio: 1 / 1;
-    height: 70%;
-    background-color: #bbb;
+    height: 12px;
+    background-color: #b7c3cf;
     border-radius: 50%;
     display: inline-block;
-    margin-right:2px;
+    margin-right: 3px;
+    box-shadow: 0 0 0 2px rgba(183, 195, 207, .16);
 }
 
 .dot1 {
     aspect-ratio: 1 / 1;
-    height: 70%;
+    height: 12px;
     background-color: #21981b;
     border-radius: 50%;
     display: inline-block;
-    margin-right:2px;
+    margin-right: 3px;
+    box-shadow: 0 0 0 2px rgba(33, 152, 27, .14);
 }
 
 .dot2 {
     aspect-ratio: 1 / 1;
-    height: 70%;
+    height: 12px;
     background-color: #bd2929;
     border-radius: 50%;
     display: inline-block;
-    margin-right:2px;
+    margin-right: 3px;
+    box-shadow: 0 0 0 2px rgba(189, 41, 41, .14);
+}
+
+.sTableWarningImg {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 17px;
+    height: 17px;
+    margin-right: 7px;
+
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    box-sizing: border-box;
+    cursor: help;
+    vertical-align: 1px;
+    box-shadow: 0 1px 2px rgba(15, 45, 70, .10);
+}
+
+
+.sTableWarningImg--warning {
+    background-color: var(--st-warning-soft);
+    border: 1px solid var(--st-warning-border);
+    color: var(--st-warning);
+}
+
+
+.sTableWarningImg--error {
+    background-color: var(--st-error-soft);
+    border: 1px solid var(--st-error-border);
+    color: var(--st-error);
+}
+
+.pcWarnings.sTableWarningTip {
+    display: none;
+    align-items: flex-start;
+    gap: 8px;
+    box-sizing: border-box;
+    max-width: 320px;
+    max-height: 300px;
+    padding: 9px 11px;
+    overflow-y: auto;
+    border: 1px solid var(--st-border);
+    border-radius: 7px;
+    background-color: #fff;
+    color: var(--st-text);
+    box-shadow: 0 12px 28px rgba(15, 45, 70, .18);
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.pcWarnings.sTableWarningTip::before {
+    content: "";
+    position: absolute;
+    top: -6px;
+    left: 14px;
+    width: 10px;
+    height: 10px;
+    background-color: inherit;
+    border-top: 1px solid currentColor;
+    border-left: 1px solid currentColor;
+    transform: rotate(45deg);
+    opacity: .35;
+}
+
+.sTableWarningTip__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.sTableWarningTip__message {
+    min-width: 0;
+}
+
+.pcWarnings.sTableWarningTip--warning {
+    border-color: var(--st-warning-border);
+    background-color: var(--st-warning-soft);
+    color: #5f3800;
+}
+
+.pcWarnings.sTableWarningTip--warning .sTableWarningTip__icon {
+    background-color: #fff;
+    color: var(--st-warning);
+    box-shadow: inset 0 0 0 1px var(--st-warning-border);
+}
+
+.pcWarnings.sTableWarningTip--error {
+    border-color: var(--st-error-border);
+    background-color: var(--st-error-soft);
+    color: #7a271a;
+}
+
+.pcWarnings.sTableWarningTip--error .sTableWarningTip__icon {
+    background-color: #fff;
+    color: var(--st-error);
+    box-shadow: inset 0 0 0 1px var(--st-error-border);
 }

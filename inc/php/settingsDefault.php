@@ -1,10 +1,8 @@
 <?php
 
-require_once 'settingsCommonFunctions.php';
-
 /*
- 	This script is required by settings.php and should not be used separately: settings.php publishes the variable
-	$settingsDefaults defined here as well as $settings (which handles all overrides).
+ 	This script is required by OasysSettings class and should not be used separately: the settings class takes care of
+	everything for use in the front end and the back end.
 */
 
 /* scope constants */
@@ -15,10 +13,7 @@ const SETTINGS_USERGROUP = 2; //can be overriden for a usergroup or single user 
 /* format constants */
 const FORMAT_BOOL = 0;
 const FORMAT_INT = 1;
-//////////////////////////////////////////////////////////////
-//Not to be used at the moment, if needed jsNumberInput needs to be modified to support floats/doubles
 const FORMAT_DOUBLE = 2;
-//////////////////////////////////////////////////////////////
 const FORMAT_STRING = 3;
 const FORMAT_SINGLE_CHOICE_INT = 4; //shown as a dropdown field, where the actual value is an integer (though not visible to the user)
 const FORMAT_SINGLE_CHOICE_STRING = 5; //shown as a dropdown field, where the actual value is a string.
@@ -46,7 +41,7 @@ const FORMAT_PASSWORD = 7; //value is saved in database using Crypt::encryptStri
 						is to be saved as the value of the setting
 
 	When overrides happen, the values are always saved as strings into the database; for FORMAT_BOOL that will be 'true'
-	or 'false' in lowercase. The settings.php scripts reconverts them to correct native data type.
+	or 'false' in lowercase. The OasysSettings class reconverts them to correct native data type.
 
 	In order to remove sensitive global setting entries from bgeing expoed on the client side, when there is a 'noJS' key
 	whose value is set to true, the entire key will be removed from the client facing javascript 'settings' variable. The
@@ -55,7 +50,6 @@ const FORMAT_PASSWORD = 7; //value is saved in database using Crypt::encryptStri
 
 function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): array
 {
-
 	// @formatter:off
 	$settingsDefaults = [
 		"alphaChannel" => [
@@ -79,6 +73,28 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 			"format" => FORMAT_BOOL,
 			"comment" => 'Enable context menu in front end, but beware: this might allow unwanted features (e.g. video controls, google translate, ... etc.)'
 		],
+		"backendInactivityTimeout" => [
+			"value" => 10,
+			"scope" => SETTINGS_SYSTEM,
+			"format" => FORMAT_INT,
+			"min" => 1,
+			"max" => 720,
+			"step" => 1,
+			"comment" => 'Minutes without a backend request after which a logged-in editor is considered inactive. The login state remains available until sessionTimeout is reached; inactive editors no longer block upgrades or maintenance operations.'
+		],
+		"cookieSameSite" => [
+			"value" => "Lax",
+			"scope" => SETTINGS_SYSTEM,
+			"format" => FORMAT_SINGLE_CHOICE_STRING,
+			"choices" => ["None" => "None", "Lax" => "Lax", "Strict" => "Strict"],
+			"comment" => 'SameSite policy for front end and back end state cookies. None is required for SAML authentication and requires secure cookies.'
+		],
+		"cookieSecure" => [
+			"value" => false,
+			"scope" => SETTINGS_SYSTEM,
+			"format" => FORMAT_BOOL,
+			"comment" => 'Whether front end and back end state cookies are sent only over secure HTTPS connections'
+		],
 		"customLoginURL" => [
 			'value' => "",
 			'scope' => SETTINGS_SYSTEM,
@@ -98,12 +114,6 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 			"choices" => $languages,
 			"comment" => 'Default language to add to a new page:'
 		],
-		"defaultPassword" => [
-			"value" => "",
-			"scope" => SETTINGS_SYSTEM,
-			"format" => FORMAT_STRING,
-			"comment" => 'This allows to set a default password to be pre-filled in login page'
-		],
 		"developmentMode" => [
 			"value" => false,
 			"scope" => SETTINGS_SYSTEM,
@@ -115,7 +125,8 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 			"scope" => SETTINGS_USER,
 			"format" => FORMAT_BOOL,
 			"comment" => 'Disable all animations in the editor:'
-		],"showLockedObjects" => [
+		],
+		"showLockedObjects" => [
 			"value" => true,
 			"scope" => SETTINGS_USER,
 			"format" => FORMAT_BOOL,
@@ -126,50 +137,68 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 			"scope" => SETTINGS_USERGROUP,
 			"format" => FORMAT_MULTIPLE_CHOICE,
 			"choices" => [
+				/* 
+					'accesslevel' Definitions for Editor Modules:
+						0 = Everyone has access
+						50 = Standard admin and higher have access
+						150 = Only superadmin has access
+						
+						* non-elevated admins have special processing in different parts of code for access control (e.g., removal of syssettings via authcommonfunctions loading)
+				 */
 				'content' => [
 					'name' => 'Content Editor',
-					'accesslevel' => 0
+					'accesslevel' => 0,
+					'module' => false
 				],
 				'tests' => [
 					'name' => 'Test Editor',
-					'accesslevel' => 0
+					'accesslevel' => 0,
+					'module' => false
 				],
 				'testtakers' => [
 					'name' => 'Test Takers',
-					'accesslevel' => 0
+					'accesslevel' => 0,
+					'module' => false
 				],
 				'testresults' => [
 					'name' => 'Test Results',
-					'accesslevel' => 0
+					'accesslevel' => 0,
+					'module' => false
 				],
 				'activityTracker' => [
 					'name' => 'Activity Tracker',
-					'accesslevel' => 0
+					'accesslevel' => 0,
+					'module' => false
 				],
 				'l10n' => [
 					'name' => 'Localization',
-					'accesslevel' => 200
+					'accesslevel' => 50,
+					'module' => false
 				],
 				'systemsettings' => [
 					'name' => 'System Settings',
-					'accesslevel' => 200
+					'accesslevel' => 50,
+					'module' => false
 				],
 				'users' => [
 					'name' => 'Users',
-					'accesslevel' => 200
+					'accesslevel' => 50,
+					'module' => false
 				],
 				'backup' => [
 					'name' => 'Backup',
-					'accesslevel' => 200
+					'accesslevel' => 50,
+					'module' => false
 				],
 				'upgrader' => [
 					'name' => 'Upgrader',
-					'accesslevel' => 200
+					'accesslevel' => 150,
+					'module' => false
 				]
 			],
 			"comment" => 'Defining which editor buttons are visible'
 		],
-		// TODO: as of right now, when set to SETTINGS_USERGROUP, only FORMAT_MULTIPLE_CHOICE is parsed in the userActions correctly. Expand handling if ever needed.
+		// FYI: as of right now, when set to SETTINGS_USERGROUP, only FORMAT_MULTIPLE_CHOICE is parsed in the userActions correctly. Expand handling if ever needed.
 		// "demo of extra group settings" => [
 		// 	'value' => 'whatevs',
 		// 	"scope" => SETTINGS_USERGROUP,
@@ -198,6 +227,36 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 			"format" => FORMAT_BOOL,
 			"comment" => 'Default setting for forced logoff when test becomes inactive due to date/time restrictions or on-off switch'
 		],
+		"frontendFailedAttemptWindow" => [
+			"value" => 300,
+			"scope" => SETTINGS_SYSTEM,
+			"format" => FORMAT_INT,
+			"min" => 1,
+			"max" => 86400,
+			"step" => 1,
+			"comment" => 'Time window in seconds during which failed front end login attempts are counted',
+			"noJS" => true
+		],
+		"frontendLoginLockoutSeconds" => [
+			"value" => 120,
+			"scope" => SETTINGS_SYSTEM,
+			"format" => FORMAT_INT,
+			"min" => 1,
+			"max" => 86400,
+			"step" => 1,
+			"comment" => 'Time in seconds that a front end login remains locked after too many failed attempts',
+			"noJS" => true
+		],
+		"frontendMaxFailedAttempts" => [
+			"value" => 15,
+			"scope" => SETTINGS_SYSTEM,
+			"format" => FORMAT_INT,
+			"min" => 1,
+			"max" => 1000,
+			"step" => 1,
+			"comment" => 'Maximum failed front end login attempts allowed per login during the configured time window',
+			"noJS" => true
+		],
 		"hideTimeoutMsg" => [
 			"value" => false,
 			"scope" => SETTINGS_SYSTEM,
@@ -208,7 +267,7 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 			"value" => "",
 			"scope" => SETTINGS_SYSTEM,
 			"format" => FORMAT_STRING,
-			"comment" => 'This will show instead of login page when returning from a test'
+			"comment" => 'Define the system-wide landing page from the landing page directory; otherwise the default login page is used.'
 		],
 		"ldap_appUser" => [
 			'value' => "",
@@ -224,11 +283,28 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 			"comment" => '(encrypted) Password for LDAP search account',
 			"noJS" => true
 		],
+		"ldap_caCertificateFile" => [
+			'value' => "",
+			'scope' => SETTINGS_SYSTEM,
+			'format' => FORMAT_STRING,
+			"comment" => 'Optional absolute path to a PEM CA certificate bundle used to verify the LDAP server certificate (the system trust store is used when empty)',
+			"noJS" => true
+		],
+		"ldap_networkTimeoutSeconds" => [
+			'value' => 5,
+			'scope' => SETTINGS_SYSTEM,
+			'format' => FORMAT_INT,
+			'min' => 1,
+			'max' => 60,
+			'step' => 1,
+			"comment" => 'LDAP connection and network timeout in seconds',
+			"noJS" => true
+		],
 		"ldap_server" => [
 			'value' => "",
 			'scope' => SETTINGS_SYSTEM,
 			'format' => FORMAT_STRING,
-			"comment" => 'URL for LDAP server (prepend with LDAP:// or LDPS://)',
+			"comment" => 'URL for LDAP server (use LDAPS:// for implicit TLS or LDAP://, optionally with StartTLS enabled)',
 			"noJS" => true
 		],
 		"ldap_searchBase" => [
@@ -243,6 +319,37 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 			'scope' => SETTINGS_SYSTEM,
 			'format' => FORMAT_STRING,
 			"comment" => 'Query attribute string for user search (%1 is substituted for username value)',
+			"noJS" => true
+		],
+		"ldap_searchTimeoutSeconds" => [
+			'value' => 5,
+			'scope' => SETTINGS_SYSTEM,
+			'format' => FORMAT_INT,
+			'min' => 1,
+			'max' => 60,
+			'step' => 1,
+			"comment" => 'LDAP user search timeout in seconds',
+			"noJS" => true
+		],
+		"ldap_startTls" => [
+			'value' => false,
+			'scope' => SETTINGS_SYSTEM,
+			'format' => FORMAT_BOOL,
+			"comment" => 'Upgrade LDAP:// connections to TLS before binding (recommended when the LDAP server supports StartTLS)',
+			"noJS" => true
+		],
+		"ldap_stripLoginDomain" => [
+			'value' => true,
+			'scope' => SETTINGS_SYSTEM,
+			'format' => FORMAT_BOOL,
+			"comment" => 'Remove the @domain suffix from usernames before searching LDAP',
+			"noJS" => true
+		],
+		"ldap_verifyCertificate" => [
+			'value' => false,
+			'scope' => SETTINGS_SYSTEM,
+			'format' => FORMAT_BOOL,
+			"comment" => 'Verify the LDAP server TLS certificate against the configured CA file or system trust store (recommended)',
 			"noJS" => true
 		],
 		"limitNavigation" => [
@@ -309,6 +416,12 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 			"choices" => ['random' => 'random', 'sequential' => 'sequential'],
 			"comment" => 'Default setting for "mutation method" for new mutation tests'
 		],
+		"optimiseDataTransfer" => [
+			"value" => false,
+			"scope" => SETTINGS_SYSTEM,
+			"format" => FORMAT_BOOL,
+			"comment" => 'Discard pending earlier answer events when the same field is changed repeatedly, reducing data transfer at the cost of an incomplete behaviour history'
+		],
 		"passwordField" => [
 			"value" => 0,
 			"scope" => SETTINGS_SYSTEM,
@@ -335,15 +448,14 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 			"comment" => 'Default setting for "save results" for new tests'
 		],
 		"sendFrequency" => [
-			"value" => 15000,
+			"value" => 15,
 			"scope" => SETTINGS_SYSTEM,
 			"format" => FORMAT_INT,
-			"min" => 5000,
-			"max" => 60000,
-			"step" => 5000,
-			"comment" => 'The frequency in milliseconds how often packages are sent to the server'
+			"min" => 5,
+			"max" => 300,
+			"step" => 5,
+			"comment" => 'The frequency in seconds how often packages are sent to the server'
 		],
-		/* the following is also hard coded inside dbSessionHandler.php … don't forget to update that if you change this default */
 		"sessionTimeout" => [
 			"value" => 60,
 			"scope" => SETTINGS_SYSTEM,
@@ -351,7 +463,7 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 			"min" => 15,
 			"max" => 10080,
 			"step" => 15,
-			"comment" => 'Time to keep a login session alive'
+			"comment" => 'Time to keep a login session alive (in minutes)'
 		],
 		"showScore" => [
 			"value" => false,
@@ -406,7 +518,7 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 			"value" => "",
 			"scope" => SETTINGS_SYSTEM,
 			"format" => FORMAT_STRING,
-			"comment" => "(encrypted) Outgoing email server address for Oasys Editor",
+			"comment" => "Outgoing email server address for Oasys Editor",
 			"noJS" => true
 		],
 		"SMTP_Port" => [
@@ -423,7 +535,7 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 			"value" => "",
 			"scope" => SETTINGS_SYSTEM,
 			"format" => FORMAT_STRING,
-			"comment" => "(encrypted) Email server SMTP username value for Oasys Editor",
+			"comment" => "Email server SMTP username value for Oasys Editor",
 			"noJS" => true
 		],
 		"SMTP_Password" => [
@@ -463,16 +575,5 @@ function getDefaultSettings(rixPDO &$db, array &$languages, array &$skins): arra
 		]
 	];
 	// @formatter:on
-
-	// filter out settings whose scope is not SETTINGS_SYSTEM if $filterSettings is set to true
-	global $filterSettings;
-	if ($filterSettings === true) {
-		foreach ($settingsDefaults as $property => $entry) {
-			if ($entry['scope'] !== SETTINGS_SYSTEM) {
-				unset($settingsDefaults[$property]);
-			}
-		}
-	}
-
 	return $settingsDefaults;
 }

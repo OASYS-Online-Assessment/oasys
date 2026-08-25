@@ -6,6 +6,7 @@
 	$pageName = "pages"; // set to the related 'editor button' string name (e.g., 'items')
 	$isSubMod = false; // set true if a module page in a subdirectory
 	$isActionFile = false; // set true if an "xxxActions.php" file
+    require_once __DIR__ . "/inc/php/initBackend.php";
 	require_once 'inc/php/authCommonFunctions.php'; // required for authentication inclusion
 	require_once 'inc/php/cacheIncludes.php'; // required for cache handling
 ?>
@@ -34,6 +35,7 @@
 
 		/* tinyMCE (only for those that need an editor */
 		includeJS("../inc/tinymce/js/tinymce/tinymce.min.js");
+		includeJS("../inc/tinymcePlugins/tabindent.js");
 		includeJS("../inc/tinymcePlugins/mediabrowser.js");
 		includeJS("../inc/tinymcePlugins/imagebrowser.js");
 

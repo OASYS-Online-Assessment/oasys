@@ -4,8 +4,8 @@ if (!empty($data['location'])) {
 
     $location = $data['location'];
 
-    function glFetchUsers(array $data, rixPDO &$db, &$returnData)
-    {
+    function glFetchUsers(array $data, rixPDO &$db, &$returnData): void
+	{
         extract($data);
 
         $resUGlist = $db->fetchColumn("SELECT `name` FROM `users` WHERE `id` IN (SELECT `userId` FROM `userGroupAccess` WHERE `usergroupId` = ?)", [$groupId])['data'];
@@ -15,8 +15,8 @@ if (!empty($data['location'])) {
         $returnData['groupName'] = $resGname;
     }
 
-    function locExists(array $data, $location, object $tableName, rixPDO &$db, &$returnData)
-    {
+    function locExists(array $data, $location, object $tableName, rixPDO &$db, &$returnData): void
+	{
         global $uiLang;
 
         $locExists = $db->fetchValue("SELECT COUNT(*) FROM `{$tableName->primary}` WHERE `id`=?", [$location])['data'];

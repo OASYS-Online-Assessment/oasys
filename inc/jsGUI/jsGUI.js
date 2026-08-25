@@ -551,7 +551,7 @@
 		id:			id for the new element
 		options:	an object with the following options
 			prepend			boolean		if true, the statusbar is added as first child of parent, rather than last
-			defaultColour	string		CSS colour string to use as default background ('#000000' if omitted)
+			defaultColour	string		CSS colour string to use as default background ('rgb(41, 41, 41)' if omitted)
 			prefix			string		prefix to always show in front of whatever the message is
 			useQueue		boolean		queue up all messages and show them one after another if this option is TRUE
 
@@ -578,9 +578,10 @@
 		/* optional settings */
 		const prepend = options.prepend || false;
 		const prefix = options.prefix || '';
-		const defaultColour = options.defaultColour || '#000000';
+		const defaultColour = options.defaultColour || 'rgb(41, 41, 41)';
 		let status = options.message || '';
 		const useQueue = options.useQueue || false;
+		const statusClasses = 'jsStatusBar-error jsStatusBar-warning jsStatusBar-success jsStatusBar-info';
 
 		/* creation */
 		const html = `<div id='${id}'></div>`;
@@ -603,7 +604,8 @@
 			if (!ttl) {
 				status = text;
 				if (statusTimer === false) element.html(prefix + status);
-				if (colour) element.animate({backgroundColor: colour}, 100);
+				if (colour) setStatusStyle(colour);
+				else if (statusTimer === false) setStatusStyle(false);
 			} else {
 				statusQueue.push({text: text, ttl: ttl, colour: colour});
 				if (statusTimer === false || useQueue === false) {
@@ -619,13 +621,60 @@
 			if (statusQueue.length > 0) {
 				const msg = statusQueue.shift();
 				element.html(prefix + msg.text);
-				element.animate({backgroundColor: msg.colour}, 100);
+				setStatusStyle(msg.colour);
 				statusTimer = setTimeout(advanceStatusQueue, msg.ttl);
 			} else {
 				element.html(prefix + status);
-				element.animate({backgroundColor: defaultColour}, 100);
+				setStatusStyle(false);
 				statusTimer = false;
 			}
+		}
+
+		function setStatusStyle(colour) {
+			const semanticColour = resolveSemanticColour(colour);
+			element.removeClass(statusClasses);
+			if (semanticColour) {
+				element.css('background-color', '');
+				element.addClass('jsStatusBar-' + semanticColour);
+			} else if (colour) {
+				element.animate({backgroundColor: colour}, 100);
+			} else {
+				element.animate({backgroundColor: defaultColour}, 100);
+			}
+		}
+
+		function resolveSemanticColour(colour) {
+			if (!colour) return false;
+			const value = String(colour).trim().toLowerCase();
+			const map = {
+				'error': 'error',
+				'danger': 'error',
+				'red': 'error',
+				'#f00': 'error',
+				'#ff0000': 'error',
+				'#dd1a00': 'error',
+				'#aa2121': 'error',
+				'rgb(255, 0, 0)': 'error',
+				'warning': 'warning',
+				'warn': 'warning',
+				'yellow': 'warning',
+				'orange': 'warning',
+				'#a60': 'warning',
+				'#aa6600': 'warning',
+				'success': 'success',
+				'ok': 'success',
+				'green': 'success',
+				'#0f0': 'success',
+				'#0a0': 'success',
+				'#00ff00': 'success',
+				'#00aa00': 'success',
+				'#22aa41': 'success',
+				'rgb(0, 170, 0)': 'success',
+				'rgb(0, 180, 0)': 'success',
+				'info': 'info',
+				'blue': 'info'
+			};
+			return map[value] || false;
 		}
 
 		/* export methods */
@@ -1017,71 +1066,54 @@
 
 })(jQuery);
 
-/* jsDashWidget 0.1 Tomas Kamarauskas 2023
+/* jsDashWidget 1.0 Tomas Kamarauskas/Willibrord Koch 2023/2025
 
-This is used to create dashboard widget with a title and an icon
-should take the params:
-* id
-* title (text)
-* iconPath (full path from root dir)
-* titleClass - additional class to the title 
-* contentClass - additional class to the content
+This function creates a dashboard widget that contains:
+- a title bar with the widget title text and an optional online help placeholder (span)
+- a content container where the widget content can be injected later
 
-Note: The ID used to create the widget applies to the content container, not the whole widget. 
-If you need to refer to the whole widget, not the content, please use {yourgivenId}_dashWidget ID.
+Parameters:
+* id            – identifier used for the content container (the overall widget gets {id}_dashWidget)
+* title         – text displayed in the widget header
+* titleClass    – optional additional CSS class for the title span
+* contentClass  – optional additional CSS class for the content container
+* hidden        – if true, the widget is initially hidden
+
+Note:
+The given ID applies to the content container (div), not the full widget.
+To refer to the entire widget wrapper, use the ID pattern {yourGivenId}_dashWidget.
+An empty <span> with the ID {yourGivenId}_help is automatically included in the title bar
+and can be used as a placeholder for attaching an OasysHelp instance.
 */
 
-
-(function($) {
-
+(function ($) {
 	function jsDashWidget(parent, id, options) {
+		if (!(parent && parent.jquery)) parent = $(parent);
+		options = options || {};
 
-		if (typeof(parent) === 'string') {
-			parent = $(parent);
-		}
-		if (!options) options = {};
-
-		const title = options.title || "The title";
-		const iconPath = options.iconPath || "";
-		const titleClass = options.titleClass || "";
+		const title        = options.title || "The title";
+		const titleClass   = options.titleClass || "";
 		const contentClass = options.contentClass || "";
-		const hidden = options.hidden || false;
+		const hidden       = !!options.hidden;
 
-		if (hidden) hide();
+		const html = `
+			<div id="${id}_dashWidget" class="jsDashWidget">
+				<div class="jsDashWidgetTitle">
+					<span id="${id}_help" class="jsDashWidgetHelpAnchor"></span>
+					<span class="jsDashWidgetTitleText ${titleClass}">${title}</span>
+				</div>
+				<div id="${id}" class="jsDashWidgetContentBox ${contentClass}"></div>
+			</div>
+		`;
 
-		const html = `<div id='${id}_dashWidget' class='jsDashWidget'><div class='jsDashWidgetTitle'><img class='jsDashWidgetIcon' src ='${iconPath}'/><span class='jsDashWidgetTitleText ${titleClass}'>${title}</span></div><div id='${id}' class='jsDashWidgetContentBox ${contentClass}'/></div>`;
-			parent.append(html);	
+		parent.append(html);
+		if (hidden) $('#' + id + '_dashWidget').hide();
+
+		// Keep existing behavior: return the content box
+		return $('#' + id);
 	}
 
-//export class
-window.jsDashWidget = jsDashWidget;
-
-})(jQuery);
-
-(function($) {
-
-	function jsDashWidget(parent, id, options) {
-
-		if (typeof(parent) === 'string') {
-			parent = $(parent);
-		}
-		if (!options) options = {};
-
-		const title = options.title || "The title";
-		const iconPath = options.iconPath || "";
-		const titleClass = options.titleClass || "";
-		const contentClass = options.contentClass || "";
-		const hidden = options.hidden || false;
-
-		if (hidden) hide();
-
-		const html = `<div id='${id}_dashWidget' class='jsDashWidget'><div class='jsDashWidgetTitle'><img class='jsDashWidgetIcon' src ='${iconPath}'/><span class='jsDashWidgetTitleText'>${title}</span></div><div id='${id}' class='jsDashWidgetContentBox'/></div>`;
-			parent.append(html);	
-	}
-
-//export class
-window.jsTooltip = jsDashWidget;
-
+	window.jsDashWidget = jsDashWidget;
 })(jQuery);
 
 

@@ -45,6 +45,7 @@
 													callback = function to execute, params = array with paramaters to send on callback
 		hideButtonsList					object		keys of object are the sections, value is an object that has keys of button names with a boolean value whether to hide that button for this section
 		hideButtonsKey					string		if item has a truthy value for this key, the buttons will not be shown for this item (example: the item has a property 'locked': true, then the buttons will not be shown)
+		disabledKey						string		if item has a truthy value for this key, the item cannot be selected, activated, or show hover buttons
 		buttons							array		list of objects for buttons to show when hovering an item (see nxButton for the supported options)
 		headerButton					object		nxButton options for a button to show in the header of the list above all sections
 		footerButton					object		nxButton options for a button to show in the footer of the list beneath all sections
@@ -114,6 +115,7 @@
 			this.prefixKey = options.prefixKey ?? null;
 			this.postfixKey = options.postfixKey ?? null;
 			this.hideButtonsKey = options.hideButtonsKey ?? null;
+			this.disabledKey = options.disabledKey ?? null;
 			this.prefixFormat = options.prefixFormat ?? "%@";
 			this.postfixFormat = options.postfixFormat ?? "%@";
 			this.classConditions = options.classConditions ?? null;
@@ -440,17 +442,30 @@
 				list = $(el);
 			}
 			for (i in this.items) {
+				prefix = '';
+				postfix = '';
 				if (this.prefixKey) {
-					prefix = sf(this.prefixFormat, this.items[i][this.prefixKey]);
+					const prefixValue = this.items[i][this.prefixKey];
+					if (prefixValue !== null && typeof prefixValue !== 'undefined') {
+						prefix = sf(this.prefixFormat, prefixValue);
+					}
 				}
 				if (this.postfixKey) {
-					postfix = sf(this.postfixFormat, this.items[i][this.postfixKey]);
+					const postfixValue = this.items[i][this.postfixKey];
+					if (postfixValue !== null && typeof postfixValue !== 'undefined') {
+						postfix = sf(this.postfixFormat, postfixValue);
+					}
 				}
+				const label = this.items[i][this.labelKey] ?? '';
 				el = document.createElement('li');
 				el = $(el);
 				el.attr('id', `${this.element.attr('id')}_${this.items[i][this.idKey]}`);
 				el.attr('data-id', i);
-				el.html(`<span class='jsSelectList-Prefix'>${prefix}</span>${he.encode(this.items[i][this.labelKey])}<span class='jsSelectList-Postfix'>${postfix}</span>`);
+				el.html(`<span class='jsSelectList-Prefix'>${prefix}</span>${he.encode(String(label))}<span class='jsSelectList-Postfix'>${postfix}</span>`);
+				if (this.isItemDisabled(this.items[i])) {
+					el.addClass('jsSelectListItemDisabled');
+					el.attr('aria-disabled', 'true');
+				}
 				if (this.classConditions) {
 					for (let className in this.classConditions) {
 						if (fetchFromObjPath(this.items[i], this.classConditions[className].path) === this.classConditions[className].value) {
@@ -501,9 +516,27 @@
 			for (i in this.sectionTitleButtons) {
 				this.sectionTitleButtons[i].element.appendTo($('#' + this.element.attr('id') + '_sectionTitleButtonWrapper_' + i));
 			}
+			this.activateTooltips();
 			this.refreshSelection();
 			this.completeItemList = this.element.find('li');
 			this.updateVisibility();
+		}
+
+		activateTooltips() {
+			if (typeof $.fn.tooltip !== 'function') return;
+			const tooltipTargets = this.element.find('[title]').filter(function() {
+				return $(this).attr('title') !== '';
+			});
+			if (tooltipTargets.length === 0) return;
+			tooltipTargets.tooltip({
+				track: true,
+				position: {
+					my: 'left+18 top+18',
+					at: 'right bottom',
+					collision: 'flipfit'
+				},
+				classes: {"ui-tooltip-content": "uitt-upgrader"}
+			});
 		}
 
 		getSectionForItem(itemData) {
@@ -558,7 +591,7 @@
 			for (let i = 0; i < this.selection.length; i++) {
 				let itemFound = false;
 				for (let j in this.items) {
-					if (this.items[j][this.idKey] === this.selection[i]) itemFound = true;
+					if (this.items[j][this.idKey] === this.selection[i] && !this.isItemDisabled(this.items[j])) itemFound = true;
 				}
 				if (!itemFound) {
 					this.selection.splice(i, 1);
@@ -575,6 +608,11 @@
 				}
 			}
 			return false;
+		}
+
+		isItemDisabled(itemData) {
+			rixToolsDebug(1, 'jsSelectList.isItemDisabled', itemData);
+			return !!(this.disabledKey && itemData && itemData[this.disabledKey]);
 		}
 
 		getIdForPosition(pos) {
@@ -641,6 +679,7 @@
 
 			const item = $(e.target);
 			if (e.target.nodeName !== 'LI') return;
+			if (this.isItemDisabled(this.getItem(this.getId(item)))) return;
 			if (!this.toggleSelection(item)) {
 				if (this.delay) {
 					this.timer = setTimeout(this.triggerSelectionCallback.bind(this), 500);
@@ -683,6 +722,7 @@
 			rixToolsDebug(1, 'jsSelectList.onActivate');
 			if (this.disabled) return;
 			if (!$(e.target).hasClass('selected')) return;
+			if (this.isItemDisabled(this.getSelection())) return;
 			if (this.delay) {
 				this.stopTimer();
 			}
@@ -713,6 +753,7 @@
 			this.hoverId = this.getId(listItem);
 			let hideButtons = false;
 			const itemData = this.getItem(this.hoverId);
+			if (this.isItemDisabled(itemData)) return;
 			const section = this.getSectionForItem(itemData);
 			if (this.hideButtonsKey) {
 				if (itemData[this.hideButtonsKey]) {

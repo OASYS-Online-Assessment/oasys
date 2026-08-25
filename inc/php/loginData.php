@@ -32,6 +32,21 @@
 
 	}
 
+	function getTestAccessData($testId, &$db, &$returnData): array {
+		/** @var rixPDO $db */
+		$query = "SELECT active, options FROM tests WHERE id=?";
+		$results = $db->fetchRow($query, [$testId]);
+		if ($results['rows'] === 0) {
+			$returnData['error'] = "Error: No test data found for testId = $testId. Cannot proceed!";
+			die();
+		}
+		decodeData($results['data'], 'options');
+		if (!isset($results['data']['options']['restrictions'])) {
+			$results['data']['options']['restrictions'] = ['dateRange' => false, 'timeRestriction' => false, 'testDays' => false];
+		}
+		return $results['data'];
+	}
+
 	function getTestData($testId, &$db, &$returnData, $passwordId = null) : array {
 		/** @var rixPDO $db */
 		$query = "SELECT id, active, name, structure, labels, options, variables, skin, metadata FROM tests WHERE id=?";
@@ -60,10 +75,6 @@
 				mergeTestData($testData, $testCache);
 			} else {
 				fetchFluidTestStructure($db, $testData, $structure);
-//				if ($testData['options']['saveResults'] === true && $returnData['data']['login']['overrides']['disableSaving'] !== true) {
-//					//if saving is not disabled, we store the test data in the cache
-//					storeCachedTestData($db, $testData, $passwordId, $testId);
-//				}
 			}
 		} elseif ($structure['type'] === 'mutation') {
 			$testCache = fetchCachedTestData($db, $passwordId, $testId);
@@ -71,10 +82,6 @@
 				mergeTestData($testData, $testCache);
 			} else {
 				fetchMutationTestStructure($db, $testData, $structure, $testId, $returnData);
-//				if ($testData['options']['saveResults'] === true && $returnData['data']['login']['overrides']['disableSaving'] !== true) {
-//					//if saving is not disabled, we store the test data in the cache
-//					storeCachedTestData($db, $testData, $passwordId, $testId);
-//				}
 			}
 		}
 
@@ -484,6 +491,12 @@
 			$returnData['error'] = "Error: No item data found for itemId = $itemId. Cannot proceed!";
 			die();
 		}
+		foreach (['parsed', 'fields', 'options', 'scripts'] as $compiledColumn) {
+			if (($results['data'][$compiledColumn] ?? null) === null) {
+				$returnData['error'] = 'noContent';
+				die();
+			}
+		}
 		decodeData($results['data'], ['languages', 'blocks'], false, true);
 		decodeData($results['data'], ['fields', 'parsed', 'options', 'scripts', 'metadata'], false, false);
 
@@ -530,14 +543,16 @@
 	/*
 	 * Remove any data that should not be shown in front end unless we are in debugging mode
 	 */
-	function obfuscateData(&$data) {
+	function obfuscateData(&$data): void
+	{
 		global $settings;
-		if ($settings['debugSystem'] === true) {
-			return;
-		}
-		if (is_array($data['fields']) && sizeof($data['fields'])) {
+//		if ($settings['debugSystem'] === true) {
+//			return;
+//		}
+		if (is_object($data['fields'])) {
 			foreach ($data['fields'] as $id => $field) {
-				unset($data['fields'][$id]['correction']);
+				unset($data['fields']->$id->correction);
+				unset($data['fields']->$id->comment);
 			}
 		}
 	}
