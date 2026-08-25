@@ -113,7 +113,7 @@ class jsPopupEditor {
 				"lists",
 				"advlist"
 			],
-			toolbar: "bold italic underline subscript superscript forecolor backcolor | bullist numlist table | alignleft aligncenter alignright alignjustify styleselect fontsizeselect outdent indent imagebrowser",
+			toolbar: "bold italic underline subscript superscript forecolor backcolor | bullist numlist table | alignleft aligncenter alignright alignjustify styles fontsize outdent indent imagebrowser",
 			toolbar_mode: 'sliding',
 			menu: {
 				edit: {title: 'Edit', items: 'undo redo | cut copy paste pastetext | selectall | searchreplace'},
