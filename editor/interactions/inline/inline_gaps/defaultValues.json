@@ -1,0 +1,17 @@
+[
+  {"value": "", "localized": false, "flags": [], "path": ["id"]},
+  {"value": "", "localized": false, "flags": [], "path": ["visibility"]},
+  {"value": true, "localized": false, "flags": [], "path": ["mandatory"]},
+  {"value": "", "localized": true, "flags": ["parseForMedia"], "path": ["question"], "context": "parsed", "contextPath": []},
+  {"value": "", "localized": true, "flags": [], "path": ["source"]},
+  {"value": {}, "localized": true, "flags": [], "path": ["fields"]},
+  {"value": [], "localized": false, "flags": [], "path": ["answers"]},
+  {"value": "alphabet", "localized": false, "flags": [], "path": ["order"]},
+  {"value": "none", "localized": false, "flags": [], "path": ["processing"]},
+  {"value": {}, "localized": false, "flags": [], "path": ["correction"]},
+  {"value": 1, "localized": false, "flags": [], "path": ["score", "maximum"]},
+  {"value": 0, "localized": false, "flags": [], "path": ["score", "initial"]},
+  {"value": 1, "localized": false, "flags": [], "path": ["score", "correct"]},
+  {"value": 0, "localized": false, "flags": [], "path": ["score", "wrong"]},
+  {"value": 0, "localized": false, "flags": [], "path": ["score", "missing"]}
+]

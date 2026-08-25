@@ -1,0 +1,14 @@
+[
+	{"value": "", "localized": false, "flags": [], "path": ["id"]},
+	{"value": "", "localized": true, "flags": [], "path": ["filename"]},
+	{"value": "", "localized": true, "flags": ["isMediaId"], "path": ["fileid"], "context": "fields", "contextPath": ["file"], "uuidPath": ["filechecksum"]},
+	{"value": "", "localized": true, "flags": [], "path": ["filechecksum"]},
+	{"value": false, "localized": false, "flags": [], "path": ["limitPlayCount"]},
+	{"value": 1, "localized": false, "flags": [], "path": ["maxPlayCount"]},
+	{"value": false, "localized": false, "flags": [], "path": ["disableControls"]},
+	{"value": false, "localized": false, "flags": [], "path": ["autoPlay"]},
+	{"value": false, "localized": false, "flags": [], "path": ["required"]},
+	{"value": false, "localized": false, "flags": [], "path": ["noPlaceHolder"]},
+	{"value": false, "localized": false, "flags": [], "path": ["navigateOnEnd"]}
+]
+

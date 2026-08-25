@@ -1,0 +1,16 @@
+[
+  {"value": "", "localized": false, "flags": [], "path": ["id"]},
+  {"value": "", "localized": false, "flags": [], "path": ["export"]},
+  {"value": "", "localized": false, "flags": [], "path": ["visibility"]},
+  {"value": true, "localized": false, "flags": [], "path": ["mandatory"]},
+  {"value": 16383, "localized": false, "flags": [], "path": ["limit"]},
+  {"value": "", "localized": true, "flags": ["parseForMedia"], "path": ["question"], "context": "parsed", "contextPath": []},
+  {"value": "", "localized": true, "flags": [], "path": ["placeholder"]},
+  {"value": "m", "localized": false, "flags": [], "path": ["size"]},
+  {"value": "", "localized": false, "flags": [], "path": ["width"]},
+  {"value": "", "localized": false, "flags": [], "path": ["height"]},
+  {"value": "l", "localized": false, "flags": [], "path": ["align"]},
+  {"value": "none", "localized": false, "flags": [], "path": ["resize"]},
+  {"value": "none", "localized": false, "flags": [], "path": ["processing"]},
+  {"value": 1, "localized": false, "flags": [], "path": ["score", "maximum"]}
+]

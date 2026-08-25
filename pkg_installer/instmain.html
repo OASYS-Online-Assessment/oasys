@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Oasys Upgrader Installer Database Maintenance</title>
+</head>
+
+<body>
+
+    <form action="instmainActions.php" method="post">
+        <select name="action" id="actionItems">
+            <option value="resetPkg">Package Name to Clear/Reset</option>
+            <option value="resetAllPkg">Clear ALL Packages</option>
+            <option value="setVer">Force Set Oasys Version</option>
+        </select>
+
+        <input type="text" name="varField" id="dataVar" placeholder="Enter pkg name with extension" size="40">
+        <input type="submit" value="Send Request">
+    </form>
+
+</body>
+
+<script>
+    document.getElementById("actionItems").selectedIndex = 0;
+
+    document.getElementById("actionItems").addEventListener('change', function () {
+        switch (this.selectedOptions[0].value) {
+            case "resetAllPkg":
+                document.getElementById("dataVar").disabled = true;
+                document.getElementById("dataVar").placeholder = "";
+                break;
+
+            case "setVer":
+                document.getElementById("dataVar").disabled = false;
+                document.getElementById("dataVar").placeholder = "Enter new version number value";
+
+                break;
+
+            default:
+                document.getElementById("dataVar").disabled = false;
+                document.getElementById("dataVar").placeholder = "Enter pkg name with extension";
+                break;
+        }
+
+    });
+</script>
+
+</html>

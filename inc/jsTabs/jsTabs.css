@@ -1,0 +1,29 @@
+.jsTabsBar {
+	border-bottom: 3px solid #217EAA;
+	height: 50px;
+	padding: 10px 8px;
+	box-sizing: border-box;
+}
+
+.jsTab {
+	display: inline-block;
+	font-size: 18px;
+	height: 37px;
+	background-color: #BEBEBE;
+	padding: 0 20px;
+	line-height: 40px;
+	border-top-left-radius: 10px;
+	border-top-right-radius: 10px;
+	border-right: 1px solid #888;
+	cursor: pointer;
+}
+
+.jsTab.jstHovered {
+	background-color: #CCCCCC;
+}
+
+.jsTab.jstActive {
+	background-color: #227DAA;
+	color: white;
+}
+

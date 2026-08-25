@@ -1,0 +1,195 @@
+@charset "UTF-8";
+/* CSS Document */
+.sTableReadonly {
+    filter: url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\'><filter id=\'grayscale\'><feColorMatrix type=\'matrix\' values=\'0.6666 0.6666 0.3333 0 0 0.6666 0.6666 0.6666 0 0 0.6666 0.6666 0.6666 0 0 0 0 0 0.5 0\'/></filter></svg>#grayscale"); /* Firefox 10+, Firefox on Android */
+    filter: contrast(60%) brightness(120%) grayscale(100%); /* Current draft standard */
+    -webkit-filter: contrast(60%) brightness(120%) grayscale(100%);
+    -moz-filter: contrast(60%) brightness(120%) grayscale(100%);
+    -ms-filter: contrast(60%) brightness(120%) grayscale(100%);
+    -o-filter: contrast(60%) brightness(120%) grayscale(100%);
+    filter: gray();
+    color: #000;
+}
+
+.ui-state-highlight {
+    background-color: #AFCCF3;
+}
+
+.stHover:hover {
+    background-color: #eeeeee !important;
+}
+
+td[id^=deleteLink_] {
+    background-image: none;
+    background-size: 85%;
+    background-repeat: no-repeat;
+    background-position: center;
+    /*cursor:pointer !important;*/
+}
+
+td[data-abid^=actionButton_] {
+    background-image: none;
+    background-size: 85%;
+    background-repeat: no-repeat;
+    background-position: center;
+    cursor: pointer !important;
+}
+
+td[data-fpid^=fixedPosition_] {
+    background-image: none;
+    background-size: 85%;
+    background-repeat: no-repeat;
+    background-position: center;
+    cursor: pointer !important;
+}
+
+td[data-pfid^=progressField_] {
+    height: 100%;
+    background-image: url(images/progressbar.jpg);
+    background-repeat: repeat-y;
+    text-align: center;
+    font-weight: 600;
+    color:#333333;
+    cursor: pointer !important;
+    font-weight: bolder;
+}
+
+.consno {
+    background-image: url(images/handle.png);
+    background-size: auto 25px;
+    background-repeat: no-repeat;
+    background-position: left center;
+    font-weight: 600;
+    color: #bebebe;
+    text-align: right;
+    font-size: 11px !important;
+    padding-right: 4px;
+}
+
+th {
+    text-align: left;
+    font-size: 14px;
+    background-color: #175978!important;
+    color: white;
+    font-weight: normal;
+    padding: 3px !important;
+}
+
+td {
+    font-size: 14px;
+    vertical-align: middle;
+}
+
+.ui-state-disabled {
+    opacity: 0.8 !important;
+}
+
+.sTableWarningImg {
+    height: 17px;
+    margin: 0px;
+    margin-right: 5px;
+    padding: 0px;
+}
+
+.stGrab {
+    cursor: grab;
+    cursor: -webkit-grab;
+}
+
+.stGrab2 {
+    cursor: default;
+}
+
+div[id^=tt_] {
+    font-size: 12px;
+    display: none;
+    z-index: 9999;
+    position: absolute;
+    background-color: #fff;
+    margin-left: -10px;
+    padding: 5px;
+    /*-webkit-box-shadow: 10px 10px 50px #333;*/
+    /*-moz-box-shadow: 10px 10px 50px #333;*/
+    /*box-shadow: 10px 10px 50px #333;*/
+
+    -webkit-box-shadow: 0 2px 5px rgba(0, 0, 0, .3);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, .3);
+    border: none;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.sTableClickable {
+    color: #4E6CAB;
+}
+
+.sTableClickable:hover {
+    text-decoration: underline;
+    cursor: pointer;
+}
+span.actionButtonsSpan:hover{
+    text-decoration: none;
+}
+span.actionButtonsSpan{
+    font-size: 18px;
+    text-decoration: none;
+    opacity: 1.0;
+}
+.actionButtonsTD{
+    text-align: right;
+}
+span.greish {
+    opacity: 0.4;
+    filter: alpha(opacity=40);
+    zoom: 1; /* needed to trigger "hasLayout" in IE if no width or height is set */
+
+}
+.stSelectedRow{
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+.actionbuttonsicon{
+    position: relative;
+    top: 1px;
+    display: inline-block;
+    font-style: normal;
+    font-weight: normal;
+    line-height: 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+.actionbuttonsicon-s:before { content: "S"; }
+.actionbuttonsicon-active{
+    background-color: #0F0;
+}
+table[id^=sortableTable] {
+    width:100% !important;
+    word-break: break-word !important;;
+}
+
+.dot0 {
+    aspect-ratio: 1 / 1;
+    height: 70%;
+    background-color: #bbb;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right:2px;
+}
+
+.dot1 {
+    aspect-ratio: 1 / 1;
+    height: 70%;
+    background-color: #21981b;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right:2px;
+}
+
+.dot2 {
+    aspect-ratio: 1 / 1;
+    height: 70%;
+    background-color: #bd2929;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right:2px;
+}

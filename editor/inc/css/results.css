@@ -1,0 +1,955 @@
+/* Results Manager */
+
+#cListSel {
+    min-width: 200px;
+    width: auto;
+}
+
+td.resultTd {
+    height: 100%;
+    background-image: url(../../../images/progressbar.jpg);
+    background-repeat: repeat-y;
+    background-color: #eee;
+    text-align: center;
+    font-weight: 600;
+    color: #555;
+    font-size: 0.8em;
+}
+
+.rightalign {
+    text-align: right;
+}
+
+/* Manual Scoring (results.js) style defs */
+
+.msLeftBubble {
+    font-size: 12pt;
+    font-weight: bold;
+    color: red;
+}
+
+#ms_scStatus,
+#ms_scTime {
+    display: block;
+    color: black;
+}
+
+#ms_scStatus {
+    font-weight: bold;
+    font-size: smaller;
+}
+
+#ms_scTime {
+    font-size: smaller;
+    margin-bottom: 10px;
+}
+
+#mscore_embHolder {
+    border-radius: 10px;
+    width: 100%;
+    display: block;
+    text-align: center;
+    margin-top: 20px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.ms_title_emph {
+    font-size: 14px;
+    color: white;
+    text-transform: none;
+}
+
+.sumbox_header {
+    color: white;
+    background-color: #7b7b7b;
+    padding: 2px 6px;
+    font-size: 14px;
+}
+
+.ms_sumBox {
+    text-align: right;
+}
+
+.ms_sumBox,
+.ms_sumBox_val {
+    color: #333;
+    font-size: small;
+}
+
+.ms_sumBox_val_score,
+.ms_sumBox_val {
+    padding-left: 15px;
+    font-weight: bold;
+}
+
+.ms_sumBox_val_score {
+    color: #217eab;
+}
+
+#questionListBoxControls {
+    padding: 12px;
+    border-bottom: 2px solid #cccccc;
+}
+
+#qSummaryStats {
+    background-color: #e6e6e6;
+    margin: 10px 5px 5px;
+    display: none;
+}
+
+.ms_cmtInput {
+    border-radius: 6px;
+    border: 2px solid #ccc;
+    font-family: "Open Sans", sans-serif;
+    font-size: smaller;
+    padding: 5px;
+    margin: 4px 20px;
+    flex: 1;
+    resize: none;
+    clear: both;
+}
+
+.ms_inputEdited {
+
+    border: 2px solid #217eaa;
+}
+
+.ms_cmtLabel {
+    display: block;
+    color: #217eaa;
+    font-weight: bold;
+    margin: 20px 20px 0;
+    font-size: 12px;
+    padding: 0;
+}
+
+.ms_cmtBtnBlock {
+    display: flex;
+    margin-bottom: 30px;
+    flex-direction: row-reverse;
+    padding-right: 16px;
+}
+
+.ms_cmtNavBtns {
+    display: inline;
+}
+
+.ms_scoringOptLabel {
+    cursor: pointer;
+    font-size: small;
+}
+
+#ms_kbhTable {
+    margin: auto;
+    border: 1px solid #ccc;
+    border-spacing: 0;
+    border-collapse: collapse;
+}
+
+#ms_kbhTable tr>td:first-child {
+    white-space: nowrap;
+}
+
+#ms_kbhTable td {
+    border: 1px solid #ccc;
+    padding: 5px;
+    font-size: small;
+}
+
+.ms_kbh_sect {
+    font-weight: bold;
+    text-align: center;
+    background-color: #eee;
+}
+
+#ms_topBar_block {
+    font-size: x-large;
+}
+
+.ms_scoring_topBar {
+    font-size: small;
+}
+
+#ms_kbh_label,
+#ms_fs_label,
+#ms_lang_label {
+    color: rgba(33, 126, 170, 1);
+    text-decoration: underline;
+}
+
+#ms_kbh_label:hover,
+#ms_fs_label:hover,
+#ms_lang_label:hover {
+    color: rgba(33, 126, 170, 0.5);
+}
+
+#ms_kbh_label {
+    cursor: help;
+}
+
+#scoringItemsContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+#isub_arrows {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    align-items: center;
+}
+
+.ms_qa_header {
+    padding: 6px 20px;
+    margin-bottom: 12px;
+    background: #217eaa;
+    color: white;
+    display: inline-flex;
+    -webkit-box-shadow: 2px 3px 7px -2px rgba(0, 0, 0, 0.25);
+    -moz-box-shadow: 2px 3px 7px -2px rgba(0, 0, 0, 0.25);
+    box-shadow: 2px 3px 7px -2px rgba(0, 0, 0, 0.25);
+    border-radius: 0 0 4px 0;
+}
+
+#qItemLabel,
+#rItemLabel {
+    font-size: 15px;
+    font-weight: 600;
+    margin-left: 12px;
+    border-left: 2px solid white;
+    padding-left: 8px;
+}
+
+#ms_qDetailBox {
+    overflow: hidden;
+    padding: 0;
+}
+
+#ms_page {
+    overflow: auto;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+#ms_qacontainer {
+    overflow: auto;
+    resize: none;
+    width: 100%;
+    min-height: 300px;
+    display: flex;
+    flex: 1;
+    flex-direction: row;
+}
+
+.qt_total {
+    float: right;
+    font-weight: bold;
+    color: #217eaa;
+
+}
+
+.list_incomplete_scoring {
+    color: #686868;
+    font-weight: 400;
+
+}
+
+.list_complete_scoring {
+    color: white;
+    background-color: #20ab41;
+    padding: 0 6px;
+    border-radius: 2px;
+    font-size: 14px;
+}
+
+.listbox_titleContainer {
+    padding: 6px 7px;
+    background: #eee;
+    border-bottom: 2px solid #cccccc;
+}
+
+.listbox_titleContainer img {
+    width: 17px;
+    vertical-align: middle;
+    margin-right: 5px;
+}
+
+#ms_questionArea,
+#ms_answerArea {
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: block;
+    width: 100%;
+    background-color: white;
+}
+
+#ms_answerArea {
+    border-left: 2px solid #ccc;
+
+}
+
+#ms_questionArea:hover,
+#ms_answerArea:hover {
+    background-color: #e2e2e220;
+}
+
+#ms_questionArea:fullscreen,
+#ms_answerArea:fullscreen {
+    border: 10px solid #175978;
+    background-color: white;
+}
+
+/* for Safari Mac & Firefox Mac compatibility */
+#ms_questionArea:-webkit-full-screen,
+#ms_answerArea:-webkit-full-screen {
+    border: 10px solid #217eaa;
+    background-color: white;
+}
+
+#ms_scoringArea {
+
+    display: flex;
+    flex-direction: column;
+
+}
+
+.ms_badOrNoAns {
+    font-weight: bold;
+    background: #dd1a00;
+    color: white;
+    padding: 12px;
+}
+
+.ms_xtraMeta {
+    color: orange;
+    margin-left: 1px;
+    cursor: pointer;
+    font-size: smaller;
+    top: -2px;
+    position: relative;
+}
+
+.ms_inav_btn {
+    cursor: pointer;
+    margin-left: 4px;
+    margin-right: 4px;
+    color: #175978;
+    font-size: 13px;
+}
+
+.ms_inav_btn:hover {
+    color: #909090;
+}
+
+.ms_itemBullet {
+    padding: 4px 12px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.ms_corKey {
+    font-weight: 600;
+    font-size: 14px;
+    color: #ffffff;
+    background-color: #7b7b7b;
+    width: calc(100% - 24px);
+    padding: 4px 12px;
+}
+
+.ms_corKeyBlock {
+    border-bottom: 2px solid #cccccc;
+    padding: 0 12px;
+}
+
+.ms_corKeyBlock:last-child {
+    border-bottom: none;
+}
+
+
+.ms_corKeyBlock li {
+    list-style-type: none;
+    padding: 4px 0;
+    font-size: 14px;
+}
+
+[id^=ms_corKey_container] {
+    width: calc(100% - 12px);
+    display: flex;
+    flex-direction: column;
+    border-radius: 2px;
+    background-color: #fafafa;
+    margin: 0 6px;
+}
+
+[id^=ms_corKey_container]:last-child {
+    border: none;
+    background-color: #20ab41;
+}
+
+/* default hide for question/correction/response blocks on test page */
+[id^="r_item_"],
+[id^="q_item_"],
+[id^="ckLabel_item_"],
+[id^="ckli_item_"] {
+    display: none;
+}
+
+#scoreAssignmentContainer {
+    display: block;
+    width: 100%;
+}
+
+#scoreKeyInner {
+    width: 100%;
+    margin-bottom: 0;
+    display: flex;
+    justify-content: center;
+    height: 46px;
+}
+
+div#text_input_scoreContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 11px 40px;
+    min-width: 240px;
+}
+
+#ms_itemHeadline {
+    padding-bottom: 25px;
+}
+
+#ms_itemSub {
+    display: inline-block;
+    font-size: small;
+    color: #217eaa;
+    white-space: nowrap;
+}
+
+#ms_itemSelList {
+    margin: 12px 0;
+    display: flex;
+    overflow-x: auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.ms_i_unscored {
+    color: #333333;
+    font-size: 16px;
+    background-color: #e6e6e6;
+    border-radius: 4px;
+}
+
+.ms_i_scored {
+    color: #333333;
+    font-weight: normal;
+    border-radius: 4px;
+}
+
+.ms_i_not_selected,
+.ms_i_selected {
+    display: inline-block;
+}
+
+.ms_i_not_selected {
+    cursor: pointer;
+    color: #333333;
+}
+
+.ms_i_selected {
+    background-color: #dcf4ff;
+    border: 2px solid #175978 !important;
+    border-radius: 4px;
+    font-weight: bold !important;
+    cursor: pointer;
+    -moz-box-shadow: inset 0 0 28px -13px rgba(23, 89, 120, 1);
+    box-shadow: inset 0 0 28px -13px rgba(23, 89, 120, 1);
+}
+
+.ms_itemSel {
+    padding: 4px 12px;
+    margin: 2px;
+    text-align: center;
+    border: 2px solid transparent;
+}
+
+.ms_i_scored:before {
+    content: "";
+    background: url('../../../images/true.png');
+    background-size: contain;
+    width: 20px;
+    height: 20px;
+    display: block;
+    float: left;
+    margin-right: 4px;
+}
+
+.ms_i_unscored:before {
+    content: "";
+    background-size: contain;
+    width: 10px;
+    height: 10px;
+    display: block;
+    float: left;
+    margin: 6px 7px 0 1px;
+    background-color: #de3f13;
+    border-radius: 50%;
+}
+
+/* JQ UI Slider widget overrides and custom styles for Manual Scoring */
+
+[id^=ms_score_slider] {
+    margin-left: 16px;
+}
+
+[id^="ms_score_slider"].ui-slider {
+    width: 80% !important;
+    background-color: rgba(33, 126, 170, 0.5);
+    display: inline-block;
+    height: 13px;
+}
+
+[id^=ms_score_slider]>.ui-slider-handle {
+    background-color: #217eaa;
+    height: 40px;
+    width: 40px;
+    border-radius: 50%;
+    margin-left: -20px;
+    margin-top: -12px;
+}
+
+.ui-slider-label {
+    position: absolute;
+    width: 20px;
+    margin-left: -10px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 400;
+    margin-top: 30px;
+    color: #686868;
+}
+
+[id^=ms_score_slider].ui-slider-disabled,
+[id^=ms_score_slider].ui-slider-disabled>span,
+[id^=t_ms_score_slider]:disabled {
+    opacity: 0.8 !important;
+    background-color: rgba(128, 128, 128, 0.5) !important;
+}
+
+[data-sllink^="t_"] {
+    font-weight: bold !important;
+    color: #175978;
+    text-align: center;
+    width: 60px;
+    background-color: #ffffff;
+    display: inline-block;
+    height: 40px;
+    border: 2px solid #7b7b7b !important;
+}
+
+[data-sllink^="m_"] {
+    display: inline-block;
+    padding-top: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #7b7b7b;
+    text-align: center;
+}
+
+.scoredAboveMax {
+    background-color: rgba(170, 33, 33, 0.5) !important;
+}
+
+.scoredAboveMaxT {
+    background-color: rgba(170, 33, 33, 1) !important;
+    color: #ffffff !important;
+}
+
+.ms_sliderBar {
+    font-size: 20px;
+    line-height: 40px;
+    font-weight: 400;
+    color: white;
+    display: inline-block;
+    text-align: center;
+    width: 100%;
+}
+
+#ms_scoreBoxInfo {
+    font-size: 14px;
+    color: #ffffff;
+    font-weight: bold;
+    margin-bottom: 6px;
+    padding: 6px;
+    text-align: center;
+    background-color: #217eaa;
+}
+
+#s_scType {
+    font-weight: 400;
+    text-transform: uppercase;
+}
+
+#s_fullName {
+    font-weight: 800;
+    font-size: 15px;
+    color: white;
+}
+
+#ms_sumBox_status,
+#ms_remItems {
+    padding: 2px 6px;
+    border-radius: 2px;
+}
+
+.scored#ms_sumBox_status,
+.scored#ms_remItems {
+    background-color: rgb(33 126 171);
+    color: #ffffff;
+}
+
+.notscored#ms_sumBox_status,
+.notscored#ms_remItems {
+    background-color: rgb(33 126 171);
+    color: #ffffff;
+}
+
+.ms_reset_headerTxt {
+    display: block;
+    text-align: center;
+    padding: 0;
+    margin: 0;
+}
+
+#testListItem.jsSelectList {
+    position: static;
+    display: block;
+    overflow-y: auto;
+}
+
+#ms_external_cm_viewer {
+    display: none;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    z-index: 99999;
+    border: none;
+}
+
+#ms_cmVeil {
+    background-color: rgba(0, 0, 0, 0.7);
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    -webkit-user-select: none;
+    user-select: none;
+    z-index: 100;
+}
+
+.ms_q_item {
+    display: block;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.ms_igap_active {
+    background-color: #ffe1ab !important;
+}
+
+.ms_igap_inactive {
+    background-color: #d6d6d6;
+}
+
+.ms_itxt_active {
+    font-weight: bold;
+    background: #ffe1ab !important;
+}
+
+.ms_itxt_inactive {
+    font-weight: normal;
+    background: #ccc !important;
+}
+
+.ms_cmtrx_active {
+    background-color: rgba(255, 255, 0, 0.30) !important;
+    color: #217eaa !important;
+    font-weight: bold !important;
+}
+
+.ms_cmtrx_inactive {
+    color: black;
+    font-weight: normal;
+}
+
+#ms_ifm {
+    background-color: rgba(255, 0, 0, 0.05);
+    color: red;
+    font-size: smaller;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    padding: 5px;
+    border: 2px solid red;
+}
+
+.ms_fltrBox {
+    display: none;
+    margin-bottom: 20px;
+    font-size: smaller !important;
+    width: 100%;
+}
+
+#qHolder {
+    margin-top: 10px;
+    flex: 1 1 auto;
+    overflow: auto;
+    margin-left: 5px;
+    margin-right: 5px;
+}
+
+#questionListBox {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+
+#infoBoxToggleButton {
+    background-color: #20ab41;
+}
+
+#ms_navholder {
+    font-size: smaller;
+    margin-bottom: 12px;
+    width: 100%;
+    display: block;
+    text-align: center;
+}
+
+.ms_navRtArrow {
+    font-size: 8px;
+    color: #aaa;
+    vertical-align: middle;
+}
+
+#ms_commentContainer {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+}
+
+[id^="q_item_cmb_"] {
+    margin-bottom: 10px;
+}
+
+/* Charting/Plotting */
+.uitt-image {
+    border: 0 !important;
+    background: transparent;
+}
+
+.uitt-image-inner {
+    background: transparent;
+}
+
+.chart_pb {
+    background-color: #a0a0a0;
+    width: 100%;
+    display: block;
+    text-align: center;
+}
+
+text.gtitle,
+text.gtitle-subtitle,
+text.xtitle,
+text.ytitle,
+tspan.line,
+tspan.line>tspan {
+    cursor: text !important;
+}
+
+.cursor-pointer,
+.annotation-arrow {
+    pointer-events: none;
+}
+
+.ot_container {
+    display: block;
+}
+
+.ot_header {
+    text-align: center;
+    padding: 10px 10px 20px 10px;
+    margin: 0;
+}
+
+.ot_content {
+    padding: 10px 10px 20px 10px;
+    margin: 0;
+}
+
+#multiItemSelBox {
+    padding: 5px;
+    border: 1px solid #ccc;
+    background-color: #fcfcfc;
+    max-height: 500px;
+    overflow: auto;
+}
+
+#stats_table {
+    margin: 10px auto;
+    display: none;
+    border-collapse: collapse;
+    min-width: 100%;
+
+}
+
+#s_clrbtn_id,
+#m_clrbtn_id {
+    border: 1px solid black;
+    display: inherit;
+    height: 20px;
+    width: 61px;
+    vertical-align: bottom;
+}
+
+#st_header {
+    color: black;
+    font-weight: bolder;
+    background: #e6e6e6;
+}
+
+#an_data {
+    width: 100%;
+    overflow: auto;
+}
+
+#rb_data {
+    margin-bottom: 20px;
+}
+
+#nsp_diag_id {
+    min-width: 600px;
+}
+
+#stats_table tr {
+    border-bottom: 1px solid #e6e6e6;
+}
+
+#stats_table_container {
+    overflow: auto;
+}
+
+#singleItemSelBox {
+    border: 1px solid #e6e6e6;
+}
+
+#singleItemSelBox li {
+    border-bottom: 1px solid #e6e6e6;
+    padding: 3px;
+}
+
+#singleItemSelBox li:last-child {
+    border-bottom: none;
+}
+
+.oa-cancel,
+.oa-choose {
+    font-family: "Open Sans", sans-serif;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.oa-cancel {
+    text-shadow: 0 1px 0 #eee;
+    vertical-align: middle;
+    top: -1px;
+    height: 14.2px;
+    left: -10px;
+    width: 100%;
+    margin: 24px 0;
+    overflow: auto;
+    table-layout: auto;
+}
+
+
+/*    Color picker ovverrides   */
+
+.sp-container {
+    border-radius: 0;
+    background-color: #ffffff;
+    border: 1px solid #eaeaea;
+    padding: 0;
+    box-shadow: 0 3px 5px rgba(0, 0, 0, 0.45);
+}
+
+.sp-palette-button-container,
+.sp-button-container {
+    float: right;
+    margin-top: 30px;
+}
+
+#background_nxok_btn {
+    float: right;
+}
+
+#background_nxcanc_btn {
+    float: right;
+    margin-right: 0;
+}
+
+.sp-palette-container {
+    border: none;
+}
+
+#rb_textEditorContainer {
+    height: 300px
+}
+
+#cListSel {
+    width: 100%;
+    padding: 8px;
+}
+
+#cListSel option {
+    font-size: 14px;
+    border-bottom: 1px solid #eaeaea;
+    margin-bottom: 4px;
+}
+
+#cListSel option:checked {
+    font-weight: bold;
+    background: red;
+}
+
+#cListSel :last-child {
+    border-bottom: none;
+}
+
+.rb-dialog-questionBox {
+    display: block;
+    background-color: #f5f5f5;
+    padding: 8px;
+    border: 1px solid #f9f9f9;
+    color: #217eaa;
+    font-weight: 600;
+    font-size: 14px;
+    font-style: italic;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.rb-dialogLabel {
+    display: block;
+    font-size: 11px;
+
+}

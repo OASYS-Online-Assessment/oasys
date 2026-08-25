@@ -1,0 +1,17 @@
+.jsLinkDefStyles{
+    width:100%;
+    cursor:pointer;
+    text-align:right;
+    color:#4E6CAB;
+    float:right;
+}
+
+.jsLinkDefStyles span, .jsLinkDefStyles input, .sp-preview-inner {
+    cursor:pointer;
+}
+
+.jsLinkDefStyles:hover{
+    text-decoration:underline;
+    cursor:pointer;
+}
+

@@ -1,0 +1,809 @@
+@font-face {
+    font-family: 'dyslexic';
+    src: url("font/OpenDyslexic-Regular.woff");
+    font-weight: normal;
+    font-style: normal;
+}
+
+html {
+	overflow: hidden;
+	height: 100%;
+	width: 100%;
+	position: fixed;
+}
+
+body {
+	overflow: hidden;
+	-ms-touch-action: none;
+	-webkit-tap-highlight-color: transparent;
+	-webkit-touch-callout: none;
+	height: 100%;
+	width: 100%;
+}
+
+a {
+	text-decoration: none;
+	color: black;
+}
+
+/* grid, responsive elements */
+#questionText, #stimulus {
+	position: relative;
+	box-sizing: border-box;
+}
+
+.column,
+.columns {
+    width: 100%;
+    float: left;
+    box-sizing: border-box;
+}
+
+.column img,
+.columns img {
+    width: 100% !important;
+    height: auto !important;
+}
+
+
+@media (min-width: 550px) {
+
+	.column,
+    .columns {
+        margin-left: 4%;
+    }
+
+    .column:first-child,
+    .columns:first-child {
+        margin-left: 0;
+    }
+
+    .six.columns {
+        width: 48%;
+    }
+
+    .twelve.columns {
+        width: 100%;
+        margin-left: 0;
+    }
+
+}
+
+.container:after,
+.row:after,
+.u-cf {
+    content: "";
+    display: table;
+    clear: both;
+}
+/* ########################## */
+
+#contentWrapper {
+	position: relative;
+	overflow: hidden;
+	height: 100%;
+	min-width: 320px;
+}
+
+#headerBar {
+	position: absolute;
+	width: 100%;
+	z-index: -1;
+	background: #00374D;
+	height: 55px;
+}
+
+#itemBar {
+	position: absolute;
+	width: 100%;
+	z-index: 1;
+	background: #F2F2F2;
+	height: 55px;
+	top: 55px;
+	border-bottom: 1px solid #D9D9D9;
+	text-align: center;
+	overflow: scroll;
+	display:none;
+}
+
+@media (min-width: 1024px) {
+	#itemBar {overflow: hidden;}
+}
+
+#itemButtonStrip {
+	display: inline-block;
+	height: 27px;
+	border-bottom: 1px solid #D9D9D9;
+	white-space: nowrap;
+	margin: 0 10px;
+}
+
+#itemButtonStrip > div:first-child {
+	margin-left: -1px;
+}
+
+#itemButtonStrip > div:last-child {
+	margin-right: -1px;
+}
+
+#itemButtonStrip div.nxButton {
+	max-width: 200px;
+}
+
+#itemButtonStrip div.nxButton > span {
+	text-overflow: ellipsis;
+	overflow: hidden;
+}
+
+#skinWrapper {
+	width: 100%;
+	margin-left: auto;
+	margin-right: auto;
+	position: relative;
+	overflow: hidden;
+	height: 100%;
+}
+
+@media (min-width: 1024px) { 
+	#skinWrapper {width: 1024px;}
+}
+
+#header {
+	position: relative;
+	height: 55px;
+}
+
+#navigation {
+	height: 55px;
+	border-bottom: 1px solid #D9D9D9;
+	position: relative;
+}
+
+#timer {
+	position: absolute;
+	left: 10px;
+	height: 55px;
+	box-sizing: border-box;
+	width: 155px;
+	color: white;
+	display: none;
+}
+
+.timerBig, .timerSmall {
+	position: absolute;
+	text-align: center;
+}
+
+.timerBig {
+	font-size: 28px;
+	top: 2px;
+}
+
+.timerSmall {
+	font-size: 10px;
+	top: 36px;
+}
+
+#timerHours {
+	left: 0;
+	width: 45px;
+}
+
+#timerMinutesSeparator {
+	left: 45px;
+	width: 10px;
+}
+
+#timerMinutes {
+	left: 55px;
+	width: 45px;
+}
+
+#timerSecondsSeparator {
+	left: 100px;
+	width: 10px;
+}
+
+#timerSeconds {
+	left: 110px;
+	width: 45px;
+}
+
+#timerHoursLabel {
+	left: 0;
+	width: 45px;
+}
+
+#timerMinutesLabel {
+	left: 55px;
+	width: 45px;
+}
+
+#languages {
+	position: absolute;
+	right: 10px;
+}
+
+#languages > .jsDropListContainer {
+	margin: 12px 0;
+}
+
+#timerSecondsLabel {
+	left: 110px;
+	width: 45px;
+}
+
+#navigationBack {
+	position: absolute;
+	left: 0;
+	top: 11px;
+}
+
+#navigationTitle {
+	text-align: center;
+	line-height: 55px;
+	color: #00374D;
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: calc(100% - 400px);
+	margin: 0 200px;
+}
+
+
+
+
+@media (max-width: 767px) {
+	#navigationTitle {
+		max-width: calc(100% - 200px);
+		margin: 0 100px;
+	}
+}
+
+#navigationNext {
+	position: absolute;
+	right: 0;
+	top: 11px;
+}
+
+#contentWrapper:not(.showSimpleNavigation) #navigationBack, #contentWrapper:not(.showSimpleNavigation) #navigationNext {
+	display: none;
+}
+
+#contentWrapper:not(.showPageLabels) #navigationTitle {
+	display: none;
+}
+
+#contentWrapper:not(.showPageLabels):not(.showSimpleNavigation) #navigation {
+	display: none;
+}
+
+#contentWrapper:not(.showPageLabels):not(.showSimpleNavigation) #main {
+	top: 55px;
+}
+
+/* nxButton theme_headerButton */
+
+.nxButtonBackground.theme_headerButton {
+	width: 28px;
+	height: 28px;
+	position: relative;
+	border-radius: 14px;
+	margin: 0;
+}
+
+.nxButton.theme_headerButton {
+	width: 28px;
+	height: 28px;
+	border-radius: 14px;
+	background-color: white;
+	color: #00374D;
+	border: 1px solid #FFFFFF;
+	transition: background 0.3s, color .3s ease, transform .3s cubic-bezier(0, .73, 1, 1);
+	font-weight: 600;
+}
+
+.nxButton.theme_headerButton > svg {
+	width: 16px;
+	height: 16px;
+	position: absolute;
+	top: 6px;
+	left: 7px;
+}
+
+.nxButton.theme_headerButton.nxButtonDisabled {
+	display: none;
+}
+
+.nxButton.theme_headerButton.nxButtonHovered, .nxButton.theme_headerButton.nxButtonActive {
+	background-color: #E5F2F7;
+}
+
+.nxButton.theme_headerButton.nxButtonActive.nxButtonPressed {
+	background-color: #00374D;
+	color: white;
+	border: 1px solid #FFFFFF;
+}
+
+/* nxButton theme_itemButton */
+
+.nxButtonBackground.theme_itemButton {
+	margin: 10px 5px;
+	vertical-align: top;
+	overflow: hidden;
+	height: 34px;
+	min-width: 34px;
+}
+
+.nxButton.theme_itemButton {
+	width: 100%;
+	height: 100%;
+	box-sizing: border-box;
+	border: 1px solid #5C9CB5;
+	background-color: #E5F2F7;
+	border-radius: 17px;
+	color: #5C9CB5;
+	transition: background 0.3s, color .3s ease, transform .3s cubic-bezier(0, .73, 1, 1);
+	font-weight: 600;
+}
+
+.nxButton.theme_itemButton > span {
+	font-size: 17px;
+	display: block;
+	line-height: 32px;
+	pointer-events: none;
+	margin: 0 10px;
+}
+
+.nxButtonBackground.theme_itemButton.unfilledItem > .nxButton {
+	border-color: #D9D9D9;
+	background-color: #FFFFFF;
+	color: #666666;
+}
+
+.nxButton.theme_itemButton.nxButtonDisabled {
+	cursor: not-allowed;
+}
+
+.nxButton.theme_itemButton.nxButtonHovered, .nxButton.theme_itemButton.nxButtonActive {
+	border: 1px solid #00374D!important;
+	background-color: #00374D!important;
+	color:  #FFFFFF!important;
+}
+
+.nxButton.theme_itemButton.nxButtonActive.nxButtonPressed {
+	background-color: #006d91;
+}
+
+.nxButton.theme_itemButton.nxButtonSelected {
+	/*border-color: #057EB6!important;*/
+	background-color: #057EB6!important;
+	color: #FFF!important;
+}
+
+/* temporary for debugging */
+
+.nxButton.theme_itemButton.nxButtonSelected:not(.unfilledItem) {
+	text-decoration: underline;
+}
+
+/* nxButton theme_staticButton */
+
+.nxButtonBackground.theme_staticButton {
+	margin: 10px 5px;
+	vertical-align: top;
+	overflow: hidden;
+	height: 34px;
+	min-width: 34px;
+}
+
+.nxButton.theme_staticButton {
+	width: 100%;
+	height: 100%;
+	box-sizing: border-box;
+	background-color: #D9D9D9;
+	color: #666666;
+	border-radius: 3px;
+	transition: background 0.3s, color .3s ease, transform .3s cubic-bezier(0, .73, 1, 1);
+	font-weight: 600;
+}
+
+.nxButton.theme_staticButton > span {
+	font-size: 17px;
+	display: block;
+	line-height: 32px;
+	pointer-events: none;
+	margin: 0 10px;
+}
+
+.nxButton.theme_staticButton.nxButtonDisabled {
+	cursor: not-allowed;
+}
+
+.nxButton.theme_staticButton.nxButtonHovered, .nxButton.theme_staticButton.nxButtonActive {
+	background-color: #00374D!important;
+	color:  #FFFFFF!important;
+}
+
+.nxButton.theme_staticButton.nxButtonActive.nxButtonPressed {
+	background-color: #006d91;
+}
+
+.nxButton.theme_staticButton.nxButtonSelected {
+	background-color: #057EB6!important;
+	color: #FFF!important;
+}
+
+/* nxButton theme_navigation */
+
+.nxButtonBackground.theme_navigation {
+	margin: 0 10px;
+}
+
+.nxButton.theme_navigation {
+	color: #057EB6;
+	border-radius: 3px;
+	border: 1px solid #D9D9D9;
+	padding: 5px 15px;
+	transition: background 0.3s, color .3s ease, transform .3s cubic-bezier(0, .73, 1, 1);
+	font-weight: 600;
+}
+
+/* nxButton theme_topButton */
+
+.nxButtonBackground.theme_topButton {
+	margin: 12px 10px;
+}
+
+.nxButton.theme_topButton {
+	color: white;
+	border: 1px solid white;
+	padding: 0 15px;
+	font-weight: 600;
+	height: 26px;
+}
+
+.nxButton.theme_topButton > span {
+	line-height: 26px;
+}
+
+
+/* ---- */
+
+#fontswitch {
+	position: absolute;
+	right: 190px;
+}
+
+#dlTitle_languageSelector, #dlTitle_languageSelectorM {
+	height: 28px;
+}
+
+#dlTitle_languageSelectorM {
+    font-size: 0.9em;
+}
+
+/*noinspection CssNoGenericFontName*/
+.dyslexic {
+	font-family: 'dyslexic';
+}
+
+/* header buttons */
+@media (max-width: 600px) {
+	
+}
+@media (max-width: 530px) {
+	#dlContainer_languageSelector{
+		display: none;
+	}
+	#fontswitch{
+		right: 62px;
+
+	}
+}
+@media (min-width: 530px) {
+	#dlContainer_languageSelectorM{
+		display: none;
+	}
+}
+
+
+.nxButton.theme_navigation.nxButtonDisabled {
+	display: none;
+}
+
+.nxButton.theme_navigation.nxButtonHovered, .nxButton.theme_navigation.nxButtonActive {
+	border-color: #00374D!important;
+	background-color: #00374D!important;
+	color: #FFF!important;
+}
+
+.nxButton.theme_navigation.nxButtonActive.nxButtonPressed {
+	border-color: #00374D!important;
+	background-color: #00374D!important;
+	color: #FFF!important;
+}
+
+#icon_leftButton {
+	margin-right: 10px;
+	margin-bottom: -2px;
+}
+
+#icon_rightButton {
+	margin-left: 10px;
+	margin-bottom: -2px;
+}
+
+/********/
+@media (max-width: 1024px) {
+	.nxDialog img {
+		width: 30% !important;
+		height: auto !important;
+	}
+}
+
+#main {
+	top: 110px;
+	bottom: 0;
+	padding-top: 25px;
+	width: 100%;
+	box-sizing: border-box;
+	position: absolute;
+	overflow-x: hidden;
+	overflow-y: auto;
+	-ms-overflow-style: -ms-autohiding-scrollbar;
+	/*-webkit-overflow-scrolling: touch;*/
+}
+
+#contentWrapper.showItemBar #main, #contentWrapper.showItemBar #navigation {
+	margin-top: 55px;
+}
+
+#contentWrapper.showItemBar #itemBar {
+	display: block;
+}
+
+@media (min-width: 1048px) { /* 1024 plus 2x 12 padding */
+	#main {width: 1024px;}
+}
+
+#stimulus, #questionInline {
+	margin-left: 0;
+	font-size: 16px;
+}
+
+#stimulus {
+	margin: 0 12px;
+}
+
+#stimulus > *:last-child {
+	margin-bottom: 40px;
+}
+
+#questionInline {
+	padding: 12px;
+	overflow: hidden;
+	clear: both;
+}
+
+#skinWrapper.floatingQuestions #questionInline {
+	background-color: #F2F2F2;
+	border-top: 11px solid #00374D;
+}
+
+#question {
+	width: 100%;
+	background-color: #F2F2F2;
+	position: absolute;
+	bottom: 0;
+	border-top: 11px solid #00374D;
+	color: #000;
+	padding: 12px;
+	box-sizing: border-box;
+	display: none;
+}
+
+#questionFog {
+	background: linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.75) 100%);
+	height: 22px;
+	position: absolute;
+	width: 100%;
+	top: -33px;
+	left: 0;
+}
+
+#questionHandle {
+	width: 40px;
+	height: 40px;
+	cursor: pointer;
+	z-index: 10;
+	background: #00374D;
+	color: white;
+	margin: -37px auto auto;
+	transform: rotate(45deg);
+}
+
+#questionText {
+	width: 1000px;
+	margin: auto;
+}
+
+@media (max-width: 1024px) {
+	#questionText {width: 100%;}
+}
+
+#questionHandle > svg {
+	width: 30px;
+	height: 30px;
+	margin-left: 5px;
+	margin-top: 5px;
+	pointer-events: none;
+	fill: currentColor;
+	transform: rotate(-45deg);
+}
+
+/**** language selector theme ****/
+
+.jsDropListContainer.jsDLTheme_languageSelector {
+	color:  white;
+	border-color: white;
+}
+
+.jsDropListContainer.jsDLTheme_languageSelector .readonly{
+	display: none;
+}
+
+.jsDropListContainer.jsDLTheme_languageSelector p[id^=dlTitle] {
+	color: inherit;
+	border-style: solid;
+	border-width: 1px;
+	border-color: inherit;
+	font-weight: normal;
+	display: block;
+	line-height: 20px;
+}
+
+body.dyslexic .jsDropListContainer.jsDLTheme_languageSelector p[id^=dlTitle] {
+	padding-top: calc(0.2em + 1px);
+}
+
+.jsDropListVeil.jsDLTheme_languageSelector ul[id^=dlList] {
+	background-color: #FFFFFF;
+	border: 1px solid #EDEDED;
+	margin: 6px 0;
+	color: #666666;
+	box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.56);
+}
+
+.jsDropListVeil.jsDLTheme_languageSelector ul[id^=dlList] > li {
+	border-bottom: 1px solid #EDEDED;
+	padding: 7px;
+}
+
+.jsDropListVeil.jsDLTheme_languageSelector ul[id^=dlList].active li:hover:not(.selected) {
+	background-color: #D9D9D9;
+}
+
+.jsDropListVeil.jsDLTheme_languageSelector ul[id^=dlList] li.selected {
+	color: #00719E;
+	font-weight: 600;
+}
+
+.jsDropListVeil.jsDLTheme_languageSelector div[id^=dlListScrollBar] {
+	background-color: #FFF;
+	border-left: 1px solid #AAA;
+}
+
+.jsDropListVeil.jsDLTheme_languageSelector div[id^=dlListScrollHandle] {
+	background-color: #00374D;
+}
+
+.jsDropListVeil.jsDLTheme_languageSelector ul::-webkit-scrollbar {
+	display: none;
+}
+
+.jsDropListVeil.jsDLTheme_languageSelector {
+	backdrop-filter: blur(3px);
+	background-color: rgba(0, 0, 0, 0.3);
+}
+
+
+/* text fields */
+
+.oasysTextfield > input {
+	border: 1px solid #D9D9D9;
+	color: #4D4D4D;
+	padding: 0.2em;
+}
+
+.oasysTextfield > input:focus {
+	border-color:  #5C9CB5;
+}
+
+.oasysTextarea > textarea {
+	border: 1px solid #D9D9D9;
+	color: #4D4D4D;
+	padding: 0.2em;
+}
+
+.oasysTextarea > textarea:focus {
+	border-color:  #5C9CB5;
+}
+
+/* jsMultipleChoice */
+
+.jsMultipleChoice_button.jsMCTheme_oasys.readonly {
+	filter: contrast(40%) brightness(150%) grayscale(100%);
+	-webkit-filter: contrast(40%) brightness(150%) grayscale(100%);
+	color: #CCC;
+}
+
+.jsMultipleChoice_button.jsMCTheme_oasys {
+	border: 2px solid #D9D9D9;
+	background-color: #FFF;
+	vertical-align: middle;
+	bottom: 2px;
+	margin: 2px;
+}
+
+.jsMultipleChoice_button[data-type="cb"].jsMCTheme_oasys, .jsMultipleChoice_button[data-type="boolean"].jsMCTheme_oasys {
+	border-radius: 3px;
+}
+
+.jsMultipleChoice_button[data-type="rb"].jsMCTheme_oasys {
+	border-radius: 50%;
+}
+
+.jsMultipleChoice_button.jsMCTheme_oasys[data-status="checked"], .jsMultipleChoice_button.jsMCLabelHovered.jsMCTheme_oasys:not(.readonly), .jsMultipleChoice_button.jsMCHovered.jsMCTheme_oasys:not(.readonly) {
+	border-color: #057EB6;
+}
+
+.jsMultipleChoice_button.jsMCTheme_oasys[data-type="cb"][data-status="checked"] > .jsmcCheckmark, .jsMultipleChoice_button.jsMCTheme_oasys[data-type="boolean"][data-status="checked"] > .jsmcCheckmark {
+	width: inherit;
+	height: inherit;
+	background-size: contain;
+	position: absolute;
+	background: #057EB6 url(images/checkmark.svg) no-repeat 0 50%;
+}
+
+.jsMultipleChoice_button.jsMCTheme_oasys[data-type="rb"][data-status="checked"] > .jsmcCheckmark {
+	width: calc(100% - 6px);
+	height: calc(100% - 6px);
+	left: 3px;
+	top: 3px;
+	border-radius: 50%;
+	background-color: #057EB6;
+	position: absolute;
+}
+
+/*** tables ***/
+
+table.striped {
+	border-collapse: collapse;
+}
+
+table.striped tr > td {
+	padding: 3px;
+}
+
+table.striped tr:nth-child(2n) {
+	background-color: #E6E6E6
+}
+
+#privacyPolicy {
+	position: absolute;
+	margin-top: -21px;
+	right: 0;
+	padding: 1px 8px 2px 8px;
+	font-size: 10px;
+	background-color: #666;
+	color: white;
+	font-weight: bold;
+	display: none;
+	cursor: pointer;
+}
+
+#privacyPolicy:hover {
+	background-color: #00afd0;
+}

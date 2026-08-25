@@ -1,0 +1,45 @@
+div.jsButton2 {
+	-webkit-user-select:none;
+	-moz-user-select:none;
+	user-select:none;
+	display: inline-block;
+	color: #444;
+	overflow: hidden;
+	margin: 5px;
+	vertical-align: top;
+	border-radius: 0;
+}
+
+div.jsButton2:not(.jsbDisabled), div.jsButton2:not(.jsbDisabled) * {
+	cursor: pointer;
+}
+
+div.jsButton2:hover:not(.jsbDisabled) {
+	border: 2px solid #e18f00;
+	margin: 3px;
+	background-color: #ffe9bc;
+}
+
+div.jsButton2.jsbDisabled {
+	color: #888;
+}
+
+div.jsButton2Icon {
+	text-align: center;
+	margin-top: 5px;
+}
+
+div.jsButton2Label {
+	font-size: 14px;
+	text-align: center;
+	padding: 5px;
+}
+
+div.jsButton2.jsbDisabled img {
+	filter: url("data:image/svg+xml;utf8,<svg%20xmlns='http://www.w3.org/2000/svg'><filter%20id='grayscale'><feColorMatrix%20type='matrix'%20values='0.3333%200.3333%200.3333%200%200.2%200.3333%200.3333%200.3333%200%200.2%200.3333%200.3333%200.3333%200%200.2%200%200%200%201%200'/></filter></svg>#grayscale"); /* Firefox 3.5+ */
+	filter: contrast(50%) brightness(80%) grayscale(100%); /* Current draft standard */
+	-webkit-filter: contrast(50%) brightness(80%) grayscale(100%);
+	-moz-filter: contrast(50%) brightness(80%) grayscale(100%);
+	-ms-filter: contrast(50%) brightness(80%) grayscale(100%);
+	-o-filter: contrast(50%) brightness(80%) grayscale(100%);
+}

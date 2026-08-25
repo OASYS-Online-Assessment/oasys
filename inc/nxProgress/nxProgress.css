@@ -1,0 +1,78 @@
+.nxProgress {
+	background: #c1c1c1; /* Old browsers */
+	background: -moz-linear-gradient(top,  #c1c1c1 0%, #a9a9a9 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#c1c1c1), color-stop(100%,#a9a9a9)); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top,  #c1c1c1 0%,#a9a9a9 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top,  #c1c1c1 0%,#a9a9a9 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top,  #c1c1c1 0%,#a9a9a9 100%); /* IE10+ */
+	background: linear-gradient(to bottom,  #c1c1c1 0%,#a9a9a9 100%); /* W3C */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#c1c1c1', endColorstr='#a9a9a9',GradientType=0 ); /* IE6-9 */
+	-moz-box-shadow: inset 1px 1px 5px rgba(0, 0, 0, 0.23);
+	-webkit-box-shadow: inset 1px 1px 5px rgba(0, 0, 0, 0.23);
+	box-shadow: inset 1px 1px 5px rgba(0, 0, 0, 0.23);
+	border-left: 1px solid #888;
+	border-right: 1px solid #999;
+	border-top: 1px solid #888;
+	border-bottom: 1px solid #999;
+	overflow: hidden;
+}
+
+.nxProgressBar {
+	height: 100%;
+	width: 50%;
+	background: url(obliqueStripes.png), -webkit-gradient(linear, left top, left bottom, from(#51c3fe), to(#007dc5)) #51c3fe;
+	background: url(obliqueStripes.png), -webkit-linear-gradient(top, #51c3fe 0%, #007dc5 100%) #51c3fe;
+	background: url(obliqueStripes.png), -moz-linear-gradient(top, #51c3fe 0%, #007dc5 100%) #51c3fe;
+	background: url(obliqueStripes.png), -ms-linear-gradient(top, #51c3fe 0%, #007dc5 100%) #51c3fe;
+	background: url(obliqueStripes.png), -o-linear-gradient(top, #51c3fe 0%, #007dc5 100%) #51c3fe;
+	background: url(obliqueStripes.png), linear-gradient(to bottom, #51c3fe 0%, #007dc5 100%) #51c3fe;
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#51c3fe', endColorstr='#007dc5',GradientType=0 ); /* IE6-9 */
+	-moz-box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), inset 1px 1px 1px rgba(0, 0, 0, 0.12);
+	-webkit-box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), inset 1px 1px 1px rgba(0, 0, 0, 0.12);
+	box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), inset 1px 1px 1px rgba(0, 0, 0, 0.12);
+}
+
+.nxProgressBar.animated {
+	-webkit-animation-duration: 1s;
+	-webkit-animation-name: barberpole;
+ 	-webkit-animation-iteration-count: infinite;
+	-webkit-animation-timing-function: linear;
+	-moz-animation-duration: 1s;
+	-moz-animation-name: barberpole;
+	-moz-animation-iteration-count: infinite;
+	-moz-animation-timing-function: linear;
+	animation-duration: 1s;
+	animation-name: barberpole;
+	animation-iteration-count: infinite;
+	animation-timing-function: linear;
+}
+
+@-webkit-keyframes barberpole {
+  from {
+	background-position: 0px 0px;
+  }
+
+  to {
+	background-position: 39px 0px;
+  }
+}
+
+@-moz-keyframes barberpole {
+  from {
+	background-position: 0px 0px;
+  }
+
+  to {
+	background-position: 39px 0px;
+  }
+}
+
+@keyframes barberpole {
+  from {
+	background-position: 0px 0px;
+  }
+
+  to {
+	background-position: 39px 0px;
+  }
+}

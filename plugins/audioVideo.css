@@ -1,0 +1,4 @@
+/* hide pause button if controls are disabled ... play button still visible to start playback initially */
+.oasys__mejs__disableControls .mejs__pause {
+	display: none
+}

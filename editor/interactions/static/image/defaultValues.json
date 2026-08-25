@@ -1,0 +1,9 @@
+[
+	{"value": "", "localized": true, "flags": [], "path": ["filename"]},
+	{"value": "", "localized": true, "flags": ["isMediaId"], "path": ["fileid"], "context": "parsed", "contextPath": [], "uuidPath": ["filechecksum"]},
+	{"value": "", "localized": true, "flags": [], "path": ["filechecksum"]},
+	{"value": "", "localized": true, "flags": [], "path": ["width"]},
+	{"value": "", "localized": true, "flags": [], "path": ["ratio"]},
+	{"value": "center", "localized": false, "flags": [], "path": ["align"]}
+]
+

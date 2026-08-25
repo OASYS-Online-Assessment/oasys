@@ -1,0 +1,241 @@
+.nxButtonBackground {
+	display: inline-block;
+	position: relative;
+	padding: 0;
+	margin: 2px 5px;
+}
+
+.nxButton {
+	-webkit-user-select: none;
+	user-select: none;
+	position: relative;
+	cursor: pointer;
+	text-align: center;
+	-ms-touch-action: none;
+}
+
+.nxButton * {
+	pointer-events: none;
+}
+
+.nxButton.nxButtonSelected, .nxButton.nxButtonDisabled  {
+	cursor: default;
+}
+
+.nxButton img {
+	pointer-events: none;
+}
+
+.nxButtonBackground.nxButtonOverlay {
+	display: block;
+	position:  absolute;
+	z-index: 10;
+}
+
+
+/*******************************
+
+	buttons using SVG as icons
+
+********************************/
+
+.nxButton svg {
+	fill: currentColor;
+	pointer-events: none;
+}
+
+.nxButton svg * {
+	fill: currentColor;
+}
+
+/****************************
+
+	text and mixed buttons / theme: default
+
+*****************************/
+
+.nxButtonBackground.theme_default {
+	border-radius: 5px;
+}
+
+.nxButton.theme_default:not(.nxButtonIconOnly) {
+	/* text or mixed button, inactive state*/
+	padding: 2px 15px;
+	border-radius: 5px;
+	background: linear-gradient(to bottom,  #ffffff 0%,#c7c7c7 100%);
+	color: #222;
+	border: 1px solid #666;
+	font-size: 0.9em;
+}
+
+.nxButtonHovered.theme_default:not(.nxButtonPressed):not(.nxButtonIconOnly) {
+	/* text or mixed button, hovered but not pressed */
+	color: #000000;
+	background: linear-gradient(to bottom,  #def0fa 0%,#86b4e1 64%,#abcbea 100%);
+}
+
+.nxButton.theme_default.nxButtonActive:not(.nxButtonIconOnly),
+.nxButton.theme_default.nxButtonSelected:not(.nxButtonIconOnly) {
+	/* text or mixed button, active or selected */
+	color: #000000;
+	background: linear-gradient(to bottom,  #86b4e1 0%,#abcbea 12.7%,#def0fa 100%);
+	box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.nxButtonSmallIcon.theme_default {
+	vertical-align: text-top;
+	margin-left: -5px;
+	margin-right: 5px;
+}
+
+.nxButtonDisabled.theme_default:not(.nxButtonIconOnly) {
+	/* text or mixed button, disabled */
+	background: #f0f0f0;
+	color: #c1c1c1;
+	border-style: solid;
+	border-color: #c1c1c1;
+}
+
+/********************
+
+	default text and mixed button / theme: default
+
+*********************/
+
+.nxButtonBackground.theme_default.defaultButton {
+	/* default button pulsating background */
+	-webkit-animation-name: pulsate;
+	-webkit-animation-iteration-count: infinite;
+	-webkit-animation-direction: alternate;
+	-webkit-animation-timing-function: ease-in-out;
+	animation-name: pulsate;
+	animation-iteration-count: infinite;
+	animation-direction: alternate;
+	animation-timing-function: ease-in-out;
+	-webkit-animation-duration: 1.5s;
+	animation-duration: 1.5s;
+}
+
+.nxButton.theme_default.defaultButton {
+	/* default button transparency in order to see pulsating background */
+	background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0) 100%);
+}
+
+@-webkit-keyframes pulsate {
+
+	from {
+		background-color: #60c2ff;
+	}
+
+	to {
+		background-color: #ccebff;
+	}
+
+}
+
+@keyframes pulsate {
+
+	from {
+		background-color: #60c2ff;
+	}
+
+	to {
+		background-color: #ccebff;
+	}
+
+}
+
+
+/*********************
+
+	image buttons
+
+**********************/
+
+.nxButton.theme_default.nxButtonActive.nxButtonIconOnly,
+.nxButton.theme_default.nxButtonSelected.nxButtonIconOnly,
+.nxButtonHovered.theme_default.nxButtonIconOnly:not(.nxButtonPressed) {
+	/* image button, active or selected */
+	filter: brightness(120%); /* Current draft standard */
+	-webkit-filter: brightness(120%);
+	color: #0059bf;
+}
+
+.nxButtonHovered.theme_default.nxButtonIconOnly.nxButtonPressed {
+	/* image button, hovered but not pressed */
+	top:  1px;
+}
+
+.nxButtonHovered.nxButtonIconOnly > .nxButtonHoverIcon + .nxButtonIcon,
+.nxButtonActive.nxButtonIconOnly > .nxButtonHoverIcon+.nxButtonIcon {
+	display: none;
+}
+
+.nxButtonIconOnly:not(.nxButtonHovered):not(.nxButtonActive) > .nxButtonHoverIcon {
+	display: none;
+}
+
+/********************
+
+	disabled icons
+	
+*********************/
+
+.nxButtonDisabled.theme_default img {
+	/* icon of a disabled button */
+	filter: contrast(50%) brightness(130%) grayscale(100%); /* Current draft standard */
+	-webkit-filter: contrast(50%) brightness(130%) grayscale(100%);
+}
+
+
+/*********************
+
+	tooltip
+
+**********************/
+
+.nxButtonTooltip {
+	border: 1px solid #333;
+	border-radius: 5px;
+	position: fixed;
+	background-color: rgba(0, 0, 0, 0.75);
+	z-index: 1000;
+	top: 100%;
+	left:  50%;
+	padding: 5px 10px;
+	color: #EEE;
+	margin-top: 8px;
+	text-align: center;
+	opacity: 1;
+	pointer-events: none;
+	font-size: 12px;
+}
+
+.nxButtonTooltipPoint {
+	background-color: rgba(0, 0, 0, 0.75);
+	width: 10px;
+	margin: 0 auto 0 auto;
+	height: 10px;
+	top: 2px;
+	-webkit-transform: rotate(-45deg);
+	transform: rotate(-45deg);
+	position: relative;
+
+}
+
+.nxButtonTooltipPointFrame {
+	height: 7px;
+	top: -8px;
+	position: absolute;
+	overflow: hidden;
+	width: 100%;
+	left: 0;
+}
+
+.nxButtonHovered + .nxButtonTooltip {
+	visibility: visible;
+}
+
+.nxButtonTooltip:empty {
+	display: none;
+}

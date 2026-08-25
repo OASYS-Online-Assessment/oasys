@@ -1,0 +1,44 @@
+.oasysInline_Textfield > input {
+	font: inherit;
+	outline: none;
+	display: inline-block;
+	border: none;
+	border-bottom: #888 1px solid;
+	margin: -3px 1px 0 1px;
+	padding: 0 3px;
+	box-sizing: border-box;
+	background-color: white;
+	line-height: 1.4em;
+	text-align: center;
+	color: #0a9fff;
+}
+
+.oasysInline_Textfield > input[readonly] {
+	cursor: not-allowed;
+}
+
+.oasysInline_Textfield {
+	line-height: 1.7em;
+}
+
+.oasysInline_Textfield > input.leftAlign {
+	text-align: left;
+	margin-left: 0;
+	padding-left: 0;
+}
+
+.oasysInline_Textfield > input.rightAlign {
+	text-align: right;
+	margin-right: 0;
+	padding-right: 0;
+}
+
+.oasysInline_Textfield_prefix:empty, .oasysInline_Textfield_suffix:empty {
+	display: inline-block;
+	min-width: 1em;
+}
+
+.oasysInline_Textfield_noBreakWrapper {
+	display: inline-block;
+	white-space: nowrap;
+}

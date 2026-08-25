@@ -1,0 +1,991 @@
+@font-face {
+	font-family: 'nxFlowChart';
+	src:  url('fonts/nxFlowChart.eot?xh4kq5');
+	src:  url('fonts/nxFlowChart.eot?xh4kq5#iefix') format('embedded-opentype'),
+	url('fonts/nxFlowChart.ttf?xh4kq5') format('truetype'),
+	url('fonts/nxFlowChart.woff?xh4kq5') format('woff'),
+	url('fonts/nxFlowChart.svg?xh4kq5#nxFlowChart') format('svg');
+	font-weight: normal;
+	font-style: normal;
+	font-display: block;
+}
+
+
+/*   color variables  */
+:root{
+
+	--body-background-color : #cccccc;
+	--body-color: #404040;
+
+	--main-bg-color-lightest: #ffffff;
+	--main-bg-color-light: #b7b7b7;
+	--main-bg-color-lighter: #cccccc;
+	--main-bg-color-mid: #aaaaaa;
+	--main-bg-color-darker: #585858;
+	--main-bg-colort-dark: #404040;
+	--main-bg-color-darkest:#262626;
+
+	--main-color-dark:#155771;
+	--main-color-mid :#15a5e5;
+	--main-color-light:#96ceef;
+
+
+	/* font colors */
+	--font-color-dark:#262626;
+	--font-color-dark-inverted:#eaeaea;
+	--font-color-mid : #585858;
+	--font-color-light:white;
+
+	--font-color-main-color-mid:#15a5e5;
+	--main-highlight_bg-color:#15a5e5;
+
+	--font-color-link:blue;
+	--font-color-link-inactive: lightgrey;
+	--font-color-accent:green;
+
+	/*the set of colors so be used for colored elements, states, etc.*/
+
+	--color-active-1:#15A7E6;
+	--color-active-2:#08C791;
+	--color-active-3:#CFA827;
+
+	/* colors for concept maps elements drawn on canvas */
+
+	--element-color-1 :black;
+	--element-color-2 :red;
+	--element-color-3 :orange;
+	--element-color-4 :green;
+	--element-color-5 :blue;
+	--element-color-6 :purple;
+
+	--element-color-1-light :black;
+	--element-color-2-light :#FB341C;
+	--element-color-3-light : #fab339;
+	--element-color-4-light :#E120FA;
+	--element-color-5-light :#08C963;
+	--element-color-6-light :#382FFA;
+
+	/*  toolbars and dialogs  */
+
+	--top-toolbar-background: #404040;
+	--top-toolbar-icon: #cccccc;
+	--top-toolbar-icon-inactive: #707070;
+	--top-toolbar-icon-hover: var(--font-color-main-color-mid) ;
+
+	--footer-backgroud : #404040;
+
+
+	--side-panel-background: #585858;
+
+	--button-background-light: #eaeaea;
+	--button-border-light: #aaaaaa;
+
+	/*Temp for debuggging*/
+
+	--bright-1:red;
+	--bright-2: cyan;
+	--light-1: #dcdcdc;
+	--light-2:white;
+	--dark:black;
+
+	--popup-backgrpound-color:#ffffff;
+	--popup-background-selected:#44c5ff;
+	--popup-background-hover:#c7f0ff;
+
+	--list-hover-bg: #96ceef;
+	--list-hover-font:#155771;
+
+
+
+}
+
+footer {
+	font-size: 0.6em;
+	color: #ffffff;
+}
+
+.icon {
+	/* use !important to prevent issues with browser extensions that change fonts */
+	font-family: 'nxFlowChart' !important;
+	speak: none;
+	font-style: normal;
+	font-weight: normal;
+	font-variant: normal;
+	text-transform: none;
+	line-height: 1;
+
+	/* Better Font Rendering =========== */
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+.icon-pencil {
+	cursor: pointer;
+}
+
+.icon-home:before {
+	content: "\e00b";
+}
+.icon-pencil:before {
+	content: "\e006";
+}
+.icon-file-download:before {
+	content: "\e001";
+}
+.icon-file-upload:before {
+	content: "\e002";
+}
+.icon-file:before {
+	content: "\e000";
+}
+.icon-undo:before {
+	content: "\e906";
+}
+.icon-redo:before {
+	content: "\e008";
+}
+.icon-search:before {
+	content: "\e003";
+}
+.icon-cogs:before {
+	content: "\e00a";
+}
+.icon-remove:before {
+	content: "\e005";
+}
+.icon-grid:before {
+	content: "\e004";
+}
+.icon-checkmark:before {
+	content: "\e370";
+}
+.icon-loop:before {
+	content: "\e009";
+}
+.icon-move:before {
+	content: "\e900";
+}
+/******    OVERRIDES   ******/
+
+
+/*  nxFlowchart.css */
+
+element.style {
+	border-left-color: orange;
+	left: 0px;
+}
+
+#leftPanel {
+	top: 60px;
+	left: 0px;
+	bottom: 30px;
+	position: absolute;
+	width: 75px;
+	z-index: 9;
+	border-right: 1px solid #888;
+	overflow: visible;
+	-moz-box-shadow: 3px 0 10px rgba(0, 0, 0, 0.5);
+	-webkit-box-shadow: 3px 0 10px rgba(0, 0, 0, 0.5);
+	box-shadow: 3px 0 10px rgba(0, 0, 0, 0.5);
+	-webkit-transition-property: left;
+	-webkit-transition-duration: 0.25s;
+	-webkit-transition-timing-function: ease-in-out;
+	-moz-transition-property: left;
+	-moz-transition-duration: 0.25s;
+	-moz-transition-timing-function: ease-in-out;
+	transition-property: left;
+	transition-duration: 0.25s;
+	transition-timing-function: ease-in-out;
+	background: var(--side-panel-background);
+
+	border-left-style: solid;
+	border-left-width: 10px;
+}
+
+#shortcutsSection { /* save space */
+	font-size: 0.8em;
+}
+
+#zoomPopup{
+	background: var(--top-toolbar-background);
+	top:70px!important;
+}
+
+#zoomPopup .ui-slider-horizontal{
+	height: 2px;
+	border: none;
+}
+#zoomPopup .ui-slider-handle {
+	top:-13px;
+	width: 25px;
+	height: 25px;
+	border-radius: 50%;
+	background-image: none;
+	background: var(--button-background-light);
+	border: 1px solid var(--button-border-light);
+}
+#gridPopup, #shortcutsPopup, #lockPopup, #langPopup{
+	background: var(--top-toolbar-background);
+	color: var(--font-color-light);
+}
+#langPopup{
+	margin-right: 60px!important;
+	padding: 4px!important;
+}
+#gridPopup, #shortcutsPopup, #lockPopup{
+	top:70px!important;
+}
+#langPopup{
+	top:125px!important;
+	right: -60px!important;
+	left: auto!important;
+	border-radius: 2px;
+}
+#labelEditorPopup{
+	background: var(--top-toolbar-background);
+	color: var(--font-color-light);
+	display: flex;
+	flex-direction: column;
+	padding: 0;
+
+}#languageSelectList{
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 0;
+}
+
+#languageSelectList li{
+	list-style: none;
+
+}
+
+#labelEditorSection_title{
+	display: block;
+	width: 100%;
+	color: var(--font-color-dark-inverted);
+	padding: 10px 15px;
+	margin: 0;
+	font-size: 14px;
+}
+.popup-toolbar{
+	width: 100%;
+	height: 32px;
+	margin: 24px 0 4px 0;
+	background-color: transparent;
+	display: flex;
+	border: none;
+}
+.popup-btn{
+	padding: 4px;
+	margin: 0 2px;
+	width: 28px;
+	display: inline-block;
+	background-color: var(--main-bg-color-lightest);
+	background-size: 18px;
+	background-repeat: no-repeat;
+	background-position: center;
+}
+
+.popup-btn.selected-tool-btn{
+	background-color: var(--main-color-mid);
+	cursor: pointer;
+}
+/* lolalised buttons */
+.cm_toolbar_italic_btn_EN{
+	background-image: url("images/icons/ic_cm_italic_en.svg");
+	cursor: pointer;
+}
+.cm_toolbar_bold_btn_EN{
+	background-image: url("images/icons/ic_cm_bold_en.svg");
+	cursor: pointer;
+}
+.cm_toolbar_italic_btn_EN.selected-tool-btn_EN{
+	background-image: url("images/icons/ic_cm_italic_en_selected.svg");
+	background-color: var(--main-color-mid);
+	cursor: pointer;
+}
+.cm_toolbar_bold_btn_EN.selected-tool-btn_EN{
+	background-image: url("images/icons/ic_cm_bold_en_selected.svg");
+	background-color: var(--main-color-mid);
+	cursor: pointer;
+}
+
+.cm_toolbar_italic_btn_FR{
+	background-image: url("images/icons/ic_cm_italic_fr.svg");
+	cursor: pointer;
+}
+.cm_toolbar_bold_btn_FR{
+	background-image: url("images/icons/ic_cm_bold_fr.svg");
+	cursor: pointer;
+}
+.cm_toolbar_italic_btn_FR.selected-tool-btn_FR{
+	background-image: url("images/icons/ic_cm_italic_fr_selected.svg");
+	background-color: var(--main-color-mid);
+	cursor: pointer;
+}
+.cm_toolbar_bold_btn_FR.selected-tool-btn_FR{
+	background-image: url("images/icons/ic_cm_bold_fr_selected.svg");
+	background-color: var(--main-color-mid);
+	cursor: pointer;
+}
+
+.cm_toolbar_italic_btn_DE{
+	background-image: url("images/icons/ic_cm_italic_de.svg");
+	cursor: pointer;
+}
+.cm_toolbar_bold_btn_DE{
+	background-image: url("images/icons/ic_cm_bold_de.svg");
+	cursor: pointer;
+}
+.cm_toolbar_italic_btn_DE.selected-tool-btn_DE{
+	background-image: url("images/icons/ic_cm_italic_de_selected.svg");
+	background-color: var(--main-color-mid);
+	cursor: pointer;
+}
+.cm_toolbar_bold_btn_DE.selected-tool-btn_DE{
+	background-image: url("images/icons/ic_cm_bold_de_selected.svg");
+	background-color: var(--main-color-mid);
+	cursor: pointer;
+}
+
+.cm_toolbar_italic_btn_LU{
+	background-image: url("images/icons/ic_cm_italic_de.svg");
+	cursor: pointer;
+}
+.cm_toolbar_bold_btn_LU{
+	background-image: url("images/icons/ic_cm_bold_de.svg");
+	cursor: pointer;
+}
+.cm_toolbar_italic_btn_LU.selected-tool-btn_LU{
+	background-image: url("images/icons/ic_cm_italic_de_selected.svg");
+	background-color: var(--main-color-mid);
+	cursor: pointer;
+}
+.cm_toolbar_bold_btn_LU.selected-tool-btn_LU{
+	background-image: url("images/icons/ic_cm_bold_de_selected.svg");
+	background-color: var(--main-color-mid);
+	cursor: pointer;
+}
+
+
+#cm_toolbar_size, #labelEditorCloseBtn {
+	cursor: pointer;
+}
+#labelEditorContainer{
+	padding: 0 4px;
+	display: flex;
+	flex-direction: column;
+
+}
+#labelEditor{
+	margin: 2px;
+	height: 100px;
+	width: calc(100% - 8px);
+	border: 0px none;
+	outline: none;
+	border-radius: 0px;
+	padding: 2px;
+	resize: none;
+	font-family: Arial, Helvetica, sans-serif;
+}
+#label-editor-header{
+	display: flex;
+	background-color: var(--main-bg-color-darkest);
+}
+#labelEditorCloseBtn{
+	margin: 12px 8px ;
+}
+.font-dropdown{
+	height: 40px;
+	margin-left: 2px;
+}
+.font-dropdown select{
+	height: 32px;
+}
+
+.hoverHilight{
+	padding: 4px;
+	font-size: 0.8em;
+}
+
+#gridPopup .hoverHilight:hover{
+	background: var(--main-bg-color-darkest);
+	color: var(--font-color-light);
+}
+#languageSelectList{
+	margin: 0;
+	padding: 0;
+}
+
+#languageSelectList li{
+	padding: 2px;
+}
+button.langSelButton{
+	padding: 4px;
+	font-size: 14px;
+	border-radius: 2px;
+	border:none;
+	background-color: var(--button-background-light);
+}
+button.langSelButton.currentLang{
+
+	color: var(--button-background-light);
+	background-color: var(--color-active-1);
+}
+button.langSelButton.currentLang:hover{
+
+	cursor: default;
+	background-color: var(--color-active-1);
+
+}
+
+button.langSelButton:hover{
+	background: var(--list-hover-bg);
+	cursor: pointer;
+}
+
+
+table#zoomTable tr.sliderTableGraduation td:first-child {
+	border-left: 1px solid var(--top-toolbar-icon);
+
+}
+table#zoomTable tr.sliderTableGraduation td{
+	height: 6px;
+	border-right: 1px solid var(--top-toolbar-icon);
+}
+
+table#zoomTable td.sliderTableSpacer {
+	height: 18px;
+}
+
+#scrollMsg {
+	height: 22px;
+	width: 180px;
+	position: absolute;
+	top: 66px;
+	left: 574px;
+	margin-left: 0px;
+	margin-top: 0px;
+	text-align: center;
+	touch-action: none;
+}
+
+#scrollMsg p {
+	margin: 0px;
+}
+
+#controls-container {
+	display: flex;
+	width: 100%;
+	justify-content: space-between;
+	flex-wrap: nowrap;
+	flex-direction: row;
+	height: 100%;
+}
+#tools-container {
+	display: flex;
+	justify-content: flex-start;
+	margin-left: 8px;
+}
+#controls{
+	display: flex;
+}
+#toolSwitch{
+	display: flex;
+}
+#controls_right{
+	height: 100%;
+	vertical-align: top;
+	display: flex;
+	margin-right: 8px;
+}
+
+/*NXButton*/
+
+/*NX button in main menu*/
+#controls .nxButton, #controls_right .nxButton {
+	background: transparent;
+	border: none;
+	margin: 0px;
+	padding: 5px 4px 0 4px;
+
+}
+
+#controls .nxButton:hover:not(.disabled), #controls_right .nxButton:hover:not(.disabled) {
+	color: var(--top-toolbar-icon-hover);
+	filter: brightness(100%);
+	webkit-filter:brightness(100%);
+}
+
+#controls .nxButton.disabled,
+#controls_right .nxButton.disabled {
+	color: var(--top-toolbar-icon-inactive);
+}
+
+.nxButtonBackground.theme_default {
+	border-radius: 4px;
+}
+
+.nxButton.theme_default:not(.nxButtonIconOnly) {
+	/* text or mixed button, inactive state*/
+	padding: 3px 12px;
+	border-radius: 4px;
+	color: #217EAA;
+	border: 2px solid #217EAA;
+	font-size: 13px;
+	background: white;
+
+}
+
+.nxButtonHovered.theme_default:not(.nxButtonPressed):not(.nxButtonIconOnly) {
+	/* text or mixed button, hovered but not pressed */
+	color: #ffffff;
+	background: #217EAA;
+}
+
+.nxButton.theme_default.nxButtonActive:not(.nxButtonIconOnly),
+.nxButton.theme_default.nxButtonSelected:not(.nxButtonIconOnly) {
+	/* text or mixed button, active or selected */
+	color: #ffffff;
+	background: #175978;
+	border: 2px solid #175978;
+	box-shadow: none;
+}
+
+/*individual buttons controls*/
+
+#helpButton{
+	top:0px!important;
+}
+#homeButton{
+	display: none!important;
+}
+/********************
+
+	default text and mixed button / theme: default
+
+*********************/
+
+.nxButtonBackground.theme_default.defaultButton {
+	/* default button pulsating background */
+	-webkit-animation-name: pulsate;
+	-webkit-animation-iteration-count: infinite;
+	-webkit-animation-direction: alternate;
+	-webkit-animation-timing-function: ease-in-out;
+	animation-name: pulsate;
+	animation-iteration-count: infinite;
+	animation-direction: alternate;
+	animation-timing-function: ease-in-out;
+	-webkit-animation-duration: 5s;
+	animation-duration: 2s;
+}
+
+.nxButton.theme_default.defaultButton {
+	/* default button transparency in order to see pulsating background */
+	background: transparent;
+	color: white;
+}
+
+@-webkit-keyframes pulsate {
+
+	from {
+		color: white;
+		background-color: #175978;
+	}
+	to {
+		color: white;
+		background-color: #1994b8;
+	}
+}
+
+@keyframes pulsate {
+	from {
+		color: white;
+		background-color: #175978;
+	}
+	to {
+		color: white;
+		background-color: #1994b8;
+	}
+}
+.nxButtonDisabled.theme_default:not(.nxButtonIconOnly) {
+	/* text or mixed button, disabled */
+	background: #eee;
+	color: #bebebe ;
+	border-style: solid;
+	border-color: #bebebe;
+}
+/*********************
+
+	image buttons
+
+**********************/
+
+.nxButton.theme_default.nxButtonActive.nxButtonIconOnly,
+.nxButton.theme_default.nxButtonSelected.nxButtonIconOnly,
+.nxButtonHovered.theme_default.nxButtonIconOnly:not(.nxButtonPressed) {
+	/* image button, active or selected */
+	filter: brightness(120%); /* Current draft standard */
+	-webkit-filter: brightness(120%);
+	color: #1f96be;
+}
+
+.nxButtonHovered.theme_default.nxButtonIconOnly.nxButtonPressed {
+	/* image button, hovered but not pressed */
+	top:  1px;
+}
+
+.nxButtonHovered.nxButtonIconOnly > .nxButtonHoverIcon + .nxButtonIcon,
+.nxButtonActive.nxButtonIconOnly > .nxButtonHoverIcon+.nxButtonIcon {
+	display: none;
+}
+
+.nxButtonIconOnly:not(.nxButtonHovered):not(.nxButtonActive) > .nxButtonHoverIcon {
+	display: none;
+}
+
+@-webkit-keyframes pulsate {
+
+	from {
+		color: white;
+		background-color: #175978;
+	}
+	to {
+		color: white;
+		background-color: #1994b8;
+	}
+}
+
+@keyframes pulsate {
+	from {
+		color: white;
+		background-color: #175978;
+	}
+	to {
+		color: white;
+		background-color: #1994b8;
+	}
+}
+.nxButtonDisabled:not(.nxButtonIconOnly) {
+	/* text or mixed button, disabled */
+	background: #eee;
+	color: #bebebe ;
+	border-style: solid;
+	border-color: #bebebe;
+}
+
+.nxDialogTitle{
+
+}
+
+/* slider */
+
+#zoomRange {
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+	outline: none;
+	width: calc(100% + 24px);
+	margin: 0 -12px;
+	height: 3px;
+	border:none;
+	background: var(--main-bg-color-light);
+}
+
+#zoomRange::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+	height: 25px;
+	width: 25px;
+	background: var(--main-color-mid);
+	box-shadow: 3px 3px 3px rgba(7, 3, 3, 0.6);
+	border:2px solid var(--main-bg-color-light);
+	border-radius: 15px;
+}
+
+
+/*Header Buttons*/
+#zoomButton span, #deleteButton span, #uploadButton span, #downloadButton span, #gridButton span, #undoButton span, #redoButton span, #helpButton span, #langButton span, #scrollButton span, #clearCanvasButton span, #save2oasysButton span, #closeEditorButton span, #returnToTestButton span, #openButton span, #saveButton span, #showButton span, #lockButton span {
+	font-size: 11px;
+	padding: 0;
+	color: #FFFFFF;
+	display: block;
+	margin-top: 0px;
+	margin-bottom: 2px;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	line-height: 12px;
+}
+.nxswSimple > .nxswItemMain > img {
+	height: 29px;
+	width: 29px;
+	position: absolute;
+	left: 6px;
+	top: 6px;
+}
+.nxswSimple > .nxswItemMain{
+	height: 50px;
+}
+
+.nxswItem {
+	position: relative;
+	display: inline-block;
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	margin-right: 26px;
+}
+.toolsLabel{
+	font-size: 11px;
+	padding: 0;
+	color: #FFFFFF;
+	display: block;
+	margin: -4px 0 0 -13px;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	line-height: 12px;
+	text-align: center;
+	width: 66px;
+
+}
+#zoomButton img, #deleteButton img, #uploadButton img, #downloadButton img, #gridButton img, #undoButton img, #redoButton img, #helpButton img, #langButton img, #scrollButton img, #clearCanvasButton img, #save2oasysButton img, #closeEditorButton img, #returnToTestButton img, #openButton img, #saveButton img, #showButton img, #lockButton img{
+	/*width: 36px!important;*/
+	/*height: 36px!important;*/
+}
+
+#background_zoomButton, #background_deleteButton, #background_uploadButton, #background_downloadButton, #background_gridButton, #background_undoButton, #background_redoButton, #background_scrollButton, #background_clearCanvasButton, #background_closeEditorButton, #background_save2oasysButton, #background_returnToTestButton, #background_openButton, #background_saveButton, #background_showButton, #background_lockButton {
+	height: 70px !important;
+	width: 78px !important;
+	border-radius: 0;
+	display: inline-block;
+	margin:0;
+	vertical-align: top;
+
+
+}
+
+/*#background_zoomButton:hover, #background_deleteButton:hover, #background_uploadButton:hover, #background_downloadButton:hover, #background_gridButton:hover, #background_undoButton:hover, #background_redoButton:hover, #background_helpButton:hover, #background_langButton:hover, #background_scrollButton:hover, #background_clearCanvasButton:hover, #background_save2oasysButton:hover, #background_closeEditorButton:hover, #background_returnToTestButton:hover, #background_openButton:hover, #background_saveButton:hover, #background_showButton:hover{
+	background-color: #232323;
+}*/
+#zoomButton, #deleteButton, #uploadButton, #downloadButton, #undoButton, #redoButton, #gridButton, #scrollButton, #save2oasysButton, #closeEditorButton, #returnToTestButton, #openButton, #saveButton, #showButton, #clearCanvasButton,  #lockButton{
+	height: 65px !important;
+	width: 70px !important;
+	height: 100%;
+	width: 100%;
+	margin: 0px!important;
+	/*padding: 0px 4px 0 4px;*/
+	border: none;
+
+
+}
+#helpButton, #langButton {
+	height: 65px !important;
+	width: 62px !important;
+	margin: 0px!important;
+	padding: 0px ;
+	border: none;
+}
+#background_helpButton, #background_langButton {
+	height: 70px !important;
+	width: 70px !important;
+	border-radius: 0;
+	display: inline-block;
+	margin:0;
+	vertical-align: top;
+}
+
+.nxswDisplay{
+	top: 8px;
+}
+#portrait-warning{
+	display: none;
+}
+@media only screen and (orientation: portrait) and  (max-width: 820px){
+	/*Show warning if screen is too small and in portrait mode*/
+
+	#portrait-warning{
+		width: 100%;
+		height: 100%;
+		background: rgb(255,255,255);
+		background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,1) 54%, rgba(219,219,219,1) 100%);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	#warning-block{
+		width: 300px;
+		height: 300px;
+	}
+	#main{
+		display: none;
+	}
+	#leftPanel{
+		display: none;
+	}
+	footer{
+		display: none;
+	}
+}
+
+@media only screen and  (max-width: 1290px) {
+
+	/*ipad landscapey*/
+	header{
+		height: 54px;
+	}
+	#leftPanel{
+		top:54px;
+	}
+	#controls {
+		position: relative;
+		height: 54px!important;
+	}
+	.nxSwitch{
+		width: 190px!important;
+		height: 40px;
+	}
+	.nxswItem {
+		height:30px;
+		width:30px;
+	}
+
+	.nxswSimple > .nxswItemMain > img {
+		height: 25px;
+		width: 25px;
+		position: absolute;
+		left: 3px;
+		top: 3px;
+	}
+	#tools-container{
+		margin-left: 10px;
+	}
+
+	/*Header Buttons*/
+
+	.toolsLabel{
+		font-size: 8px;
+		padding: 0;
+		color: #FFFFFF;
+		display: block;
+		margin: -4px 0 0 -10px;
+		text-overflow: ellipsis;
+		overflow: hidden;
+		line-height: 10px;
+		text-align: center;
+		width: 50px;
+	}
+	.nxswSimple > .nxswItemMain{
+		height: 35px;
+	}
+	.nxswSimple > .nxswItemMain{
+		margin-right: 10px;
+	}
+	#controls .nxButton, #controls_right .nxButton {
+		padding: 1px 0;
+	}
+	#zoomButton span, #deleteButton span, #uploadButton span, #downloadButton span, #gridButton span, #undoButton span, #redoButton span, #helpButton span, #langButton span, #scrollButton span, #clearCanvasButton span, #save2oasysButton span, #closeEditorButton span, #returnToTestButton span, #openButton span, #saveButton span, #showButton span, #lockButton span{
+		font-size: 8px;
+		padding: 0;
+		color: #FFFFFF;
+		display: block;
+		margin-top: -4px;
+		text-overflow: ellipsis;
+		overflow: hidden;
+		line-height: 10px;
+	}
+	#zoomButton img, #deleteButton img, #uploadButton img, #downloadButton img, #gridButton img, #undoButton img, #redoButton img, #helpButton img, #langButton img, #scrollButton img, #clearCanvasButton img, #save2oasysButton img, #closeEditorButton img, #returnToTestButton img, #openButton img, #saveButton img, #showButton img, #lockButton img{
+		width: 32px!important;
+		height: 32px!important;
+	}
+
+	#helpButton, #langButton {
+		height: 54px !important;
+		width: 52px !important;
+		margin: 0px!important;
+		padding: 0px 4px 0 4px;
+		border: none;
+	}
+	#background_helpButton, #background_langButton {
+		height: 54px !important;
+		width: 52px !important;
+		border-radius: 0;
+		display: inline-block;
+		margin:0;
+		vertical-align: top;
+	}
+
+	.section > p.sectionTitle {
+		font-size: 12px;
+
+	}
+	#shortcutsSection{
+		font-size: 0.6em;
+	}
+	#leftPanel textarea{
+		font-size: 12px;
+	}
+	#main{
+		top:42px;
+	}
+	#gridPopup{
+		top:54px!important;
+	}
+	#zoomPopup{
+		top:54px!important;
+	}
+
+
+	.nxswDisplay {
+		padding-left: 4px;
+		padding-right: 4px;
+	}
+
+	#background_zoomButton, #background_deleteButton, #background_uploadButton, #background_downloadButton, #background_gridButton, #background_undoButton, #background_redoButton, #background_scrollButton, #background_clearCanvasButton, #background_closeEditorButton, #background_save2oasysButton, #background_returnToTestButton, #background_openButton, #background_saveButton, #background_showButton {
+		height: 52px !important;
+		width: 52px !important;
+		border-radius: 0;
+		display: inline-block;
+		margin:0 0px!important;
+		vertical-align: top;
+		padding: 0 4px 4px 4px;
+	}
+
+	#zoomButton, #deleteButton, #uploadButton, #downloadButton, #undoButton, #redoButton, #gridButton, #scrollButton, #save2oasysButton, #closeEditorButton, #returnToTestButton, #openButton, #saveButton, #showButton, #clearCanvasButton, #lockButton {
+		height: 52px !important;
+		width: 52px !important;
+		margin: 0px!important;
+		padding: 0px 4px 0 4px;
+		border: none;
+
+	}
+	#langPopup{
+		top:110px!important;
+		right: -60px!important;
+		left: auto!important;
+		border-radius: 2px;
+		width:40px!important;
+		height: 100px!important;
+	}
+	button.langSelButton{
+		padding: 2px;
+		font-size: 12px;
+		border-radius: 2px;
+	}
+
+}
+
+/* show question nxDialog in assessment context */
+#questionDisplay {
+	overflow: auto;
+	top: 0;
+    left: 0;
+	width: 100%;
+	font-family: "Open Sans", sans-serif;
+	color: #444;
+	background-color: rgba(255, 255, 255, 1);
+    transform: none;
+    max-width: 100%;
+    font-size: 16px;
+}

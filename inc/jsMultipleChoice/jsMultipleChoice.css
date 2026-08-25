@@ -1,0 +1,65 @@
+@charset "UTF-8";
+
+.jsMultipleChoice_button.readonly {
+	cursor: default;
+}
+
+.jsMultipleChoice_label.readOnly {
+	cursor: default;
+}
+
+.jsMultipleChoice_label, .jsMultipleChoice_button {
+	position: relative;
+	cursor: pointer;
+	display: inline-block;
+}
+
+.jsMultipleChoice_button > .jsmcCheckmark {
+	pointer-events: none;
+}
+
+/* default theme */
+.jsMultipleChoice_button.jsMCTheme_default.readonly {
+	filter: contrast(40%) brightness(150%) grayscale(100%);
+	-webkit-filter: contrast(40%) brightness(150%) grayscale(100%);
+	color: #CCC;
+}
+
+.jsMultipleChoice_button.jsMCTheme_default {
+	border: 1px solid #444;
+	background-color: #EEE;
+	box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.33);
+	vertical-align: bottom;
+}
+
+.jsMultipleChoice_button[data-type="cb"].jsMCTheme_default, .jsMultipleChoice_button[data-type="boolean"].jsMCTheme_default {
+	border-radius: 3px;
+}
+
+.jsMultipleChoice_button[data-type="rb"].jsMCTheme_default {
+	border-radius: 50%;
+}
+
+.jsMultipleChoice_button.jsMCTheme_default:not(.readonly):hover, .jsMultipleChoice_button.jsMCLabelHovered.jsMCTheme_default:not(.readonly), .jsMultipleChoice_button.jsMCLabelHovered.jsMCTheme_default:not(.readonly) {
+	background-color: #c0e0fe;
+}
+
+.jsMultipleChoice_button.jsMCTheme_default[data-type="cb"][data-status="checked"] > .jsmcCheckmark, .jsMultipleChoice_button.jsMCTheme_default[data-type="boolean"][data-status="checked"] > .jsmcCheckmark {
+	width: inherit;
+	height: inherit;
+	top: -15%;
+	right: -15%;
+	background-image: url(images/checkmark.svg);
+	background-size: contain;
+	position: absolute;
+}
+
+.jsMultipleChoice_button.jsMCTheme_default[data-type="rb"][data-status="checked"] > .jsmcCheckmark {
+	width: 70%;
+	height: 70%;
+	left: 15%;
+	top: 15%;
+	border-radius: 50%;
+	background: radial-gradient(ellipse farthest-corner, #060606 0%, #5e5e5e 100%) #000000;
+	position: absolute;
+}

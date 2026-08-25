@@ -1,0 +1,17 @@
+# Default deny for everything
+Require all denied
+
+# Allow access to installer DB utility handler from localhost
+<Files "instmain*.*">
+    Require ip 127.0.0.1
+</Files>
+
+# Allow access to downloaded packages for installation
+<Files "inst_*.php">
+    Require all granted
+</Files>
+
+# Allow access to post-install repair script on upgrades
+<Files "repair.php">
+    Require all granted
+</Files>

@@ -1,0 +1,73 @@
+.jsSelectList {
+	padding: 0;
+	margin: 0;
+}
+
+.jsSelectList ul {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.jsSelectList ul > li {
+	padding: 2px 5px;
+	position: relative;
+}
+
+.jsSelectList:not(.disabled) ul > li:hover {
+	background: #ffddac;
+}
+
+span.jsSelectList-Prefix {
+	margin-right: 10px;
+	pointer-events: none;
+}
+
+span.jsSelectList-Postfix {
+	margin-left: 10px;
+	pointer-events: none;
+}
+
+span.jsSelectList-Prefix:empty, span.jsSelectList-Postfix:empty {
+	display: none;
+}
+
+.jsSelectList ul:empty {
+	display: none;
+}
+
+.jsSelectList:not(.disabled)  li.selected {
+	background: #ffc268;
+}
+
+div.jsSelectListStorage {
+	display: none;
+}
+
+.jsSelectList ul > li *[class^=nxButton]:not(.nxButtonEventTrap) {
+	cursor: pointer;
+}
+
+.jsSelectListSectionTitle {
+	margin-bottom: 5px;
+}
+
+.jsSelectListSectionUl:not(:empty) {
+	border-top: 1px solid #333;
+}
+
+.jsSelectListSectionHeader, .jsSelectListHeader {
+	text-align: center;
+	margin-bottom: 10px;
+	margin-top: 15px;
+}
+
+.jsSelectListSectionFooter, .jsSelectListFooter {
+	text-align: center;
+	margin-bottom: 15px;
+	margin-top: 10px;
+}
+
+.jsslSectionTitleButtonWrapper {
+	float: right;
+}

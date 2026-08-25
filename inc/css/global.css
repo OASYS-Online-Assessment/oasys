@@ -1,0 +1,25 @@
+html, body {
+	height: 100%;
+	width: 100%;
+	overflow: hidden;
+}
+
+body {
+	margin: 0;
+	padding:  0;
+	font-family: "Open Sans", sans-serif;
+	color: #444;
+	user-select: none;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+}
+
+
+/*
+this makes images as choice labels become invisible … TODO: find other solution
+img {
+	max-width: 100%;
+	height: auto;
+}
+*/

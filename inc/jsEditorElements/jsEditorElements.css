@@ -1,0 +1,756 @@
+/* @group general */
+
+.red {
+    color: red;
+}
+
+.hidden {
+    display: none;
+}
+
+.editorProperty {
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.editorPropertyLabel {
+    margin-bottom: 4px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.editorInlineLabel {
+    display: inline-block;
+}
+
+hr.editorSeparator {
+    margin: 30px 0;
+    border: none;
+    border-top: 2px dashed #666;
+}
+
+.clickable {
+    cursor: pointer;
+}
+
+.editorSectionToggleBox {
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 1em;
+    margin-right: 7px;
+}
+
+.editorSectionToggleBox + .editorSectionHeader {
+    display: inline-block;
+}
+
+.editorBlockAlign_left {
+    text-align: left;
+}
+
+.editorBlockAlign_center {
+    text-align: center;
+}
+
+.editorBlockAlign_right {
+    text-align: right;
+}
+
+.numberToken {
+    font-family: "Passion One", sans-serif;
+    font-size: 1.4em;
+    font-style: normal;
+    background-color: darkorange;
+    border-radius: 3px;
+    padding: 0;
+    border: 1px solid #000;
+    color: white;
+    text-shadow: 0 0 2px black;
+    box-sizing: border-box;
+    min-width: 25px;
+    height: 20px;
+    text-align: center;
+    line-height: 1em;
+    display: inline-block;
+}
+
+/* @end */
+
+/* @group editorSection */
+
+.editorSectionHeader {
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 14px;
+    width: fit-content;
+}
+.editorSectionHeader:first-letter{
+    text-transform: uppercase;
+}
+
+.editorSection {
+    margin-bottom: 20px;
+}
+
+.preview {
+    padding: 20px;
+    overflow: hidden;
+    margin-top: 20px;
+    border: 2px dashed #d9d9d9;
+    background-color: #ffffff;
+}
+.previewControls{
+    font-size: 14px;
+}
+
+.preview_selector_container {
+    display: inline-block;
+    vertical-align: middle;
+}
+/* @end */
+
+/* @group editorInfobox */
+
+.editorInfoboxWrapper {
+    margin: 20px auto;
+    max-width: 600px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.editorInfoboxHeader:not(:empty) {
+    margin: 0 12px 0 0;
+}
+
+.editorInfobox {
+    padding: 10px 20px;
+    background-color: #DDDDDD;
+    min-height: 1em;
+    border-radius: 30px;
+    background: var(--color-content);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+/* @end */
+
+/* @group editorLabel */
+
+.editorLabel {
+    position: relative;
+}
+
+.tinyMCE_toolbar_container {
+    position: absolute;
+    top: -16px;
+}
+
+.editorLabelText {
+    background-color: white;
+    border: 1px solid #cdcdcd;
+    border-radius: 2px;
+    padding: 10px 15px;
+}
+
+.editorLabelFrame {
+    display: grid;
+    grid-template-columns: 1fr max-content;
+}
+
+.editorLabelButton {
+    margin-top: 0.5em;
+    margin-left: 0.5em;
+}
+/* @end */
+
+/* @group columnSplitter */
+
+.columnSplitter {
+    display: grid;
+    grid-column-gap: 0;
+    grid-auto-flow: column;
+}
+
+.columnSplitterColumn {
+   display: contents;
+}
+
+.columnSplitterColumn > * {
+    box-sizing: border-box;
+}
+
+.columnSplitter_left > * {
+    grid-column: 1;
+}
+
+.columnSplitterHandle {
+    cursor: col-resize;
+    grid-column: 2;
+    grid-row-start: 1;
+    display: flex;
+    justify-content: center; /* Center horizontally */
+    align-items: center; /* Center vertically */
+}
+
+.columnSplitter_right > * {
+    grid-column: 3;
+}
+
+.columnSplitterHandleMarker {
+    height: 100%;
+    width: 0;
+    border-left: 1px dashed #AAA;
+    pointer-events: none;
+}
+
+/* @end */
+
+/* @group editorInlineEditor */
+
+.editorInlineTextBox {
+    background-color: white;
+    border: 1px solid #cdcdcd;
+    border-radius: 2px;
+    padding: 10px 15px;
+    height: 12em;
+    overflow: auto;
+}
+
+.editorInlineFieldsTitle {
+    font-weight: bold;
+}
+
+.editorInlineFields {
+    display: grid;
+    grid-template-columns: max-content 1fr max-content;
+    grid-column-gap: 10px;
+    grid-row-gap: 5px;
+    border: 1px solid #cdcdcd;
+    background-color: #ececec;
+    padding: 10px;
+    grid-auto-rows: max-content;
+    height: 12em;
+    overflow: auto;
+    align-items: center;
+}
+
+.editorInlineField {
+    display: contents; /* children of this row wrapper will be placed according to grid, while this level is skipped */
+}
+
+.editorInlineFieldsNumber {
+    text-align: center;
+}
+
+.editorInlineFieldButton {
+    height: 24px;
+}
+
+.editorInlineFieldButton > .nxButtonIconOnly {
+    margin: 0;
+}
+
+.editorInlineEditorButtons {
+    display: grid;
+    grid-template-columns: auto;
+    grid-column-gap: 10px;
+    margin-top: 10px;
+    grid-auto-flow: column;
+    overflow-x: auto;
+    padding-bottom: 20px;
+}
+
+.editorInlineEditorButtons > div {
+    margin: 0;
+}
+
+.inlineFieldKeyword {
+    color: #ff8606;
+}
+
+ul.editorInlineEditorMessage {
+    list-style-type: none;
+    padding: 0;
+}
+
+ul.editorInlineEditorMessage > li {
+    background: red;
+    color: white;
+    padding: 2px 10px;
+    display: inline-block;
+    border-radius: 10px;
+    border: 2px white solid;
+    box-shadow: rgba(0,0,0,0.5) 2px 2px 5px;
+    margin: 2px;
+}
+
+/* @end */
+
+/* @group editorList */
+
+.editorListDZ {
+    margin: 20px 0;
+    overflow: visible;
+}
+
+.editorListItem {
+    display: grid;
+    position: relative;
+    padding: 4px 8px;
+    border-radius: 4px;
+    align-items: center;
+    grid-template-columns: max-content 1fr max-content max-content 0;
+    overflow: visible;
+    grid-column-gap: 10px;
+}
+
+.editorListItem > input[type="text"] {
+    height: 100%;
+}
+
+.editorList.displayLinks .editorListItem {
+    grid-template-columns: max-content 1fr max-content max-content max-content;
+}
+
+.editorListItem[data-locked="1"] .editorListLabel {
+    background-color: #ffefae;
+}
+
+.editorListItem:not(.dragging):not(.disableTransition) {
+    transition-property: top;
+    transition-duration: 0.25s;
+}
+
+.editorListItem.dragging {
+    background-color: #28ABE2;
+    box-shadow: 2px 2px 2px rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    opacity: 0.8;
+}
+
+.editorList_toolbar {
+    grid-column: 2;
+    grid-row: 1;
+    position: absolute;
+    top: -44px;
+}
+
+.editorListHandle {
+    grid-column: 1;
+    grid-row: 2;
+    height: 24px;
+    width: 16px;
+    background-image: url(../../images/miniSymbols/interactionDragHandle_alt.svg);
+    background-size: auto;
+    background-repeat: no-repeat;
+}
+
+.editorListFieldNumber {
+    grid-column: 5;
+    grid-row: 2;
+    text-align: center;
+}
+
+.editorListFieldNumber:empty {
+    visibility: hidden;
+}
+
+.editorListLabel {
+    grid-column: 2;
+    grid-row: 2;
+    position: relative;
+    font-size: 14px;
+    border: 1px solid #cdcdcd;
+    border-radius: 2px;
+    background-color: #FFF;
+    padding: 5px 10px;
+    overflow: hidden;
+    /*min-height: 30px;*/
+    width: auto;
+}
+
+.editorListLabel img {
+    max-height: 30px;
+    width: auto;
+}
+
+input[type="text"].editorListLabelText, input[type="text"][readonly].editorListLabelText {
+    border: none;
+    background: none;
+    width: 100%;
+    padding: 0;
+}
+
+input[type="text"][readonly].editorListLabelText {
+    color: #AAAAAA;
+    font-style: italic;
+}
+
+.editorListLabel:has(input[type="text"][readonly].editorListLabelText) {
+    background-color: #EEEEEE;
+}
+
+input[type="text"].editorListValue {
+    font-size: 14px;
+    width: 150px;
+    border: 1px solid #cdcdcd;
+    line-height: 30px;
+    background-color: #FFF;
+    padding: 0 10px;
+    overflow: hidden;
+    grid-column: 3;
+    grid-row: 2;
+}
+
+input[type="text"].editorListValue:invalid {
+    border-color: red;
+}
+
+.editorListItemButtons {
+    grid-column: 4;
+    grid-row: 2;
+}
+
+.editorListItem .lockedIcon::before {
+    content: '🔒';
+    font-size: 1.5em;
+}
+
+.editorListItem .lockedIcon {
+    width: 42px;
+    text-align: center;
+    display: inline-block;
+}
+
+/* @end */
+
+/* @group editorCheckList */
+
+.editorCheckListItem {
+    margin: 5px 20px;
+    display: grid;
+    grid-template-columns: max-content 1fr;
+}
+
+.editorCheckListItem > .jsMultipleChoice_button {
+    margin-right: 7px;
+    vertical-align: middle;
+    background-color: white;
+}
+
+/* @end */
+
+/* @group editorTF */
+
+input[type='text'].editorTF {
+    width: 200px;
+    font-size: 14px;
+    margin-left: 10px;
+}
+
+input[type='text'].editorTF:invalid {
+    border: 1px solid red;
+}
+
+div.editorTF_message {
+    display: none;
+    border: 1px solid red;
+    padding: 2px 5px;
+    font-size: 14px;
+    position: relative;
+    z-index: 1;
+    background-color: #ffcece;
+    width: 250px;
+    box-sizing: border-box;
+    margin-top: 5px;
+    border-radius: 5px;
+}
+
+/* @end */
+
+/* @group editorMultiList */
+
+
+.editorMultiListHeader {
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-style: italic;
+}
+
+.editorMultiListHilight {
+    color: darkorange;
+}
+
+.editorMultiListFields > ul {
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    flex-direction: row;
+}
+
+.editorMultiListFields > ul > li {
+    padding: 0 30px;
+    font-weight: 600;
+    background: var(--editor-textbox-background);
+    color: var(--editor-textbox-text-color);
+    border: 1px solid #cdcdcdcd;
+    width: fit-content;
+    border-radius: 8px;
+    margin: 0 6px 8px 0;
+    height: 24px;
+    line-height: 24px;
+    font-size: 16px;
+    transition: border-color 0.5s ease, background-color 0.5s ease;
+}
+
+.editorMultiListFields > ul > li[data-locked=true]::after {
+    content: '🔒';
+    margin-left: 5px;
+}
+
+.editorMultiListTextfield {
+    width: 250px;
+    font-size: 14px;
+}
+
+.editorMultiListAddButton {
+    display: inline-block;
+    top: 7px;
+    position: relative;
+}
+
+.editorMultiListRemoveButton {
+    display: inline-block;
+    position: absolute;
+}
+
+.editorMultiListParking {
+    display: none;
+}
+
+.editorMultiListFields > ul > li.editorMultiList_flash {
+    border: 1px solid darkorange;
+    background-color: #ffebce;
+}
+
+.editorMultiListError {
+    color: dodgerblue;
+}
+
+/* @end */
+
+
+/* @group propsDiv */
+
+.grid_2col {
+    display: grid;
+    grid-template-columns: 1fr max-content;
+}
+
+.grid_2col > .editorPropertyLabel {
+    grid-column-start: 1;
+    grid-column-end: 3;
+}
+
+/* @end */
+div.propsToggleDiv {
+    padding: 2px 0;
+    border-radius: 4px;
+}
+
+/* @group propsTF */
+
+input[type='text'].propsTF {
+    width: 100%;
+    font-size: 14px;
+}
+
+input[type='text'].propsTF:invalid {
+    border: 1px solid red;
+}
+
+div.propsTF_message {
+    display: none;
+    border: 1px solid red;
+    padding: 2px 5px;
+    font-size: 14px;
+    position: relative;
+    z-index: 1;
+    background-color: #ffcece;
+    width: 250px;
+    box-sizing: border-box;
+    margin-top: 5px;
+    border-radius: 5px;
+}
+
+/* @end */
+
+/* @group propsList */
+
+.propsList {
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    flex-direction: row;
+}
+
+.propsList > li {
+    padding: 0 30px;
+    font-weight: 600;
+    background: var(--editor-textbox-background);
+    color: var(--editor-textbox-text-color);
+    border: 1px solid #cdcdcdcd;
+    width: fit-content;
+    border-radius: 8px;
+    margin: 0 6px 8px 0;
+    height: 24px;
+    line-height: 24px;
+    font-size: 16px;
+    transition: border-color 0.5s ease, background-color 0.5s ease;
+}
+
+.propsListTextfield {
+    width: 250px;
+    font-size: 14px;
+}
+
+.propsListAddButton {
+    display: inline-block;
+    top: 7px;
+    position: relative;
+}
+
+.propsListRemoveButton {
+    display: inline-block;
+    position: absolute;
+}
+
+.propsListParking {
+    display: none;
+}
+
+.propsCheckboxRow{
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    grid-column-gap: 8px;
+}
+
+.hovered {
+    background: #eeeeee;
+    color: #272727;
+    text-decoration: underline;
+}
+
+ul.propsList > li.propsList_flash {
+    border: 1px solid darkorange;
+    background-color: #ffebce;
+}
+
+/* @end */
+
+/* @group propsSpinnerRow */
+
+.propsSpinnerRow > .editorInlineLabel, .propsSpinnerLabel {
+    line-height: 34px;
+}
+
+.propsSpinnerUnits {
+    display: inline;
+    margin-left: 5px;
+    line-height: 34px;
+}
+
+.propsSpinner {
+    display: inline-block;
+    margin-left: 10px;
+}
+
+.propsSpinner > input[type="number"] {
+    width: 80px;
+    margin: 2px 0;
+    font-size: 14px;
+}
+
+.propsSpinner > input.invalid {
+	border: 1px solid red;
+}
+
+/* @end */
+
+/* @group propsSwitch */
+
+.propsSwitchRow {
+    display: grid;
+    grid-template-columns: 1fr max-content ;
+}
+
+.propsSwitch {
+    margin-right: 0;
+}
+
+.propsSwitchRow + .propsSwitchRow, .propsToggleDiv + .propsSwitchRow, .propsSwitchRow + .propsToggleDiv {
+    margin-top: 5px;
+}
+
+.propsSwitchRow:hover{
+    background: #eeeeee;
+}
+
+/* @end */
+
+/* @group propsToggleDiv */
+
+.toggleDivFlash {
+    -webkit-animation: flash 1s ease-in-out both;
+    animation: flash 1s ease-in-out both;
+}
+
+div[id^='editorCheckListGrid'], div[id^='editorCheckListItems'] {
+    background: white;
+    border-radius: 4px;
+    padding: 6px 0;
+}
+
+.scoringRangeContainer{
+    max-width: 200px;
+}
+.editorContainerRow{
+    max-width: 400px;
+}
+.propertiesRow{
+
+}
+
+.avCounterSpinner{
+    display: grid;
+    grid-template-columns: 1fr max-content;
+}
+
+@keyframes flash {
+    from {
+        background:  none;
+        box-shadow: none;
+    }
+
+    50% {
+        background: rgb(231, 231, 231);
+        padding: 2px 0;
+        box-shadow: 0 0 14px 0 rgb(211, 211, 211);
+    }
+
+    to {
+        background: none;
+        box-shadow: none;
+        -webkit-box-shadow: none;
+        -moz-box-shadow: none;
+    }
+}
+
+/* @end */
+
+/* @group tinyMCE inline mode */
+.tox-tinymce-inline {
+    z-index: 10;
+}
+/* @end */

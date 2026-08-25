@@ -1,0 +1,18 @@
+#scoreTitle {
+	font-size:  48px;
+	text-align: center;
+	margin:  2vh 0;
+}
+
+#score {
+	font-size:  64px;
+	position: relative;
+	text-align: center;
+	font-weight: bold;
+}
+
+#buttonStrip {
+	margin-top: 50px;
+	text-align: center;
+	font-size: 24px;
+}

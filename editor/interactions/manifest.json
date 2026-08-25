@@ -1,0 +1,92 @@
+{
+  "sections": {
+    "order": [
+      "static",
+      "simple",
+      "inline",
+      "advanced"
+    ],
+    "labels": {
+      "simple": "simple interactions",
+      "advanced": "advanced editors",
+      "inline": "inline interactions",
+      "static": "static content"
+    },
+    "blocks": {
+      "simple": {
+        "order": [
+          "textfield",
+          "textarea",
+          "choice",
+          "choicematrix",
+          "slider",
+          "slikert"
+        ],
+        "labels": {
+          "textfield": "text field",
+          "textarea": "text area",
+          "choice": "choice",
+          "choicematrix": "choice matrix",
+          "slider": "slider",
+          "slikert": "slikert"
+        }
+      },
+      "inline": {
+        "order": [
+          "inline_textfields",
+          "inline_gaps"
+        ],
+        "labels": {
+          "inline_textfields": "text fields",
+          "inline_gaps": "gaps"
+        }
+      },
+      "advanced": {
+        "order": [
+          "advanced",
+          "conceptmap"
+        ],
+        "labels": {
+          "advanced": "advanced editor",
+          "conceptmap": "concept map"
+        }
+      },
+      "static": {
+        "order": [
+          "wysiwyg",
+          "button",
+          "languageswitcher",
+          "image",
+          "video",
+          "audio"
+        ],
+        "labels": {
+          "button": "button",
+          "wysiwyg": "text editor",
+          "image": "image",
+          "video": "video",
+          "audio": "audio",
+          "languageswitcher": "language switcher"
+        }
+      }
+    }
+  },
+  "paths": {
+    "advanced": "advanced",
+    "conceptmap": "advanced",
+    "textfield": "simple",
+    "textarea": "simple",
+    "choice": "simple",
+    "choicematrix": "simple",
+    "slider": "simple",
+    "slikert": "simple",
+    "button": "static",
+    "languageswitcher": "static",
+    "wysiwyg": "static",
+    "image": "static",
+    "video": "static",
+    "audio": "static",
+    "inline_textfields": "inline",
+    "inline_gaps": "inline"
+  }
+}

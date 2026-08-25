@@ -1,0 +1,141 @@
+.nxMultiState {
+	-webkit-user-select:none;
+	-moz-user-select:none;
+	width: 52px;
+	height: 40px;
+	background-color: #666;
+	display: none;
+	position: relative;
+	margin:  8px 8px 2px 2px;
+}
+
+.nxMultiState.active {
+	cursor: pointer;
+	/*display: inline-block;*/
+	display: block;
+}
+
+.nxMultiState.singleState {
+	width: 40px;
+}
+
+.nxmsDisplay {
+	width: 40px;
+	height: 40px;
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	background-size: 40px 40px!important;
+	overflow: hidden;
+	line-height: 0px;
+}
+
+.nxmsGloss {
+	width: 40px;
+	height: 40px;
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	/*background: url(images/nxms_gloss.png) no-repeat;*/
+	/*background-size: 40px 40px!important;*/
+}
+
+.nxmsArrow {
+	width: 12px;
+	height: 40px;
+	position: absolute;
+	left: 40px;
+	top: 0px;
+	background: var(--main-bg-color-darkest);
+
+}
+
+.nxmsDown {
+	width: 12px;
+	height: 20px;
+	top:  28px;
+	position: absolute;
+	background: url(images/nxms_inactiveArrow.png) no-repeat;
+	background-size: 12px 12px!important;
+}
+
+.nxMultiState:hover .nxmsDown {
+	background: url(images/nxms_activeArrow.png) no-repeat;
+}
+
+.nxmsDisplay > img {
+	width: 40px;
+	height: 40px;
+}
+
+.nxmsVeil {
+	position: fixed;
+	width: 100%;
+	height: 100%;
+	top: 0px;
+	left: 0px;
+	z-index: 100;
+	background-color: rgba(255, 255, 255, 0.0);
+}
+
+.nxmsPopup {
+	background: white;
+	position: absolute;
+	margin-top: 1px;
+	-moz-box-shadow:2px 2px 9px 2px rgba(0,0,0,0.44);
+	-webkit-box-shadow: 2px 2px 9px 2px rgba(0,0,0,0.44);
+	box-shadow: 2px 2px 9px 2px rgba(0,0,0,0.44);
+	line-height: 0px;
+	background-color: var(--popup-backgrpound-color);
+}
+
+.nxmsPopup > img {
+	width: 40px;
+	height: 40px;
+}
+
+.nxmsPopup > img.active, .nxmsPopup > img.active:hover {
+	background-color: var(--popup-background-selected);
+}
+
+.nxmsPopup > img:hover {
+	background-color: var(--popup-background-hover);
+}
+
+/* Display colors */
+
+.nxmsDisplay.orange {
+	background-image: url(images/nxmsOrange_inactive.png);
+}
+
+.nxMultiState.active:hover > .nxmsDisplay.orange {
+	background-image: url(images/nxmsOrange_hover.png);
+}
+
+.nxMultiState.active > .nxmsDisplay.orange {
+	background-image: url(images/nxmsOrange_active.png);
+}
+
+.nxmsDisplay.white {
+	background-image: url(images/nxmsWhite_inactive.png);
+}
+
+.nxMultiState.active:hover > .nxmsDisplay.white {
+	background-image: url(images/nxmsWhite_hover.png);
+}
+
+.nxMultiState.active > .nxmsDisplay.white {
+	background-image: url(images/nxmsWhite_active.png);
+}
+
+.nxmsDisplay.blue {
+	background-image: url(images/nxmsBlue_inactive.png);
+}
+
+.nxMultiState.active:hover > .nxmsDisplay.blue {
+	background-image: url(images/nxmsBlue_hover.png);
+}
+
+.nxMultiState.active > .nxmsDisplay.blue {
+	background-image: url(images/nxmsBlue_active.png);
+}

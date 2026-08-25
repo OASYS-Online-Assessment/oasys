@@ -1,0 +1,16 @@
+/* variable */
+@font-face {
+	font-family: 'Open Sans';
+	src: url('ttf/OpenSans-VariableFont_wdth,wght.ttf') format('truetype');
+	font-weight: 300 800;    /* Use the available weight range */
+	font-stretch: 75% 100%;  /* Use the available width range */
+	font-style: normal;
+}
+/* variable italic */
+@font-face {
+	font-family: 'Open Sans';
+	src: url('ttf/OpenSans-Italic-VariableFont_wdth,wght.ttf') format('truetype');
+	font-weight: 300 800;    /* Use the available weight range */
+	font-stretch: 75% 100%;  /* Use the available width range */
+	font-style: italic;
+}

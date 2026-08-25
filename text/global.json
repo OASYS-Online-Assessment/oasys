@@ -1,0 +1,86 @@
+{
+  "cookiesDisabled": {
+	"EN": "Cookies are disabled in your browser. Please enable them and reload this page in order to proceed.",
+	"DE": "Die Cookies in Ihrem Browser sind ausgeschaltet. Bitte schalten Sie diese ein und laden Sie die Seite neu!",
+	"FR": "Le support de cookies est désactivé dans votre navigateur. Pour continuer, il faudra activer les cookies et recharger cette page.",
+	"LU": "D'Cookies an Ärem Browser sinn desaktivéiert. Fir weiderzefueren, musst Dir d'Cookies aktivéieren an d'Säit nei lueden."
+  },
+  "error": {
+	"EN": "Error",
+	"DE": "Fehler",
+	"FR": "Erreur",
+	"LU": "Feeler"
+  },
+  "featureNotSupported": {
+	"EN": "Your browser does not fulfil the technical requirements to run OASYS.",
+	"DE": "Ihr Browser erfüllt die technischen Voraussetzungen nicht um OASYS nutzen zu können.",
+	"FR": "Votre navigateur ne supporte pas tous les technologies nécessaires pour utiliser OASYS.",
+	"LU": "Äre Browser erfëllt net déi néideg technesch Bedéngungen, fir OASYS notzen ze kënnen."
+  },
+  "returnToLogin": {
+	"EN": "return to login screen",
+	"DE": "kehre zum Loginschirm zurück",
+	"FR": "retourne à l'écran login",
+	"LU": "zeréck op de Login-Schierm"
+  },
+  "noContent": {
+	"EN": "The page(s) you are trying to preview do not have any contents. Be aware that you can only preview saved data!",
+	"DE": "Die Seite(n), die Sie in der Vorschau anzeigen möchten, haben keinen Inhalt. Bitte beachten Sie, dass Sie nur gespeicherte Daten anzeigen können!",
+	"FR": "La ou les pages que vous essayez de prévisualiser n'ont pas de contenu. Sachez que vous ne pouvez prévisualiser que des données enregistrées&nbsp;!",
+	"LU": "Déi Säiten, déi Dir wëllt kucken, hu kee Contenu. Säite kënnen nëmme gewise ginn, wann se gespäichert goufen."
+  },
+  "unkownError": {
+	"EN": "An error of unkown origin has occurred!",
+	"DE": "Es ist ein Fehler aufgetreten, dessen Ursache nicht ermittelt werden konnte!",
+	"FR": "Une erreur s'est produite, dont la cause n'est pas connue!&nbsp;!",
+	"LU": "E Feeler vun onbekannter Ursaach ass opgetrueden."
+  },
+  "sessionExpired": {
+	"EN": "Your session has expired, please log in again!",
+	"DE": "Ihre Sitzung ist abgelaufen, bitte melden Sie sich erneut an!",
+	"FR": "Votre session a expiré, veuillez vous reconnecter !",
+	"LU": "Är Sessioun ass ofgelaf, loggt Iech w.e.g. nach eng Kéier an!"
+  },
+  "systemInMaintenance": {
+	"EN": "System is under maintenance at the moment. Please try connecting again at a later time.",
+	"DE": "Das System wird zur Zeit gewartet. Bitte versuchen Sie es später erneut.",
+	"FR": "Le système est en maintenance. Veuillez réessayer plus tard.",
+	"LU": "De System ass an der Ënnerhalt. Probéiert w.e.g. zu engem spéideren Zäitpunkt nach eng Kéier."
+  },
+  "maintenanceStarted": {
+	"EN": "The system has entered maintenance mode. You cannot continue editing the test.",
+	"DE": "Das System ist in den Wartungsmodus gewechselt. Sie können den Test nicht mehr weiter bearbeiten.",
+	"FR": "Le système est passé en mode maintenance. Vous ne pouvez plus continuer à éditer le test.",
+	"LU": "D'System ass an de Wartungsmodus gaangen. Dir kënnt den Test net méi weider beschaffen."
+  },
+  "previewAccessDenied": {
+	"EN": "You do not have permission to preview this. Make sure that you are logged into the editor and have the necessary read permissions.",
+	"DE": "Sie haben keine Berechtigung, dies anzusehen. Stellen Sie sicher, dass Sie im Editor angemeldet sind und die erforderlichen Leseberechtigungen besitzen.",
+	"FR": "Vous n'avez pas la permission de prévisualiser ceci. Assurez-vous d'être connecté à l'éditeur et de disposer des autorisations de lecture nécessaires.",
+	"LU": "Dir hutt keng Berechtegung fir dëst ze kucken. Vergewëssert Iech, datt Dir am Editor ageloggt sidd an déi néideg Liesberechtegungen hutt."
+  },
+  "mediaCacheTimeout": {
+	"EN": "The connection is too slow to cache all media files up front. They will be loaded as needed.",
+	"DE": "Die Verbindung ist zu langsam, um alle Mediendateien im Voraus zwischenzuspeichern. Sie werden bei Bedarf geladen.",
+	"FR": "La connexion est trop lente pour mettre en cache tous les fichiers multimédias à l'avance. Ils seront chargés à la demande.",
+	"LU": "D'Verbindung ass ze lues, fir all Mediendateien am Viraus ze cachen. Si ginn no Bedarf geluede."
+  },
+  "mediaCacheLoadError": {
+	"EN": "An error has occurred while trying to cache all media files up front. They will be loaded as needed.",
+	"DE": "Beim Versuch, alle Mediendateien im Voraus zwischenzuspeichern, ist ein Fehler aufgetreten. Sie werden bei Bedarf geladen.",
+	"FR": "Une erreur s'est produite lors de la mise en cache préalable de tous les fichiers multimédias. Ils seront chargés à la demande.",
+	"LU": "Beim Versuch, all Mediendateien am Viraus ze cachen, ass e Feeler opgetrueden. Si ginn no Bedarf geluede."
+  },
+  "mediaProgress": {
+	"EN": "Loading media files…<br>{loaded} of {total} kb",
+	"DE": "Lade Mediendateien…<br>{loaded} von {total} kb",
+	"FR": "Chargement des fichiers multimédias…<br>{loaded} sur {total} kb",
+	"LU": "Mediendateie gi gelueden…<br>{loaded} vun {total} kb"
+  },
+  "loading": {
+	"EN": "loading...",
+	"DE": "wird geladen...",
+	"FR": "chargement...",
+	"LU": "gëtt geluede..."
+  }
+}

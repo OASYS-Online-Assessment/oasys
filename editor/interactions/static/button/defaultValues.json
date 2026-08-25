@@ -1,0 +1,10 @@
+[
+  {"value": "", "localized": false, "flags": [], "path": ["id"]},
+  {"value": "", "localized": false, "flags": [], "path": ["visibility"]},
+  {"value": "", "localized": true, "flags": ["parseForMedia"], "path": ["label"], "context": "fields", "contextPath": ["label"]},
+  {"value": "center", "localized": false, "flags": [], "path": ["align"]},
+  {"value": "endTest", "localized": false, "flags": [], "path": ["action"]},
+  {"value": "", "localized": false, "flags": [], "path": ["language"]},
+  {"value": false, "localized": false, "flags": [], "path": ["ignoreNavigationConstraints"]},
+  {"value": false, "localized": false, "flags": [], "path": ["disableOnTestIncomplete"]}
+]

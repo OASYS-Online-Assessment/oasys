@@ -1,0 +1,26 @@
+{
+  "DE": {
+	"EN": "German",
+	"DE": "Deutsch",
+	"FR": "Allemand",
+	"LU": "Däitsch"
+  },
+  "EN": {
+	"EN": "English",
+	"DE": "Englisch",
+	"FR": "Anglais",
+	"LU": "Englesch"
+  },
+  "FR": {
+	"EN": "French",
+	"DE": "Französisch",
+	"FR": "Français",
+	"LU": "Franséisch"
+  },
+  "LU": {
+	"EN": "Luxembourgish",
+	"DE": "Luxemburgisch",
+	"FR": "Luxembourgeois",
+	"LU": "Lëtzebuergesch"
+  }
+}

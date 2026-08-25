@@ -1,0 +1,176 @@
+/* choice block alignment */
+
+.choiceCell, .choiceCellInline {
+    align-items: center;
+}
+
+.choiceAlignment_left > .choiceBlock {
+    justify-content: left;
+}
+
+.choiceAlignment_center > .choiceBlock {
+    justify-content: center;
+}
+
+.choiceAlignment_right > .choiceBlock {
+    justify-content: right;
+}
+
+.choiceLabel > .jsMultipleChoice_label > div:has(+span.oasysTextfield) {
+	display: inline-block;
+}
+
+/* choice vertical layout */
+.choiceBlock.choiceLayout_vertical {
+    display: grid;
+}
+
+.choiceBlock.choiceLayout_vertical.choiceLabelPosition_right, .choiceBlock.choiceLayout_vertical.choiceLabelPosition_left {
+    display: grid;
+    grid-template-columns: minmax(0, max-content);
+    column-gap:  10px;
+}
+
+.choiceBlock.choiceLayout_vertical.choiceLabelPosition_right .choiceCellInline, .choiceBlock.choiceLayout_vertical.choiceLabelPosition_left .choiceCellInline {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: 5px;
+    align-items: center;
+}
+
+.choiceBlock.choiceLayout_vertical.choiceLabelPosition_left {
+    justify-items: right;
+}
+
+.choiceBlock.choiceLayout_vertical.choiceLabelPosition_above, .choiceBlock.choiceLayout_vertical.choiceLabelPosition_below {
+    display: grid;
+    grid-template-columns: minmax(0, max-content);
+}
+
+.choiceBlock.choiceLayout_vertical.choiceLabelPosition_below .choiceCellInline, .choiceBlock.choiceLayout_vertical.choiceLabelPosition_above .choiceCellInline {
+    justify-items: center;
+}
+
+/* choice horizontal layout */
+
+.choiceBlock.choiceLayout_horizontal {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.choiceBlock.choiceLayout_horizontal .choiceCellInline {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    align-items: center;
+}
+
+.choiceBlock.choiceLayout_horizontal.choiceLabelPosition_right .choiceLabel {
+    margin-left: 5px;
+}
+
+.choiceBlock.choiceLayout_horizontal.choiceLabelPosition_left .choiceElement {
+    margin-left: 5px;
+}
+
+.choiceBlock.choiceLayout_horizontal .choiceCell {
+    display:  grid;
+    justify-items: center;
+    row-gap: 5px;
+    margin: 10px 20px;
+}
+
+/* choice 2 column layout */
+
+.choiceBlock.choiceLayout_twocolumns {
+    display: grid;
+}
+
+.choiceBlock.choiceLayout_twocolumns {
+    grid-template-columns: minmax(0, max-content) minmax(0, max-content);
+}
+
+.choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_right {
+    justify-items: left;
+}
+
+.choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_left {
+    justify-items: right;
+}
+
+.choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_above, .choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_below {
+    justify-items: center;
+}
+
+.choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_above > .choiceCell, .choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_below > .choiceCell {
+    display: grid;
+    justify-items: center;
+}
+
+.choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_right > .choiceCell, .choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_left > .choiceCell {
+    display: grid;
+    grid-template-columns: minmax(0, max-content) minmax(0, max-content);
+    column-gap: 5px;
+}
+
+/* choice label only mode */
+
+.choiceBlock.choiceLabelPosition_only .choiceElement {
+	display: none;
+}
+
+.choiceAlignment_left > .choiceBlock.choiceLabelPosition_only {
+    justify-items: left;
+}
+
+.choiceAlignment_center > .choiceBlock.choiceLabelPosition_only {
+    justify-items: center;
+}
+
+.choiceAlignment_right > .choiceBlock.choiceLabelPosition_only {
+    justify-items: right;
+}
+
+.choiceBlock.choiceLabelPosition_only .jsMultipleChoice_label[data-status='checked'] {
+	border: 1px dashed #00a0da;
+}
+
+.choiceBlock.choiceLabelPosition_only .jsMultipleChoice_label {
+	padding: 5px;
+}
+
+.choiceBlock.choiceLabelPosition_only .jsMultipleChoice_label[data-status='clear'] {
+	border: 1px dashed rgba(0, 0, 0, 0);
+}
+
+@supports selector(:has(> .foo[a='b'])) {
+
+	/* revert CSS used for browsers that do not support this */
+	.choiceBlock.choiceLabelPosition_only .jsMultipleChoice_label {
+		border: none !important;
+	}
+
+	.choiceBlock.choiceLabelPosition_only .jsMultipleChoice_label {
+		padding: 0;
+	}
+
+	/* add new rules for browsers that support the :has() selector */
+	.choiceBlock.choiceLabelPosition_only  .choiceLabel:has( > .jsMultipleChoice_label[data-status='checked']) {
+		border: 1px dashed #00a0da;
+	}
+
+	.choiceBlock.choiceLabelPosition_only  .choiceLabel:has( > .jsMultipleChoice_label[data-status='clear']) {
+		border: 1px dashed rgba(0, 0, 0, 0);
+	}
+
+	.choiceBlock.choiceLabelPosition_only  .choiceLabel {
+		padding: 5px;
+	}
+
+}
+
+.oasysChoice > select {
+	font: inherit;
+	outline: none;
+}
+

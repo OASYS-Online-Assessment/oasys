@@ -1,0 +1,286 @@
+div#main {
+	overflow: auto;
+	padding-top: 30px;
+	box-sizing: border-box;
+}
+
+table#tracker {
+	width: calc(100% - 20px);
+	margin: 5px 10px;
+	position: relative;
+	border-collapse: collapse;
+	font-size: 14px;
+}
+
+tbody.category {
+	font-size: 14px;
+	margin-top: 20px;
+}
+
+span.categoryLevel {
+	display: inline-block;
+	min-width: 5vw;
+	margin-right: 20px;
+	pointer-events: none;
+}
+#categoryLevel>.outerPB{
+
+
+}
+
+tr.login {
+	margin-left: 25px;
+	font-size: 14px;
+}
+.categoryLabel{
+	font-size: 14px;
+	color: #333333;
+	font-weight: bolder;
+}
+tbody.category.closed > tr.login {
+	display: none;
+}
+
+tbody.category.closed > tr.categoryLabel > td:before {
+	content: "▸ ︎";
+}
+
+tbody.category:not(.closed) > tr.categoryLabel > td:before {
+	content: "▾ ︎";
+}
+
+tr.categoryLabel.hovered {
+	background-color: #56BAE8;
+	color: white;
+}
+
+td.leftSpace {
+	border-right: 1px #888 solid;
+}
+
+tr.login > td {
+	padding-left: 20px;
+}
+
+tr.login.hovered {
+	background-color: #e6e6e6;
+}
+
+
+tr.login.hovered {
+
+}
+
+.leftAligned {
+	text-align: left!important;
+}
+
+.centerAligned {
+	text-align: center!important;
+}
+
+.rightAligned {
+	text-align: right!important;
+}
+
+.spacer {
+	height: 10px;
+}
+
+div.status {
+	margin:5px;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+}
+
+tr.status_0 div.status {
+	background-color: #BEBEBE;
+}
+
+tr.status_1 div.status {
+	background-color: #22aa41;
+}
+
+tr.status_2 div.status {
+	background-color: #DD1A00;
+}
+
+tr.status_3 div.status {
+	background-color: #ffa700;
+}
+
+table#tracker.hideClosed tr.status_0 {
+	display: none;
+}
+
+table#tracker.hideTimeOut tr.status_2{
+	display: none;
+}
+
+table#settings {
+	font-size: 14px;
+	line-height: 16px;
+	width: 100%;
+}
+
+table#settings td:not(.panelTitle){
+	text-align: left;
+}
+
+header {
+	display: none;
+}
+
+.panelTitle {
+	color: #333;
+	font-weight: bolder;
+	font-size: 14px;
+	padding-bottom: 10px;
+	padding-top: 10px;
+	text-align: center; !important;
+	text-transform: uppercase;
+}
+
+td.panelDivider {
+	border-bottom: #666 1px solid;
+	height: 10px;
+}
+
+.outerPB {
+	height: 20px;
+	width: 150px;
+	border: 1px #bebebe solid;
+	line-height: 20px;
+	position: relative;
+}
+
+
+.innerPB {
+	background-color: #56bae8;
+	height: 100%;
+}
+
+.labelPB {
+	position: absolute;
+	width: 100%;
+	top: 0px;
+	left: 0;
+	text-align: center;
+	font-size: 12px;
+	font-weight: bolder;
+	color: #333333;
+	line-height: 20px;
+}
+
+.outerCPB {
+	height: 10px;
+	width: 100px;
+	border: none;
+	position: relative;
+}
+
+
+.innerCPB_closed {
+	background-color: #BEBEBE;
+	height: 100%;
+	float: left;
+}
+
+.innerCPB_active {
+	background-color: #22aa41;
+	height: 100%;
+	float: left;
+}
+
+.innerCPB_timeout {
+	background-color: #DD1A00;
+	height: 100%;
+	float: left;
+}
+
+table#settings label {
+	font-size: 0.8em;
+}
+
+table#settings input[type=text] {
+	border: #666 1px solid;
+	width: 100%;
+}
+
+table#details tr > td:first-of-type {
+	font-weight: bolder;
+	padding-right: 30px;
+	font-size: 14px;
+}
+
+table#details {
+	font-size: 14px;
+	border-spacing: 5px;
+	margin-top: 0;
+	background-color: transparent;
+}
+
+table#details a {
+	color: #56BAE8;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+table#details a:hover {
+	text-decoration: underline;
+}
+
+table#details h2{
+	color: #333333;
+	font-size: 20px;
+	margin: 0;
+}
+/***************************************
+
+ 	v3 additions and overrides
+
+***************************************/
+
+#monitoring_sections, #details_sections{
+	height: 30px;
+	line-height: 30px;
+	text-transform: uppercase;
+	font-size: 14px;
+	background-color: #333333;
+	border: none;
+	color: white;
+}
+
+.hidden {
+	display: none;
+}
+
+#controls {
+    margin-top: 32px;
+}
+
+#controls button {
+    margin-right: 12px;
+    margin-bottom: 8px;
+    padding: 8px 18px;
+    border: none;
+    border-radius: 5px;
+    background: #1976d2;
+    color: #fff;
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    transition: background 0.2s;
+}
+#controls button:last-child {
+    margin-right: 0;
+}
+#controls button:hover, #controls button:focus {
+    background: #1565c0;
+    outline: none;
+}
+
+#details:empty + #controls {
+    display: none;
+}

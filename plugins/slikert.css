@@ -1,0 +1,74 @@
+.slikertTooltip {
+	display: inline-block;
+	padding: 0 8px;
+	border-radius: 5px;
+	margin-bottom: 5px;
+}
+
+.slikertTooltip.hidden {
+	display: none;
+}
+
+.slikertTrackFrame {
+	height: 50px;
+	width: 100%;
+	position: relative;
+	z-index: 1;
+}
+
+div.slikertLabelFrame {
+	font-size: 12px;
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr;
+	column-gap: 30px;
+}
+
+div.slikertLabelLeft {
+	text-align: left;
+	vertical-align: top;
+}
+
+div.slikertLabelCentre {
+	text-align: center;
+	vertical-align: top;
+}
+
+div.slikertLabelRight {
+	text-align: right;
+	vertical-align: top;
+}
+
+div.slikertOutsideLabelLeft {
+	text-align: right;
+	font-size: 12px;
+}
+
+div.slikertOutsideLabelRight {
+	text-align: left;
+	font-size: 12px;
+}
+
+div.slikertNoReplyFrame {
+	margin-top: 30px;
+}
+
+div.slikertNoReplyFrame > .jsMultipleChoice_label {
+	margin-left: 10px;
+}
+
+div.slikertTrackGrid {
+	display: grid;
+	grid-column-gap: 10px;
+}
+
+div.slikertFrame.slikertLabelPosition_outside > .slikertLabelFrame {
+	display: none;
+}
+
+div.slikertFrame.slikertLabelPosition_below [class^=slikertOutsideLabel] {
+	display: none;
+}
+
+div.slikertFrame.slikertLabelPosition_none > .slikertLabelFrame, div.slikertLabelPosition_none [class^=slikertOutsideLabel] {
+	display: none;
+}

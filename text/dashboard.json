@@ -1,0 +1,134 @@
+{
+  "loggedInAs":{
+	"EN": "Logged in as",
+	"DE": "Eingeloggt unter",
+	"FR": "Loggé sous le nom",
+	"LU": "Ageloggt als"
+  },
+  "logout":{
+	"EN": "Logout",
+	"DE": "Abmelden",
+	"FR": "Déconnexion",
+	"LU": "Ausloggen"
+  },
+  "currentTestsTitle":{
+	"EN": "Current Tasks",
+	"DE": "Aktuelle Aufgaben",
+	"FR": "Tâches en cours",
+	"LU": "Aktuell Aufgaben"
+  },
+  "pastTestsTitle":{
+	"EN": "Past Tasks",
+	"DE": "Vergangene Aufgaben",
+	"FR": "Tâches passées",
+	"LU": "Vergangene Aufgaben"
+  },
+  "logoutButton":{
+	"EN": "Logout",
+	"DE": "Abmelden",
+	"FR": "Déconnexion",
+	"LU": "Ausloggen"
+  },
+  "testNotAvailable":{
+	"EN": "Task not available at this time",
+	"DE": "Aufgabe zu diesem Zeitpunkt nicht verfügbar",
+	"FR": "Tâche non disponible pour le moment",
+	"LU": "Aufgab zu desem Moment net verfügbar"
+  },
+  "noTestsAvailable": {
+	"EN": "No tasks available",
+	"DE": "Keine Aufgaben verfügbar",
+	"FR": "Aucune tâche disponible",
+	"LU": "Keng Aufgaben verfügbar"
+  },
+  "Mon": {
+	"EN": "Mon",
+	"DE": "Mo",
+	"FR": "Lun",
+	"LU": "Méi"
+  },
+  "Tue": {
+	"EN": "Tue",
+	"DE": "Di",
+	"FR": "Mar",
+	"LU": "Dë"
+  },
+  "Wed": {
+	"EN": "Wed",
+	"DE": "Mi",
+	"FR": "Mer",
+	"LU": "Më"
+  },
+  "Thu": {
+	"EN": "Thu",
+	"DE": "Do",
+	"FR": "Jeu",
+	"LU": "Do"
+  },
+  "Fri": {
+	"EN": "Fri",
+	"DE": "Fr",
+	"FR": "Ven",
+	"LU": "Fr"
+  },
+  "Sat": {
+	"EN": "Sat",
+	"DE": "Sa",
+	"FR": "Sam",
+	"LU": "Sa"
+  },
+  "Sun": {
+	"EN": "Sun",
+	"DE": "So",
+	"FR": "Dim",
+	"LU": "So"
+  },
+  "available": {
+	"EN": "available",
+	"DE": "verfügbar",
+	"FR": "disponible",
+	"LU": "verfügbar"
+  },
+  "every day": {
+	"EN": "every day",
+	"DE": "jeden Tag",
+	"FR": "tous les jours",
+	"LU": "all Dag"
+  },
+  "from": {
+	"EN": "from",
+	"DE": "von",
+	"FR": "de",
+	"LU": "vun"
+  },
+  "to": {
+	"EN": "to",
+	"DE": "bis",
+	"FR": "à",
+	"LU": "bis"
+  },
+  "requirePassword_msg": {
+	"EN": "This task requires a password to start. If you have not received any password, please ask your test administrator.",
+	"DE": "Diese Aufgabe erfordert ein Passwort zum Starten. Wenn Sie kein Passwort erhalten haben, wenden Sie sich bitte an Ihren Testadministrator.",
+	"FR": "Cette tâche nécessite un mot de passe pour commencer. Si vous n'avez pas reçu de mot de passe, veuillez demander à votre administrateur de test.",
+	"LU": "Dës Aufgab erfuerdert e Passwuert fir unzefänken. Wann Dir keen Passwuert kritt hutt, w.e.g. kontaktéiert Äre Testadministrateur."
+  },
+  "requirePassword_title": {
+	"EN": "Password Required",
+	"DE": "Passwort erforderlich",
+	"FR": "Mot de passe requis",
+	"LU": "Passwuert erfuerderlech"
+  },
+  "welcomeMessage": {
+	"EN": "Here you can see any tasks assigned to you. Some of them may require an additional password or may not be immediately available if they have been scheduled for a later date. Click on the task you want to start.",
+	"DE": "Hier können Sie alle Ihnen zugewiesenen Aufgaben sehen. Einige davon benötigen möglicherweise ein zusätzliches Passwort oder sind nicht sofort verfügbar, wenn sie für ein späteres Datum geplant wurden. Klicken Sie auf die Aufgabe, die Sie starten möchten.",
+	"FR": "Ici, vous pouvez voir toutes les tâches qui vous sont assignées. Certaines d'entre elles peuvent nécessiter un mot de passe supplémentaire ou ne pas être immédiatement disponibles si elles sont programmées pour une date ultérieure. Cliquez sur la tâche que vous souhaitez commencer.",
+	"LU": "Hei kënnt Dir all Aufgaben gesin, déi Iech zougewisen sinn. E puer dovun kënnen e weideren Passwuert erfuerderen oder sinn net direkt verfügbar, wann se fir en méi spéit Datum geplangt sinn. Klickt op d'Aufgab, déi Dir ufänke wëllt."
+  },
+  "filled": {
+	"EN": "filled",
+	"DE": "ausgefüllt",
+	"FR": "rempli",
+	"LU": "ausgefëllt"
+  }
+}

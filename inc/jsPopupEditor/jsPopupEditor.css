@@ -1,0 +1,69 @@
+#jsPopupEditorFrame {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 100;
+    backdrop-filter: blur(8px);
+}
+
+#jsPopupEditorWindow {
+	width: 1200px;
+	max-width: 90vw;
+	margin: 120px auto ;
+	height: calc(100vh - 250px);
+	background-color: #FFF;
+	display: flex;
+	flex-direction: column;
+}
+
+#jsPopupEditorBreadCrumbs {
+	padding: 10px 20px;
+}
+
+#jsPopupEditorBreadCrumbs:empty {
+	display: none;
+}
+
+#jsPopupEditorHeader {
+	height: 40px;
+	background-color: #217EAA;
+	line-height: 40px;
+	text-align: center;
+	color: white;
+}
+
+#jsPopupEditorBody {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+#jsPopupEditorMain {
+	height: 100%;
+	margin: 20px;
+	padding-bottom: 20px;
+	border-bottom: 2px solid #333;
+}
+
+#jsPopupEditorShortcuts {
+	color: #666;
+	font-size: 0.8em;
+	display: grid;
+	grid-auto-flow: column;
+	justify-content: center;
+	grid-column-gap: 40px;
+	padding: 0 20px;
+}
+
+.jspeShortcutForArrays {
+	display: none;
+}
+
+#jsPopupEditorButtonStrip {
+	height: 50px;
+	text-align: right;
+	padding: 0 20px;
+}

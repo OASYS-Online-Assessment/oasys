@@ -1,0 +1,17 @@
+.oasysOverview > .ovProgressTrack {
+    background-color: #CCC;
+    display: inline-block;
+    vertical-align: middle;
+    margin-bottom: 2px;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.oasysOverview > .ovProgressTrack > .ovProgressBar {
+    height: 100%;
+    min-width: 1px;
+}
+
+.oasysOverview > .ovProgressLabel {
+    margin-left: 0.5em;
+}

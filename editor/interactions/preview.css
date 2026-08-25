@@ -1,0 +1,545 @@
+.preview {
+    font-size: 16px;
+}
+
+.preview_warning {
+    background-color: #FF4400;
+    padding: 5px;
+    margin-top: 20px;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+}
+
+.preview_noWrap {
+    white-space: nowrap;
+    display: inline-block;
+}
+
+.preview_inlineWrapper {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.previewTag_CB {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    border: #888 1px solid;
+    border-radius: 0.2em;
+    vertical-align: middle;
+    margin: 3px;
+    background-color: white;
+}
+
+.previewTag_RB {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    border: #888 1px solid;
+    border-radius: 0.5em;
+    vertical-align: middle;
+    margin: 3px;
+    background-color: white;
+}
+
+.previewTag_DD {
+    display: inline-block;
+    width: 200px;
+    height: 1.5em;
+    border: #888 1px solid;
+    margin-right: 3px;
+    margin-left: 3px;
+    box-sizing: border-box;
+    padding-right: 5px;
+    text-align: right;
+    background-color: white;
+    vertical-align: middle;
+}
+
+.previewTag_TF {
+    display: inline-block;
+    width: 200px;
+    height: 1.5em;
+    border: #888 1px solid;
+    box-sizing: border-box;
+    background-color: white;
+    overflow: hidden;
+    vertical-align: middle;
+}
+
+.previewTag_TA {
+    display: inline-block;
+    width: calc(100% - 10px);
+    height: 6em;
+    border: #888 1px solid;
+    vertical-align: text-bottom;
+    margin-bottom: 2px;
+    margin-right: 3px;
+    margin-left: 3px;
+    overflow: hidden;
+    background-color: white;
+}
+
+.previewTag_button {
+    border: 1px solid #333;
+    padding: 2px 10px;
+    border-radius: 5px;
+    background-image: linear-gradient(to bottom, white 0%, #bababa 100%);
+	display: inline-block;
+}
+
+.quickPreview {
+    max-width: calc(100% - 25px);
+    pointer-events: none;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.previewTag_languageswitcher {
+    border: 1px solid black;
+    padding: 5px 10px;
+    display: inline-block;
+    margin-top: 10px;
+    position: relative;
+    box-sizing: border-box;
+    width: 180px;
+    text-align: left;
+}
+
+.previewTag_languageswitcher::after {
+    content: "\02023";
+    font-size: 50px;
+    position: absolute;
+    line-height: 17px;
+    right: 5px;
+    transform: rotate(90deg) scaleX(70%);
+    top: 6px;
+}
+
+/* choice block alignment */
+
+.choiceCell, .choiceCellInline {
+    align-items: center;
+}
+
+.choiceAlignment_left > .choiceBlock {
+	justify-content: left;
+}
+
+.choiceAlignment_center > .choiceBlock {
+	justify-content: center;
+}
+
+.choiceAlignment_right > .choiceBlock {
+	justify-content: right;
+}
+
+.choiceLabel > div:has(+span.previewTag_TF) {
+    display: inline-block;
+}
+
+/* choice vertical layout */
+.choiceBlock.choiceLayout_vertical {
+    display: grid;
+}
+
+.choiceBlock.choiceLayout_vertical.choiceLabelPosition_right, .choiceBlock.choiceLayout_vertical.choiceLabelPosition_left {
+	display: grid;
+	grid-template-columns: minmax(0, max-content);
+	column-gap:  10px;
+}
+
+.choiceBlock.choiceLayout_vertical.choiceLabelPosition_right .choiceCellInline, .choiceBlock.choiceLayout_vertical.choiceLabelPosition_left .choiceCellInline {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: 5px;
+    align-items: center;
+}
+
+.choiceBlock.choiceLayout_vertical.choiceLabelPosition_left {
+	justify-items: right;
+}
+
+.choiceBlock.choiceLayout_vertical.choiceLabelPosition_above, .choiceBlock.choiceLayout_vertical.choiceLabelPosition_below {
+	display: grid;
+	grid-template-columns: minmax(0, max-content);
+}
+
+.choiceBlock.choiceLayout_vertical.choiceLabelPosition_below .choiceCellInline, .choiceBlock.choiceLayout_vertical.choiceLabelPosition_above .choiceCellInline {
+    justify-items: center;
+}
+
+
+
+/* choice horizontal layout */
+
+.choiceBlock.choiceLayout_horizontal {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.choiceBlock.choiceLayout_horizontal .choiceCellInline {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    align-items: center;
+}
+
+.choiceBlock.choiceLayout_horizontal.choiceLabelPosition_right .choiceLabel {
+	margin-left: 5px;
+}
+
+.choiceBlock.choiceLayout_horizontal.choiceLabelPosition_left .choiceElement {
+	margin-left: 5px;
+}
+
+.choiceBlock.choiceLayout_horizontal .choiceCell {
+	display:  grid;
+	justify-items: center;
+	row-gap: 5px;
+	margin: 10px 20px;
+}
+
+/* choice 2 column layout */
+
+.choiceBlock.choiceLayout_twocolumns {
+    display: grid;
+}
+
+.choiceBlock.choiceLayout_twocolumns {
+    grid-template-columns: minmax(0, max-content) minmax(0, max-content);
+}
+
+.choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_right {
+	justify-items: left;
+}
+
+.choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_left {
+	justify-items: right;
+}
+
+.choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_above, .choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_below {
+	justify-items: center;
+}
+
+.choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_above > .choiceCell, .choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_below > .choiceCell {
+	display: grid;
+	justify-items: center;
+}
+
+.choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_right > .choiceCell, .choiceBlock.choiceLayout_twocolumns.choiceLabelPosition_left > .choiceCell {
+	display: grid;
+	grid-template-columns: minmax(0, max-content) minmax(0, max-content);
+    column-gap: 5px;
+}
+
+/* choice label only mode */
+
+.choiceBlock.choiceLabelPosition_only .choiceElement {
+	display: none;
+}
+
+.choiceAlignment_left > .choiceBlock.choiceLabelPosition_only {
+    justify-items: left;
+}
+
+.choiceAlignment_center > .choiceBlock.choiceLabelPosition_only {
+    justify-items: center;
+}
+
+.choiceAlignment_right > .choiceBlock.choiceLabelPosition_only {
+    justify-items: right;
+}
+
+.matrixBlock {
+    display: grid;
+}
+
+.matrixHeader {
+    display: grid;
+    grid-row: 1;
+    padding: 5px 10px;
+    font-size: 90%;
+}
+
+.matrixRow {
+    display: grid;
+    padding: 5px 10px;
+}
+
+.matrixRow:nth-child(2n) {
+    background-color: rgba(0,0,0,0.15);
+}
+
+.matrixChoicesRow:nth-child(2n+1) {
+    background-color: rgba(0,0,0,0.15);
+}
+
+.matrixBlock.tableLayout .matrixHeader > .matrixHeaderCell:first-child {
+    grid-column: 2;
+}
+
+.matrixRowLabel {
+    grid-row: 1;
+    grid-column: 1;
+    align-self: center;
+}
+
+.matrixHeaderCell {
+    text-align: center;
+    padding: 5px;
+    justify-self: center;
+    align-self: end;
+}
+
+.matrixChoiceCell {
+    text-align: center;
+    padding: 5px;
+    justify-self: center;
+    align-self: center;
+}
+
+
+.matrixBlock.stackedLayout .matrixHeaderCell {
+    grid-row: 1;
+}
+
+.matrixBlock.stackedLayout .matrixChoiceCell {
+    grid-row: 2;
+    margin-bottom: 20px;
+}
+
+.legend {
+    border: 1px solid #333;
+    display: inline-block;
+    padding: 5px 10px;
+}
+
+.matrixRowHovered {
+    background-color: #DDD;
+}
+
+.matrixChoiceCell .jsMultipleChoice_button {
+    bottom: 0;
+}
+
+.sliderTooltipFrame {
+    width: 48px;
+    text-align: center;
+}
+
+.sliderTooltip {
+    display: inline-block;
+    padding: 0 8px;
+    border-radius: 5px;
+    margin-bottom: 5px;
+    color: #FFFFFF;
+    background-color: #666666;
+}
+
+.sliderTrackFrame {
+    height: 50px;
+    width: 100%;
+    position: relative;
+    z-index: 1;
+}
+
+.sliderValuesFrame {
+    height: 25px;
+    width: 100%;
+    position: relative;
+    margin-top: -18px;
+    font-size: 12px;
+}
+
+.sliderValue {
+    position: absolute;
+    width: 100px;
+    text-align: center;
+}
+
+div.sliderLabelFrame {
+    font-size: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    column-gap: 30px;
+}
+
+div.sliderLabelLeft {
+    text-align: left;
+    vertical-align: top;
+}
+
+div.sliderLabelCenter {
+    text-align: center;
+    vertical-align: top;
+}
+
+div.sliderLabelRight {
+    text-align: right;
+    vertical-align: top;
+}
+
+div.sliderNoReplyFrame {
+    margin-top: 30px;
+}
+
+div.sliderNoReplyFrame > div {
+    display: inline-block;
+}
+
+.slikertTooltipFrame {
+    width: 48px;
+    text-align: center;
+}
+
+.slikertTooltipFrame.hidden {
+    display: none;
+}
+
+.slikertTooltip {
+    display: inline-block;
+    padding: 0 8px;
+    border-radius: 5px;
+    margin-bottom: 5px;
+    color: #FFFFFF;
+    background-color: #666666;
+}
+
+.slikertTrackFrame {
+    height: 50px;
+    width: 100%;
+    position: relative;
+    z-index: 1;
+}
+
+div.slikertLabelFrame {
+    font-size: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    column-gap: 30px;
+}
+
+div.slikertLabelLeft {
+    text-align: left;
+    vertical-align: top;
+}
+
+div.slikertLabelCenter {
+    text-align: center;
+    vertical-align: top;
+}
+
+div.slikertLabelRight {
+    text-align: right;
+    vertical-align: top;
+}
+
+div.slikertOutsideLabelLeft {
+    text-align: right;
+    font-size: 12px;
+}
+
+div.slikertOutsideLabelRight {
+    text-align: left;
+    font-size: 12px;
+}
+
+div.slikertNoReplyFrame {
+    margin-top: 30px;
+}
+
+div.slikertNoReplyFrame > div {
+    display: inline-block;
+}
+
+div.slikertTrackGrid {
+    display: grid;
+    grid-column-gap: 10px;
+}
+
+div.slikertFrame.slikertLabelPosition_outside > .slikertLabelFrame {
+    display: none;
+}
+
+div.slikertFrame.slikertLabelPosition_below [class^=slikertOutsideLabel] {
+    display: none;
+}
+
+div.slikertFrame.slikertLabelPosition_none > .slikertLabelFrame, div.slikertLabelPosition_none [class^=slikertOutsideLabel] {
+    display: none;
+}
+
+/* inline interaction */
+.previewTag_inlineText {
+    display: inline-block;
+    border-bottom: #888 1px solid;
+    box-sizing: border-box;
+    overflow: hidden;
+    vertical-align: bottom;
+    line-height: calc(1.7em - 2px);
+    color: #ff8606;
+}
+
+.inlineText_center {
+    text-align: center;
+}
+
+.inlineText_left {
+    text-align: left;
+}
+
+.inlineText_right {
+    text-align: right;
+}
+
+.inlineInteractionText {
+    line-height: 1.7em;
+}
+
+.previewTag_inlineGap {
+    display: inline-block;
+    margin: -3px 1px 0 1px;
+    padding: 0 5px;
+    box-sizing: border-box;
+    overflow: hidden;
+    vertical-align: middle;
+    height: 1.4em;
+    border-radius: 5px;
+    background-color: #d6d6d6;
+}
+
+.previewTag_inlineDraggableStock {
+    margin-top: 20px;
+    padding: 5px;
+    box-sizing: border-box;
+    border-radius: 5px;
+    min-height: 2em;
+    border: 1px dashed #888;
+    background-color: #d6d6d6;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.previewTag_inlineDraggable {
+    display: inline-block;
+    padding: 0 5px;
+    box-sizing: border-box;
+    overflow: hidden;
+    vertical-align: middle;
+    line-height: calc(1.4em - 2px);
+    text-align: center;
+    background-color: #ffe1ab;
+    border-radius: 5px;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.legendLabel {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+}

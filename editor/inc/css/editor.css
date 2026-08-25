@@ -1,0 +1,13 @@
+body {
+	font-size: 12pt;
+}
+
+img {
+	cursor: default;
+}
+
+span.oasysTag {
+	border: 1px dashed #888;
+	cursor: default;
+	display: inline-block;
+}

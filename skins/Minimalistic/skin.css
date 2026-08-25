@@ -1,0 +1,228 @@
+/* media queries used
+
+// Small devices (landscape phones, 576px and up)
+@media (min-width: 576px) { ... }
+
+// Medium devices (tablets, 768px and up)
+@media (min-width: 768px) { ... }
+
+// Large devices (desktops, 992px and up)
+@media (min-width: 992px) { ... }
+
+// Extra large devices (large desktops, 1200px and up)
+@media (min-width: 1200px) { ... }
+
+*/
+
+html {
+	overflow: hidden;
+	height: 100%;
+	width: 100%;
+	position: fixed;
+}
+
+body {
+	overflow: hidden;
+	-ms-touch-action: none;
+	-webkit-tap-highlight-color: transparent;
+	-webkit-touch-callout: none;
+	height: 100%;
+	width: 100%;
+}
+
+a {
+	text-decoration: none;
+	color: black;
+}
+
+/* grid, responsive elements */
+#stimulus {
+	position: relative;
+	box-sizing: border-box;
+}
+
+.column,
+.columns {
+    width: 100%;
+    float: left;
+    box-sizing: border-box;
+}
+
+.column img,
+.columns img {
+    width: 100% !important;
+    height: auto !important;
+}
+
+
+@media (min-width: 550px) {
+
+	.column,
+    .columns {
+        margin-left: 4%;
+    }
+
+    .column:first-child,
+    .columns:first-child {
+        margin-left: 0;
+    }
+
+    .six.columns {
+        width: 48%;
+    }
+
+    .twelve.columns {
+        width: 100%;
+        margin-left: 0;
+    }
+
+}
+
+.container:after,
+.row:after,
+.u-cf {
+    content: "";
+    display: table;
+    clear: both;
+}
+/* ########################## */
+
+#contentWrapper {
+	position: relative;
+	overflow: hidden;
+	height: 100%;
+	min-width: 320px;
+}
+
+#skinWrapper {
+	width: 100%;
+	margin-left: auto;
+	margin-right: auto;
+	position: relative;
+	overflow: hidden;
+	height: 100%;
+}
+
+@media (min-width: 1024px) { 
+	#skinWrapper {width: 1024px;}
+}
+
+/********/
+@media (max-width: 1024px) {
+	.nxDialog img {
+		width: 30% !important;
+		height: auto !important;
+	}
+}
+
+#main {
+	top: 0;
+	bottom: 0;
+	padding: 25px 12px 0 12px;
+	width: 100%;
+	box-sizing: border-box;
+	position: absolute;
+	overflow-x: hidden;
+	overflow-y: auto;
+	-ms-overflow-style: -ms-autohiding-scrollbar;
+	/*-webkit-overflow-scrolling: touch;*/
+}
+
+@media (min-width: 1048px) { /* 1024 plus 2x 12 padding */
+	#main {width: 1024px;}
+}
+
+#stimulus, #question {
+	margin-left: 0;
+	font-size: 16px;
+}
+
+#stimulus > *:first-child {
+	margin-top: 0;
+}
+
+#stimulus > *:last-child {
+	margin-bottom: 50px;
+}
+
+/* text fields */
+
+.oasysTextfield > input {
+	border: 1px solid #D9D9D9;
+	color: #4D4D4D;
+	padding: 0.2em;
+}
+
+.oasysTextfield > input:focus {
+	border-color:  #5C9CB5;
+}
+
+.oasysTextarea > textarea {
+	border: 1px solid #D9D9D9;
+	color: #4D4D4D;
+	padding: 0.2em;
+}
+
+.oasysTextarea > textarea:focus {
+	border-color:  #5C9CB5;
+}
+
+/* jsMultipleChoice */
+
+.jsMultipleChoice_button.jsMCTheme_oasys.readonly {
+	filter: contrast(40%) brightness(150%) grayscale(100%);
+	-webkit-filter: contrast(40%) brightness(150%) grayscale(100%);
+	color: #CCC;
+}
+
+.jsMultipleChoice_button.jsMCTheme_oasys {
+	border: 2px solid #D9D9D9;
+	background-color: #FFF;
+	vertical-align: middle;
+	bottom: 2px;
+	margin: 2px;
+}
+
+.jsMultipleChoice_button[data-type="cb"].jsMCTheme_oasys, .jsMultipleChoice_button[data-type="boolean"].jsMCTheme_oasys {
+	border-radius: 3px;
+}
+
+.jsMultipleChoice_button[data-type="rb"].jsMCTheme_oasys {
+	border-radius: 50%;
+}
+
+.jsMultipleChoice_button.jsMCTheme_oasys[data-status="checked"], .jsMultipleChoice_button.jsMCLabelHovered.jsMCTheme_oasys:not(.readonly), .jsMultipleChoice_button.jsMCHovered.jsMCTheme_oasys:not(.readonly) {
+	border-color: #057EB6;
+}
+
+.jsMultipleChoice_button.jsMCTheme_oasys[data-type="cb"][data-status="checked"] > .jsmcCheckmark, .jsMultipleChoice_button.jsMCTheme_oasys[data-type="boolean"][data-status="checked"] > .jsmcCheckmark {
+	width: inherit;
+	height: inherit;
+	background-size: contain;
+	position: absolute;
+	background: #057EB6 url(images/checkmark.svg) no-repeat 0 50%;
+}
+
+.jsMultipleChoice_button.jsMCTheme_oasys[data-type="rb"][data-status="checked"] > .jsmcCheckmark {
+	width: calc(100% - 6px);
+	height: calc(100% - 6px);
+	left: 3px;
+	top: 3px;
+	border-radius: 50%;
+	background-color: #057EB6;
+	position: absolute;
+}
+
+/*** tables ***/
+
+table.striped {
+	border-collapse: collapse;
+}
+
+table.striped tr > td {
+	padding: 3px;
+}
+
+table.striped tr:nth-child(2n) {
+	background-color: #E6E6E6
+}

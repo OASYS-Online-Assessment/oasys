@@ -1,0 +1,153 @@
+@charset "UTF-8";
+/* jsDropList CSS updated in version 1.73 */
+
+.jsDropListContainer {
+	position: relative;
+	display: inline-block;
+	max-width: 100%;
+}
+
+.jsDropListContainer .readonly{
+	cursor: default;
+	text-align: center;
+}
+
+p[id^=dlTitle] {
+	margin: 0;
+	cursor: pointer;
+	padding: 0.2em 2em 0.2em 0.5em;
+	position: relative;
+	box-sizing: border-box;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.jsDropListVeil.collapsed > * {
+	display: none;
+}
+
+.jsDropListVeil.expanded {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 999;
+}
+
+ul[id^=dlList] {
+	position: absolute;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	overflow: auto;
+	max-height: 150px;
+	box-sizing: border-box;
+	scrollbar-width: none;
+}
+
+ul[id^=dlList].jsDL_showScrollBar {
+	padding-right: 15px;
+}
+
+ul[id^=dlList]:not(.jsDL_showScrollBar) + div[id^=dlListScrollBar] {
+	display: none;
+}
+
+div[id^=dlListScrollBar] {
+	display: block;
+	position: absolute;
+	box-sizing: border-box;
+	width: 14px;
+	overflow: hidden;
+}
+
+div[id^=dlListScrollHandle] {
+	position: absolute;
+	box-sizing: border-box;
+	top: 0;
+	width: 13px;
+	height: 20px;
+	border: 2px solid white;
+}
+
+ul[id^=dlList] li {
+	padding: 3px 5px;
+	cursor: pointer;
+}
+
+ul[id^=dlList].readonly li {
+	cursor: default;
+}
+
+svg#dlDownArrowIcon {
+	position: absolute;
+	z-index: 1;
+	right: 0.3em;
+	width: 1em;
+	top: 0;
+	height: 100%;
+	fill: currentColor;
+	pointer-events: none;
+}
+
+/**** default theme ****/
+
+.jsDLTheme_default {
+	color:  inherit;
+	border-color: inherit;
+}
+
+.jsDropListContainer.jsDLTheme_default {
+	background-color:  white;
+}
+
+.jsDropListContainer.jsDLTheme_default p[id^=dlTitle] {
+	color: inherit;
+	border-style: solid;
+	border-width: 1px;
+	border-color: inherit;
+}
+
+.jsDropListContainer.jsDLTheme_default p[id^=dlTitle].readonly{
+	color: #AAA;
+	border-color: #AAA;
+	background-color: #f1f1f1;
+}
+
+.jsDropListVeil.jsDLTheme_default ul[id^=dlList] {
+	background-color: white;
+	border-style: solid;
+	border-width: 1px;
+	border-color: inherit;
+}
+
+.jsDropListVeil.jsDLTheme_default ul[id^=dlList].active li.jsdl_hovered:not(.selected) {
+	background-color: #0baefe;
+	color: #ffffff;
+}
+.jsDropListVeil.jsDLTheme_default ul[id^=dlList].active li.jsdl_hovered.selected {
+	background-color: #227DAA;
+	color: white;
+}
+
+.jsDropListVeil.jsDLTheme_default ul[id^=dlList] li.selected {
+	background-color: #175978;
+	color: white;
+	font-weight: bolder;
+}
+
+.jsDropListVeil.jsDLTheme_default div[id^=dlListScrollBar] {
+		background-color: #FFF;
+		border-left: 1px solid #AAA;
+}
+
+.jsDropListVeil.jsDLTheme_default div[id^=dlListScrollHandle] {
+		background-color: #888;
+}
+
+.jsDropListVeil.jsDLTheme_default ul::-webkit-scrollbar {
+    display: none;
+}

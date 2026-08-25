@@ -1,0 +1,5 @@
+/* this must never be overriden, otherwise draggables with images will no longer drag */
+
+.jsDraggable img {
+    pointer-events: none!important;
+}

@@ -1,0 +1,7 @@
+span.oasysLink {
+    cursor: pointer;
+}
+
+span.oasysLink.oasysLinkHovered {
+    color: #ff00ff;
+}

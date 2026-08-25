@@ -1,0 +1,39 @@
+body.testPaused * {
+	pointer-events: none;
+}
+
+body.testPaused #contentWrapper {
+	visibility: hidden;
+}
+
+.oasysInteractionBlock {
+	margin-bottom: 40px;
+}
+
+.oasysInteractionBlock:last-child {
+	margin-bottom: 20px;
+}
+
+.oasysQuestion {
+	margin-bottom: 20px;
+}
+
+span.oasysConceptMap {
+	display: block;
+	text-align: center;
+}
+
+iframe#externalEditor {
+	width: 100%;
+	height: 100%;
+	position: absolute;
+	z-index: 99999;
+	border: none;
+}
+
+.layout_inlineWrapper {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: 5px;
+}

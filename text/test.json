@@ -1,0 +1,188 @@
+{
+  "connectionLost": {
+    "EN": "The connection to the server has been lost. Please check your network cable resp. wifi connection. As soon as the connection is reestablished the test will resume automatically.",
+    "DE": "Die Verbindung zum Server ist abgebrochen. Überprüfen Sie das Netzwerkkabel, bzw. die Wifi-Verbindung. Sobald die Verbindung wieder hergestellt ist, läuft der Test automatisch weiter.",
+    "FR": "La connection avec le serveur est interrompue. Veuillez vérifier votre cable réseau resp. la connection sans fil. Quand la connection est rétablie, le test va continuer automatiquement.",
+    "LU": "D'Verbindung zum Server ass ofgebrach. Iwwerpréift wgl. Ären Netzwierk-Kabel respektiv d'Wifi-Connexioun. Esoubal d'Verbindung nees hiergestallt ass, leeft den Test automatesch weider."
+  },
+  "connectionLostTitle": {
+    "EN": "Network problems",
+    "DE": "Netzwerk gestört",
+    "FR": "Problèmes de réseau",
+    "LU": "Netzwierk-Stéierungen"
+  },
+  "duplicateFieldInstances": {
+    "EN": "The field '%@' is contained more than once in the item. Only the first occurrence can be rendered.",
+    "DE": "Das Feld '%@' kommt mehr als einmal im Item vor. Nur das erste kann dargestellt werden!",
+    "FR": "Le champs '%@' est inclus plus qu'une fois dans l'item. Uniquement la première occurence peut être montrée.",
+    "LU": "D'Feld '%@' kënnt méi wéi eemol am Item vir. Just déi éischt Occurrence kann ugewise ginn."
+  },
+  "hours": {
+    "EN": "hours",
+    "DE": "Stunden",
+    "FR": "heures",
+    "LU": "Stonnen"
+  },
+  "minutes": {
+    "EN": "min",
+    "DE": "Min",
+    "FR": "min",
+    "LU": "Min"
+  },
+  "missingFieldInstance": {
+    "EN": "The field '%@' is missing in this version of the item.",
+    "DE": "Das Feld '%@' fehlt in dieser Version des Items.",
+    "FR": "Le champs '%@' manque dans cette version de l'item.",
+    "LU": "D'Feld '%@' feelt an dëser Versioun vum Item."
+  },
+  "next": {
+    "EN": "Next",
+    "DE": "Weiter",
+    "FR": "Suivant",
+    "LU": "Weider"
+  },
+  "noLanguageEnabled": {
+    "EN": "No language has been enabled for this test. Please contact the test author!",
+    "DE": "Für diesen Test wurde keine Sprache aktiviert. Bitte kontaktieren Sie den Autor des Tests!",
+    "FR": "Aucune langue n'a été activé pour ce test. Veuillez contacter l'auteur du test!",
+    "LU": "Dësen Test huet keng aktiv Sprooch. Kontaktéiert wgl. den Auteur vum Test!"
+  },
+  "previous": {
+    "EN": "Previous",
+    "DE": "Zurück",
+    "FR": "Précédent",
+    "LU": "Zeréck"
+  },
+  "proceedButton": {
+    "EN": "Proceed",
+    "DE": "Fortfahren",
+    "FR": "Continuer",
+    "LU": "Weider"
+  },
+  "returnButton": {
+    "EN": "Return",
+    "DE": "Zurück",
+    "FR": "Retour",
+    "LU": "Zeréck"
+  },
+  "seconds": {
+    "EN": "sec",
+    "DE": "Sek",
+    "FR": "sec",
+    "LU": "Sek"
+  },
+  "timeOverProceed": {
+    "EN": "The time is up. Please click the button in order to proceed to the next part!",
+    "DE": "Die Zeit ist abgelaufen. Klicken Sie bitte auf den Button, um mit dem nächsten Teil fortzufahren!",
+    "FR": "Le temps est écoulé. Veuillez cliquer sur le bouton pour passer à la partie suivante !",
+    "LU": "D'Zäit ass ofgelaf. Klickt wgl. op de Knäppchen, fir mam nächsten Deel weiderzefueren."
+  },
+  "timeOverReturn": {
+    "EN": "The time is up. Please click the button in order to return to the login screen!",
+    "DE": "Die Zeit ist abgelaufen. Klicken Sie bitte auf den Button, um zum Login zurückzukehren.",
+    "FR": "Le temps est écoulé. Veuillez cliquer sur le bouton pour revenir à l'écran de connexion !",
+    "LU": "D'Zäit ass ofgelaf. Klickt wgl. op de Knäppchen, fir bei de Login-Schierm zeréckzekommen."
+  },
+  "timeOverTitle": {
+    "EN": "Time is up",
+    "DE": "Die Zeit ist abgelaufen",
+    "FR": "Le temps est écoulé",
+    "LU": "D'Zäit ass eriwwer"
+  },
+  "endProceed": {
+    "EN": "You reached the end of this part. Please click the button in order to proceed to the next part!",
+    "DE": "Sie haben das Ende dieses Teils erreicht. Klicken Sie bitte auf den Button, um mit dem nächsten Teil fortzufahren!",
+    "FR": "Vous avez atteint la fin de cette partie. Veuillez cliquer sur le bouton afin de passer à la partie suivante !",
+    "LU": "Dir sidd um Enn vum dësem Deel ukomm. Klickt wgl. op de Knäppchen, fir mam nächsten Deel weiderzefueren."
+  },
+  "endReturn": {
+    "EN": "You reached the end of this test. Please click the button in order to return to the login screen!",
+    "DE": "Sie haben das Ende dieses Tests erreicht. Klicken Sie bitte auf den Button, um zum Login zurückzukehren.",
+    "FR": "Vous avez atteint la fin de ce test. Veuillez cliquer sur le bouton afin de revenir à l'écran de connexion !",
+    "LU": "Dir sidd um Enn vum dësem Deel ukomm. Klickt wgl. op de Knäppchen, fir bei de Login-Schierm zeréckzekommen."
+  },
+  "forceLogoffReturn": {
+    "EN": "The access has been revoked. Please click the button in order to return to the login screen!",
+    "DE": "Der Zugang wurde gesperrt. Klicken Sie bitte auf den Button, um zum Login zurückzukehren.",
+    "FR": "L'accès a été révoqué. Veuillez cliquer sur le bouton pour revenir à l'écran de connexion !",
+    "LU": "Den Accès ass gespaart ginn.  Klickt wgl. op de Knäppchen, fir  bei de Login-Schierm zeréckzekommen."
+  },
+  "forceLogoffTitle": {
+    "EN": "The access has been revoked",
+    "DE": "Der Zugang wurde gesperrt",
+    "FR": "L'accès a été révoqué",
+    "LU": "Den Accès ass gespaart ginn"
+  },
+  "externalEditorButton": {
+    "EN": "Open editor",
+    "DE": "Editor öffnen",
+    "FR": "Ouvrir éditeur",
+    "LU": "Den Editor opmaachen"
+  },
+  "editorNotFound": {
+    "EN": "External editor could not be found. Please verify system settings!",
+    "DE": "Externer Editor konnte nicht gefunden werden. Bitte überprüfen Sie die Systemeinstellungen!",
+    "FR": "Éditeur externe n'a pas été trouvé. Veuillez vérifier vos réglages de système!",
+    "LU": "Den externen Editor konnt net lokaliséiert ginn. Iwwerpréift wgl. d'System-Astellungen!"
+  },
+  "cannotRenderField": {
+    "EN": "Cannot render this field due to errors in its configuration",
+    "DE": "Dieses Feld kann nicht dargestellt werden, wegen Fehler in dessen Konfiguration",
+    "FR": "Impossible de présenter ce champ pour causes d'erreurs dans sa configuration",
+    "LU": "Dëst Feld kann net duergestallt ginn, well et falsch konfiguréiert ass."
+  },
+  "noTestContent": {
+    "EN": "No contents were defined for this test.",
+    "DE": "Es wurde kein Inhalt für diesen Test definiert.",
+    "FR": "Aucun contenu n'a été défini pour ce test.",
+    "LU": "Et gouf kee Contenu fir dësen Test definéiert."
+  },
+  "launchingTest": {
+    "EN": "Error while starting test",
+    "DE": "Fehler beim Starten des Tests",
+    "FR": "Erreur lors du démarrage du test",
+    "LU": "Feeler beim Starte vum Test"
+  },
+  "dyslexic": {
+    "EN": "dyslexia",
+    "DE": "Dyslexie",
+    "FR": "Dyslexie",
+    "LU": "Dyslexie"
+  },
+  "imageLoadError": {
+    "EN": "The image with the id '%@' could not be loaded. Please contact the technical support!",
+    "DE": "Das Bild mit der Id '%@' konnte nicht geladen werden. Bitte kontaktieren Sie den technischen Support!",
+    "FR": "L'image avec l'identifiant '%@' n'a pas pu être chargée. Veuillez contacter le support technique !",
+    "LU": "D'Bild matt der Id '%@' konnt net geluede ginn. Kontaktéiert wgl. den technesche Support!"
+  },
+  "privacyPolicy": {
+    "EN": "Privacy Policy",
+    "DE": "Datenschutz",
+    "FR": "Politique de confidentialité",
+    "LU": "Dateschutz"
+  },
+  "privacyPolicyTitle": {
+    "EN": "Privacy Policy",
+    "DE": "Datenschutzerklärung",
+    "FR": "Politique de confidentialité",
+    "LU": "Dateschutzerklärung"
+  },
+  "noPrivacyPolicy": {
+    "EN": "No privacy policy has been defined.",
+    "DE": "Es wurde keine Datenschutzerklärung definiert.",
+    "FR": "Aucune politique de confidentialité n'a été définie.",
+    "LU": "Et gouf keng Dateschutzerklärung definéiert."
+  },
+  "scoringStarted": {
+    "EN": "The test administrator has started scoring the test. You cannot continue editing the test.",
+    "DE": "Der Test Administrator hat mit der Bewertung des Tests begonnen. Sie können den Test nicht mehr weiter bearbeiten.",
+    "FR": "L'administrateur du test a commencé à évaluer le test. Vous ne pouvez plus continuer à éditer le test.",
+    "LU": "De Test-Administrator huet ugefaangen, de Test ze bewäerten. Dir kënnt den Test net méi weider beschaffen."
+  },
+  "invalidItem": {
+    "EN": "One or more interactions on this page are invalid. Please contact the technical support!",
+    "DE": "Eine oder mehrere Interaktionen in dieser Seite sind ungültig. Bitte kontaktieren Sie den technischen Support!",
+    "FR": "Une ou plusieurs interactions sur cette page sont invalides. Veuillez contacter le support technique !",
+    "LU": "Eng oder méi Interaktiounen op dëser Säit sinn ongëlteg. Kontaktéiert wgl. den technesche Support!"
+  }
+}

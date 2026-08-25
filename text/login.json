@@ -1,0 +1,62 @@
+{
+  "invalidLogin": {
+	"EN": "The login and password that you entered are not valid.",
+	"DE": "Die von Ihnen eingegebenen Anmeldedaten und das Passwort sind ungültig.",
+	"FR": "Le login et mot de passe que vous avez entré ne sont pas valides.",
+	"LU": "De Login an d'Passwuert, déi agetippt goufen, sinn net valid."
+  },
+  "invalidTestData": {
+	"EN": "The login and password you entered are valid, however no test has been linked to these credentials.",
+	"DE": "Die von Ihnen eingegebenen Anmeldedaten und das Passwort sind zwar gültig, aber es wurde kein Test mit diesen Daten verknüpft.",
+	"FR": "Le login et le mot de passe que vous avez entré sont valides, mais aucun test n'a été lié à cet identifiant.",
+	"LU": "De Login an d'Passwuert, déi agetippt goufen, si valid, mee et ass keen Test mat dësen Date verknëppt."
+  },
+  "welcome": {
+	"EN": "Welcome",
+	"DE": "Willkommen",
+	"FR": "Bienvenu",
+	"LU": "Wëllkomm"
+  },
+  "login": {
+	"EN": "login",
+	"DE": "Login",
+	"FR": "login",
+	"LU": "Login"
+  },
+  "loginInUse": {
+	"EN": "This login is in use on a different device already.",
+	"DE": "Dieses Login wird bereits auf einem anderen Gerät verwendet.",
+	"FR": "Ce login est déjà actif sur un autre ordinateur.",
+	"LU": "Dëse Login ass schonn op engem anere Gerät am Gebrauch."
+  },
+  "password": {
+	"EN": "password",
+	"DE": "Passwort",
+	"FR": "mot de passe",
+	"LU": "Passwuert"
+  },
+  "start": {
+	"EN": "Start",
+	"DE": "Start",
+	"FR": "Démarrer",
+	"LU": "Start"
+  },
+  "testClosed": {
+	"EN": "This login has already been used. You can no longer log in with it.",
+	"DE": "Dieses Login wurde schon benutzt. Sie können sich damit nicht mehr einloggen.",
+	"FR": "Ce login est déjà usé. Vous ne pouvez plus l'utiliser.",
+	"LU": "Dëse Login gouf schonns benotzt. Dir kënnt Iech net méi domat aloggen."
+  },
+  "testLocked": {
+	"EN": "Access is currently blocked. This test can be accessed only during a predefined schedule.",
+	"DE": "Der Zugang ist derzeit gesperrt. Auf diesen Test kann nur während eines vordefinierten Zeitplans zugegriffen werden.",
+	"FR": "L'accès est actuellement bloqué. Ce test n'est accessible que selon un horaire prédéfini.",
+	"LU": "Den Zougang as momentan gespaart. Op dësen Test kann nëmmen an engem fest definéierten Zäitplang zougegraff ginn."
+  },
+  "testDeactivated": {
+	"EN": "This test is currently deactivated.",
+	"DE": "Dieser Test ist derzeit deaktiviert.",
+	"FR": "Ce test est actuellement désactivé.",
+	"LU": "Desen Test as momentan deaktivéiert."
+  }
+}

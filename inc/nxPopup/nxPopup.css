@@ -1,0 +1,30 @@
+.blurred3 {
+	-webkit-filter: blur(3px);
+}
+
+.nxPopupVeil {
+	background-color: rgba(255, 255, 255, 0.5);
+	position: fixed;
+	left: 0px;
+	right: 0px;
+	top:  0px;
+	bottom: 0px;
+	z-index: 1000;
+}
+
+.nxPopup {
+	-moz-box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.29);
+	-webkit-box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.29);
+	box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.29);
+	position: absolute;
+	padding: 10px 20px;
+	background: #fdfdfd; /* Old browsers */
+	background: -moz-linear-gradient(top,  #fdfdfd 0%, #dbdbdb 100%); /* FF3.6+ */
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#fdfdfd), color-stop(100%,#dbdbdb)); /* Chrome,Safari4+ */
+	background: -webkit-linear-gradient(top,  #fdfdfd 0%,#dbdbdb 100%); /* Chrome10+,Safari5.1+ */
+	background: -o-linear-gradient(top,  #fdfdfd 0%,#dbdbdb 100%); /* Opera 11.10+ */
+	background: -ms-linear-gradient(top,  #fdfdfd 0%,#dbdbdb 100%); /* IE10+ */
+	background: linear-gradient(to bottom,  #fdfdfd 0%,#dbdbdb 100%); /* W3C */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#fdfdfd', endColorstr='#dbdbdb',GradientType=0 ); /* IE6-9 */
+	border: 1px solid #888;
+}

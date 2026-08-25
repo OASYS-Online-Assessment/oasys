@@ -1,0 +1,195 @@
+iFrame#studentLoginFrame {
+    border: none;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    z-index: 99998;
+    top: 0;
+    left: 0;
+    background-color: white;
+}
+
+#contentWrapper {
+    max-width: 100vw;
+    width: 1000px;
+    height: 100%;
+    margin: auto;
+    overflow: auto;
+}
+
+#header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #00374D;
+    padding: 10px;
+    color: #EEE;
+}
+
+#headerText {
+    text-align: left;
+}
+
+#headerButtons {
+    text-align: right;
+}
+
+#welcomeContainer {
+    padding: 20px 12px;
+}
+
+#welcomeTitle {
+    font-size: 32px;
+    margin: 12px 0;
+    text-align: center;
+}
+
+#welcomeText {
+    color: #747474;
+    padding: 20px 12px;
+}
+
+#main {
+    max-width: 1024px;
+    margin: 0 auto;
+}
+
+.testItemTitle {
+    display: grid;
+    padding: 0 15px;
+    grid-template-columns: 1fr 60px;
+    grid-column-gap: 10px;
+    width: 100%;
+    font-size: 0.8em;
+    box-sizing: border-box;
+}
+
+.testItemTitle:has(+.testList:empty) {
+    display: none;
+}
+
+.testItemTitleRight {
+    grid-column: 2/3;
+    text-align: center;
+}
+
+.testItem {
+    display: grid;
+    padding: 10px 15px;
+    grid-template-columns: 1fr 60px;
+    grid-column-gap: 10px;
+    width: 100%;
+    border-radius: 4px;
+    background-color: rgb(221, 241, 255);
+    margin: 4px 0;
+    transition: background-color 0.1s ease-in-out;
+    box-sizing: border-box;
+}
+
+.testItem.testAvailability_false {
+    filter: grayscale(1);
+    cursor: not-allowed;
+}
+
+.testItem:hover {
+    background-color: rgb(142, 255, 183);
+}
+
+.testTitle {
+    grid-column: 1/2;
+    font-size: 16px;
+    font-weight: 600;
+    color: rgb(58, 58, 58);
+}
+
+.testProgress {
+    grid-column: 2/3;
+    grid-row: 1 / 4;
+    font-size: 1.2em;
+    align-self: center;
+    justify-self: center;
+}
+
+.testStatus {
+    grid-column: 1/2;
+    grid-row: 2/3;
+}
+
+.testStatus:empty {
+    display: none;
+}
+
+.testStatus:not(:empty) + .testDateRange, .testStatus:not(:empty) + .testDateRange + .testTimeRange {
+    display: none;
+}
+
+.testDateRange {
+    grid-column: 1/2;
+    grid-row: 2/3;
+}
+
+.testTimeRange {
+    grid-column: 1/2;
+    grid-row: 3/4;
+}
+
+#currentTestsListContainer, #pastTestsListContainer {
+    width: 100%;
+}
+
+.testlistTitleContainer {
+    display: inline-flex;
+    width: 100%;
+    margin: 20px 0;
+}
+
+.testsListTitle {
+    font-size: 18px;
+    padding: 0 40px;
+    white-space: nowrap;
+}
+
+.line {
+    width: 100%;
+    height: 2px;
+    background-color: #d3d3d3;
+    align-self: center;
+}
+
+.progressBarIncomplete {
+    background-color: rgb(255, 144, 32) !important;
+}
+
+.progressBarComplete {
+    background-color: #24A000;
+}
+
+.testProgressContainer.progressBarHidden {
+    visibility: hidden;
+}
+
+.testProgressContainer.progressBarVisible {
+    visibility: visible;
+}
+
+.noTestAvailablePlaceholder {
+    text-align: center;
+    padding: 10px 15px;
+    width: 100%;
+    border-radius: 4px;
+    background-color: rgb(255, 238, 191);
+    margin: 4px 0;
+    box-sizing: border-box;
+}
+
+.testList:not(:empty) + .noTestAvailablePlaceholder {
+    display: none;
+}
+
+#pastTestsListContainer:has(.testList:empty) {
+    display: none;
+}
+
+.testItem.testState_expired .accessDetails, .testItem.testState_finished .accessDetails {
+    display: none;
+}

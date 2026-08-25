@@ -1,0 +1,9 @@
+{
+	"watchlist":{
+		"path":"watchlist/",
+		"js":"watchlist.js",
+		"css":"watchlist.css",
+		"jsconstruct":"WatchList",
+		"ajax":"watchlist.php"
+	}
+}

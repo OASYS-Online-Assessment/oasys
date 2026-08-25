@@ -1,0 +1,8 @@
+[
+  {"value": "", "localized": false, "flags": [], "path": ["id"]},
+  {"value": true, "localized": false, "flags": [], "path": ["mandatory"]},
+  {"value": "", "localized": true, "flags": ["parseForMedia"], "path": ["question"], "context": "parsed", "contextPath": []},
+  {"value": {}, "localized": false, "flags": [], "path": ["conceptmap"]},
+  {"value": "manual", "localized": false, "flags": [], "path": ["processing"]},
+  {"value": 1, "localized": false, "flags": [], "path": ["score", "maximum"]}
+]

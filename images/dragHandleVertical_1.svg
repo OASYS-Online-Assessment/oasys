@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 20 30" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <g id="Artboard1" transform="matrix(0.4,0,0,0.6,0,0)">
+        <rect x="0" y="0" width="50" height="50" style="fill:none;"/>
+        <clipPath id="_clip1">
+            <rect x="0" y="0" width="50" height="50"/>
+        </clipPath>
+        <g clip-path="url(#_clip1)">
+            <g transform="matrix(1.66667,0,0,1.25,-16.6667,-6.25)">
+                <g transform="matrix(0.720713,0,0,0.306262,6.13954,15.281)">
+                    <rect x="5.356" y="15.408" width="41.625" height="6.53" style="fill:rgb(153,153,153);"/>
+                </g>
+                <g transform="matrix(0.720713,0,0,0.306262,6.13954,19.281)">
+                    <rect x="5.356" y="15.408" width="41.625" height="6.53" style="fill:rgb(153,153,153);"/>
+                </g>
+                <g transform="matrix(0.720713,0,0,0.306262,6.13954,23.281)">
+                    <rect x="5.356" y="15.408" width="41.625" height="6.53" style="fill:rgb(153,153,153);"/>
+                </g>
+            </g>
+            <g transform="matrix(1.24546,0,0,1.25,-6.13662,3.56802)">
+                <path d="M25,-2.854L32.521,7.162L17.479,7.162L25,-2.854Z" style="fill:rgb(153,153,153);"/>
+            </g>
+            <g transform="matrix(-1.24546,1.01684e-16,-2.29621e-16,-1.25,56.1366,46.432)">
+                <path d="M25,-2.854L32.521,7.162L17.479,7.162L25,-2.854Z" style="fill:rgb(153,153,153);"/>
+            </g>
+        </g>
+    </g>
+</svg>

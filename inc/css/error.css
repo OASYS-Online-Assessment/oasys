@@ -1,0 +1,19 @@
+p.error_message {
+	text-align: center;
+	font-size: 24px;
+	max-width: 600px;
+	margin: 40px auto;
+}
+
+#contentWrapper {
+	text-align: center;
+}
+
+#error_image {
+	max-height: 300px;
+	max-width: 300px;
+}
+
+#buttonContainer {
+	margin: 40px auto;
+}

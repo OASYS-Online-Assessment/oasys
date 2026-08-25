@@ -1,0 +1,428 @@
+ul[id^="watchlist"] {
+  list-style-type: none;
+  margin-top: 0px;
+  color: #333333;
+  font-size: 14px;
+}
+
+ul[id^="watchlist"] li {
+  background-position: 0 0px;
+  background-repeat: no-repeat;
+  padding-left: 30px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  margin-right: 10px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+
+ul[id^="watchlist"] li.folder {
+  background-image: url(images/listFolder.png);
+  background-size: 1.5em;
+}
+
+#myTabs {
+  /*padding: 0;*/
+}
+
+#WatchList {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+#contentcontainer {
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.wl-table {
+  width: 100%;
+  color: #333333;
+  border: none;
+  margin: 0;
+  border-spacing: 0;
+  text-align: center;
+  padding: 0 8px;
+  font-size: 14px;
+  overflow: auto;
+}
+
+.wl-table th {
+  padding-top: 2px;
+
+}
+
+.wl-table td {
+  border: none;
+}
+
+.wl-tHeader {
+  color: whitesmoke;
+  background: #227DAA;
+  margin: 0 -10px;
+  height: 26px;
+
+}
+
+.wl-HName {
+  text-align: left !important;
+  padding-left: 30px;
+}
+
+.wl-table tr:not(th):hover td {
+  background-color: #eeeeee;
+}
+
+.wl-itemName {
+  background-position: 0 3px;
+  background-repeat: no-repeat;
+  padding-left: 30px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  margin-right: 10px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  text-align: left;
+}
+
+.wl-itemName a {
+  color: #333333;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.wl-itemName a:hover {
+  text-decoration: underline;
+}
+
+.folder {
+  background-image: url(./images/listFolder.png);
+  background-size: 1.5em;
+}
+
+.tTaker {
+  background-image: url(./images/testee.png);
+  background-size: 1.5em;
+}
+
+.tTakerDP {
+  background-image: url(./images/testTaker_DP.png);
+  background-size: 1.5em;
+}
+
+.tTakerLDAP {
+  background-image: url(./images/testTaker_LDAP.png);
+  background-size: 1.5em;
+}
+
+.tTakerSAML {
+  background-image: url(./images/testTaker_IAM.png);
+  background-size: 1.5em;
+}
+
+.tTakerCloned {
+  background-image: url(./images/testee.png);
+  background-size: 1.5em;
+}
+
+.tTakerCloned > a{
+  color: #c7c7c7;
+  font-style: italic;
+}
+
+.tTakerTemplate {
+  background-image: url(./images/template.png);
+  background-size: 1.5em;
+}
+
+.itemsGroup {
+  background-image: url(./images/listDocuments.png);
+  background-size: 1.5em;
+}
+
+.test {
+  background-image: url(./images/test.png);
+  background-size: 1.5em;
+}
+
+.testLinear {
+  background-image: url(./images/testLinear.png);
+  background-size: 1.5em;
+}
+
+.testFluid {
+  background-image: url(./images/testFluid.png);
+  background-size: 1.5em;
+}
+
+.testMutation {
+  background-image: url(./images/testMutation.png);
+  background-size: 1.5em;
+}
+
+.itemsGroup.blocked {
+  background-image: url(./images/listdocumentsBlocked.png);
+  background-size: 1.5em;
+}
+
+.test.blocked {
+  background-image: url(./images/testBlocked.png);
+  background-size: 1.5em;
+}
+
+.tTaker.blocked {
+  background-image: url(./images/testeeBlocked.png);
+  background-size: 1.5em;
+}
+
+.folder.blocked {
+  background-image: url(./images/listFolderBlocked.png);
+  background-size: 1.5em;
+}
+
+.tTakerTemplate.blocked {
+  background-image: url(./images/templateBlocked.png);
+  background-size: 1.5em;
+}
+
+.wl-notification {
+  text-align: left;
+  font-weight: normal;
+}
+
+.wl-notificationWithIcon {
+  background-position: 0 3px;
+  background-repeat: no-repeat;
+  padding-left: 30px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  margin-right: 10px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.wl-itemError {
+  background-image: url(./images/warning.png);
+  background-size: 1.3em;
+}
+
+.wl-starCol {
+  text-align: center;
+}
+
+.watchListToggle {
+  width: 15px;
+  float: right;
+  padding-right: 10px;
+  margin-top: -1px;
+  line-height: 14px;
+}
+
+.star {
+  position: relative;
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: .9em;
+  margin-right: .9em;
+  margin-bottom: 1.2em;
+  border-right: .3em solid transparent;
+  border-bottom: .7em solid #d3d3d3;
+  border-left: .3em solid transparent;
+  /* Star size */
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.star:before,
+.star:after {
+  content: '';
+  display: block;
+  width: 0;
+  height: 0;
+  position: absolute;
+  top: .6em;
+  left: -1em;
+  border-right: 1em solid transparent;
+  border-bottom: .7em solid #d3d3d3;
+  border-left: 1em solid transparent;
+  transform: rotate(-35deg);
+}
+
+.star:after {
+  transform: rotate(35deg);
+}
+
+.checked {
+  border-bottom: .7em solid #fddc01;
+}
+
+.checked:before,
+.checked:after {
+  border-bottom: .7em solid #fddc01;
+}
+
+.wl-testState {
+  color: #333333;
+  font-weight: normal;
+}
+
+.active {
+  color: green;
+  font-weight: 600;
+}
+
+.nonzero {
+  font-weight: bolder;
+  color: #227DAA;
+}
+
+.inactive,
+.zero {
+  color: #7b7b7b;
+}
+
+#myTabs.jsTabsBar {
+  padding: 0 8px;
+  height: 27px;
+  border-bottom: 0px solid;
+}
+
+#myTabs .jsTab {
+  font-size: 14px;
+  height: 27px;
+  line-height: 30px;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+}
+
+.wl-table th {
+  background-color: #227daa !important;
+  opacity: 100 !important;
+  font-size: 12px;
+  text-align: center;
+  /* padding-right: 20px; */
+}
+
+.wl-table>th:first-child {
+  text-align: left !important;
+  padding-left: 7px !important;
+  font-weight: bold;
+}
+
+.wl-sheduleTooltipBox {
+  display: flex;
+  flex-direction: column;
+}
+
+.wl-dateblockTitle {
+  align-self: flex-start;
+}
+
+/* Tooltip classes for restyling standard jQuery UI tooltip */
+.wl-tooltip {
+  border: 0;
+  border-radius: 2px;
+  padding: 4px 8px;
+  box-shadow: 4px 6px 10px -1px rgba(0, 0, 0, 0.13);
+  -webkit-box-shadow: 4px 6px 10px -1px rgba(0, 0, 0, 0.13);
+  -moz-box-shadow: 4px 6px 10px -1px rgba(0, 0, 0, 0.13);
+  font-size: 11px;
+  max-width: 300px;
+}
+
+.wl-tooltip-path {
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+.wl-tooltip li {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #333333;
+  list-style-type: disc;
+}
+
+.wl-tooltip-message {
+  color: #333333;
+  padding: 4px 6px;
+  font-size: 13px;
+  background-color: #e6e6e6;
+  border-radius: 2px;
+  margin-bottom: 2px;
+}
+
+.wl-sheduleTooltipBox {
+  color: #333333;
+  background-color: #ffffff;
+}
+
+.wl-dateblockTitle {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.wl-dateblockTitle span {
+  font-weight: 600;
+}
+
+.wl-datesblock {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  padding: 0 12px;
+
+}
+
+.wl-dateblock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 8px;
+
+}
+
+.wl-date {
+  color: #333333;
+  font-weight: 600;
+  font-size: 13px;
+  margin: 4px 0;
+}
+
+.wl-time {
+  font-size: 12px;
+  background-color: #4D4D4D;
+  color: #ffffff;
+  border-radius: 6px;
+  margin: 0 0 4px 0;
+  padding: 2px 6px;
+}
+
+.wl-lang-missing {
+  color: #DD1A00;
+  font-weight: bold;
+}
+
+.noFavMsg {
+  color: #bebebe;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 30px;
+  text-align: center;
+  margin: 0 8px;
+  border-top: 2px solid #217eaa;
+
+}
+
+/* #sortableTable_gfd_id tr td, #sortableTable_ud_id tr td {
+  text-align: center;
+}
+#sortableTable_gfd_id tr td:first-child, #sortableTable_ud_id tr td:first-child {
+  text-align: left;
+} */

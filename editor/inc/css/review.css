@@ -1,0 +1,198 @@
+body {
+    height: 100vh;
+    width: 100vw;
+    padding: 0;
+    margin: 0;
+    font-family: "Open Sans", sans-serif;
+    position: fixed;
+    background-color: #AAA;
+}
+
+#outer_wrapper {
+    display: flex;
+    flex-direction: column;
+    max-height: 100vh;
+    max-width: 100vw;
+}
+
+#controls {
+    flex: 0 0 auto;
+    background-color: #333;
+    padding: 0 20px;
+    color: white;
+}
+
+#mainContent {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    background-color: #AAA;
+    padding: 20px;
+}
+
+#previewWidthSlider {
+    width: 100%;
+    max-width: 600px;
+    margin: 20px 0;
+    appearance: none;
+    height: 12px;
+    background: transparent;
+    border-radius: 4px;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+/* Track styling for Webkit browsers (Chrome, Safari, Opera) */
+#previewWidthSlider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 6px;
+    cursor: pointer;
+    background: linear-gradient(90deg, #3498db, #2980b9);
+    border-radius: 3px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Thumb styling for Webkit browsers */
+#previewWidthSlider::-webkit-slider-thumb {
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    margin-top: -7px; /* offset to position thumb vertically centered on track */
+    background: white;
+    border: 2px solid #2980b9;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: all 0.2s ease;
+}
+
+#previewWidthSlider::-webkit-slider-thumb:hover {
+    background: #f0f0f0;
+    transform: scale(1.1);
+}
+
+#previewWidthSlider::-webkit-slider-thumb:active {
+    background: #e0e0e0;
+    transform: scale(0.95);
+}
+
+/* Track styling for Firefox */
+#previewWidthSlider::-moz-range-track {
+    width: 100%;
+    height: 6px;
+    cursor: pointer;
+    background: linear-gradient(90deg, #3498db, #2980b9);
+    border-radius: 3px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Thumb styling for Firefox */
+#previewWidthSlider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: white;
+    border: 2px solid #2980b9;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transition: all 0.2s ease;
+}
+
+#previewWidthSlider::-moz-range-thumb:hover {
+    background: #f0f0f0;
+}
+
+#previewWidthSlider::-moz-range-thumb:active {
+    background: #e0e0e0;
+}
+
+/* Track styling for IE/Edge */
+#previewWidthSlider::-ms-track {
+    width: 100%;
+    height: 6px;
+    cursor: pointer;
+    background: transparent;
+    border-color: transparent;
+    color: transparent;
+}
+
+#previewWidthSlider::-ms-fill-lower {
+    background: #3498db;
+    border-radius: 3px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+}
+
+#previewWidthSlider::-ms-fill-upper {
+    background: #2980b9;
+    border-radius: 3px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Thumb styling for IE/Edge */
+#previewWidthSlider::-ms-thumb {
+    width: 16px;
+    height: 16px;
+    background: white;
+    border: 2px solid #2980b9;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    margin-top: 0;
+}
+
+#previewWidthSlider:focus {
+    outline: none;
+}
+
+#previewWidthSlider:focus::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px rgba(41,128,185,0.3);
+}
+
+#previewWidthSlider:focus::-moz-range-thumb {
+    box-shadow: 0 0 0 3px rgba(41,128,185,0.3);
+}
+
+#previewWidthSlider:focus::-ms-thumb {
+    box-shadow: 0 0 0 3px rgba(41,128,185,0.3);
+}
+
+#languagePreviews {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    height: 100%;
+    /*background-color: orange;*/ /* debug */
+    position: relative;
+}
+
+.language-preview {
+    flex: 1 1 0;
+    min-width: 300px;
+    border: 1px solid #666;
+    border-radius: 8px;
+    padding: 16px;
+    background: #ffffff;
+    position: relative;
+    box-shadow: 3px 3px 5px rgba(0, 0, 0, 0.8);
+    min-height: calc(100% - 2em - 39px); /* Adjusted for title height, padding, border and drop shadow */
+    margin-top: 2em;
+}
+
+.languageTitle {
+    position: absolute;
+    top: -1.25em;
+    border: 1px solid black;
+    border-radius: 0.5em;
+    padding: 0.2em 0.5em;
+    background-color: #0a9fff;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    font-weight: bold;
+    font-size: 1.25em;
+    box-shadow: 3px 3px 5px rgba(0,0,0,0.8);
+}
+
+.block {
+    overflow: hidden;
+}

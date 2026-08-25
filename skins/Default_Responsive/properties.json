@@ -1,0 +1,53 @@
+{
+  "id": "Default Responsive",
+  "properties": {
+    "showTimer": {
+      "name": "Show timer",
+      "type": "boolean",
+      "perItem": {},
+      "defaultValue": true
+    },
+    "showDetailedNavigation": {
+      "name": "Show detailed navigation",
+      "type": "boolean",
+      "perItem": {},
+      "defaultValue": true
+    },
+    "showSimpleNavigation": {
+      "name": "Show simple navigation",
+      "type": "boolean",
+      "perItem": {
+        "name": "Show navigation buttons",
+        "property": "showSimpleNavigation"
+      },
+      "defaultValue": true
+    },
+    "showPageName": {
+      "name": "Show page labels",
+      "type": "boolean",
+      "perItem": {},
+      "defaultValue": true
+    },
+    "floatingQuestions": {
+      "name": "Floating questions",
+      "type": "boolean",
+      "perItem": {
+        "name": "Floating question",
+        "property": "FloatingQuestion"
+      },
+      "defaultValue": false
+    },
+    "dyslexicFont": {
+      "name": "Dyslexic font option",
+      "type": "boolean",
+      "perItem": {},
+      "defaultValue": false
+    },
+    "privacyPolicy": {
+      "name": "Privacy policy button",
+      "type": "boolean",
+      "perItem": {},
+      "defaultValue": false
+    }
+  }
+}

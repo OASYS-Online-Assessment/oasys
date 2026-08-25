@@ -1,0 +1,9 @@
+.oasysTextfield > input {
+	font: inherit;
+	padding: 0 5px;
+	outline: none;
+}
+
+.oasysTextfield > input[readonly] {
+	cursor: not-allowed;
+}

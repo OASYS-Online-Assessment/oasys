@@ -1,0 +1,23 @@
+[
+  {"value": "", "localized": false, "flags": [], "path": ["id"]},
+  {"value": "", "localized": false, "flags": [], "path": ["export"]},
+  {"value": "", "localized": false, "flags": [], "path": ["visibility"]},
+  {"value": true, "localized": false, "flags": [], "path": ["mandatory"]},
+  {"value": 100, "localized": false, "flags": [], "path": ["limit"]},
+  {"value": "", "localized": true, "flags": ["parseForMedia"], "path": ["question"], "context": "parsed", "contextPath": []},
+  {"value": "", "localized": true, "flags": ["parseForMedia"], "path": ["suffix"], "context": "parsed", "contextPath": []},
+  {"value": "", "localized": true, "flags": [], "path": ["placeholder"]},
+  {"value": "m", "localized": false, "flags": [], "path": ["size"]},
+  {"value": "", "localized": false, "flags": [], "path": ["width"]},
+  {"value": "l", "localized": false, "flags": [], "path": ["align"]},
+  {"value": "none", "localized": false, "flags": [], "path": ["filter"]},
+  {"value": "", "localized": false, "flags": [], "path": ["pattern"]},
+  {"value": "none", "localized": false, "flags": [], "path": ["processing"]},
+  {"value": [], "localized": false, "flags": [], "path": ["correction"]},
+  {"value": false, "localized": false, "flags": [], "path": ["case"]},
+  {"value": 1, "localized": false, "flags": [], "path": ["score", "maximum"]},
+  {"value": 0, "localized": false, "flags": [], "path": ["score", "initial"]},
+  {"value": 1, "localized": false, "flags": [], "path": ["score", "correct"]},
+  {"value": 0, "localized": false, "flags": [], "path": ["score", "wrong"]},
+  {"value": 0, "localized": false, "flags": [], "path": ["score", "missing"]}
+]

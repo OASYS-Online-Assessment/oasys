@@ -1,0 +1,21 @@
+@font-face {
+  font-family: 'Passion One';
+  font-style: normal;
+  font-weight: 400;
+  src: url('ttf/PassionOne-Regular.ttf') format('truetype')
+}
+
+@font-face {
+    font-family: 'Passion One';
+    font-style: normal;
+    font-weight: 700;
+    src: url('ttf/PassionOne-Bold.ttf') format('truetype')
+}
+
+@font-face {
+    font-family: 'Passion One';
+    font-style: normal;
+    font-weight: 900;
+    src: url('ttf/PassionOne-Black.ttf') format('truetype')
+}
+

@@ -1,0 +1,381 @@
+/* @group general */
+
+.jsGuiSelectable {
+	user-select: text;
+	-moz-user-select: text;
+	-webkit-user-select: text;
+	-ms-user-select: text;
+}
+
+/* @end */
+
+/* @group jsFlexBox */
+
+.jsFlexBox {
+	position: relative;
+	padding-top: 8px;
+	margin: 24px 1px 1px 0;
+	background-color: #FFF;
+	flex: 1;
+}
+
+.jsFlexBoxVeil {
+	background-color: rgba(39, 39, 39, 0.7);
+	position: absolute;
+	z-index: 1;
+	left: 0;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	text-align: center;
+	margin-top: -25px;
+	font-size: 36px;
+	cursor: pointer;
+	display: none;
+}
+.jsFlexBoxVeil img {
+	width: 100px;
+	height: 100px;
+	margin: 0;
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	-ms-transform: translate(-50%, -50%);
+	transform: translate(-50%, -50%);
+	border-radius: 50%;
+	overflow: hidden;
+}
+
+.jsFlexBox.locked.useVeil:hover .jsFlexBoxVeil {
+	display: block;
+}
+
+.jsFlexBoxTitle {
+	position: absolute;
+	margin: 0 0 0 0;
+	bottom: -1px;
+	top: -24px;
+	width: calc(100%);
+	height: 24px;
+	padding: 2px 0 2px 0;
+	color: #FFF;
+	/*z-index: 10;*/
+	font: 9pt "Open Sans";
+	background-color: #7b7b7b;
+	text-transform: uppercase;
+	text-align: center;
+	font-weight: 600;
+	line-height: 24px;
+}
+
+.jsFlexBoxTitle > span {
+	display: inline;
+	white-space: nowrap;
+	width:100%;
+	text-align:center;
+}
+
+.jsFlexBoxInner {
+	position: absolute;
+	top: 4px;
+	bottom: 0;
+	overflow: auto;
+	padding: 15px 15px 15px 15px;
+	width: 100%;
+	box-sizing: border-box;
+	flex: 1;
+}
+
+.jsFlexBoxInner.noPadding {
+	padding: 0 0 0 0;
+}
+
+.jsFlexBoxInner > *:first-child {
+	margin-top: 0;
+}
+
+.jsFlexBoxPanel {
+	position: absolute;
+	width: 100%;
+	height: 30px!important; /* todo:modify JS*/
+	border-bottom: 1px solid #f1f1f1;
+	background-color: #e5e5e5;
+	top: 4px;
+	overflow: hidden;
+}
+
+.jsFlexBoxTitle + .jsFlexBoxPanel {
+	padding-top: 24px;
+}
+
+.jsFlexBoxTabs {
+	margin-top: -8px;
+	position: absolute;
+	right: 100%;
+	margin-right: 10px;
+}
+
+.jsFlexBoxTab {
+	border-radius: 10px;
+	text-align: center;
+	background-color: #FFFFFF;
+	color: #666;
+	border: 1px solid black;
+	margin-bottom: 3px;
+	padding: 0 15px;
+}
+
+.jsFlexBoxTab:hover {
+	background-color: #ffe3a9;
+}
+
+.jsFlexBoxTab.active {
+	background-color: #000000;
+	color: white;
+	border: 1px solid black;
+}
+
+/* @end */
+
+
+/* @group jsInterfaceRow */
+
+div.jsInterfaceRow {
+	padding: 3px;
+	font-size: 14px;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	grid-column-gap: 5px;
+}
+
+div.jsInterfaceRow.twoRows, div.jsInterfaceRow.noLabel {
+	grid-template-columns: 1fr;
+	grid-row-gap: 3px;
+}
+
+div.jsInterfaceRow.noLabel > div.jsInterfaceRowLabelCell {
+	display: none;
+}
+
+div.jsInterfaceRow:not(.lockedInterfaceRow):hover {
+	background: #eeeeee;
+	color: #272727;
+}
+
+div.jsInterfaceRowLabelCell, div.jsInterfaceRowPropertyCell {
+	padding: 0 0;
+	position: relative;
+	vertical-align: middle;
+}
+
+/* @end */
+
+/* @group jsSidePanel */
+
+div.jsSidePanel {
+	background-color: #FFFFFF;
+	position: relative;
+	overflow: hidden;
+	display: grid;
+	grid-template-rows: max-content auto;
+}
+
+div.jsSidePanel.left {
+	border-right: 1px solid #666;
+}
+
+div.jsSidePanel.right {
+	border-left: 1px solid #666;
+}
+
+div.jsSidePanelHandle {
+	width: 10px;
+	height: 100%;
+	position: absolute;
+	cursor: ew-resize;
+}
+
+div.jsSidePanel.right > div.jsSidePanelHandle {
+	left: -5px;
+}
+
+div.jsSidePanel.left > div.jsSidePanelHandle {
+	right: -5px;
+}
+
+div.jsSidePanel.jssp_hideSectionTitles > div.jsSidePanelSectionTitle {
+	display: none;
+}
+
+div.jsSidePanelTitle {
+	font-size: 14px;
+	background: #666;
+	text-align: center;
+	padding: 5px;
+	font-weight: bold;
+	color: white;
+}
+
+div.jsSidePanelSectionTitle {
+	font-size: 14px;
+	background: #E6E6E6;
+	text-align: left;
+	padding: 3px 10px;
+	font-weight: 600;
+	margin: 10px 10px 0;
+	cursor: pointer;
+	border-radius: 2px;
+	text-transform: capitalize;
+}
+
+div.jsSidePanelContent {
+	overflow-x: auto;
+	padding-bottom: 30px;
+	font-size: 14px;
+}
+
+span.jsSidePanelSectionIndicator {
+	float: right;
+	margin-top: -1px;
+}
+
+div.jsSidePanelSectionTitle.active > span.jsSidePanelSectionIndicator:after {
+	content: '▾';
+}
+
+div.jsSidePanelSectionTitle:not(.active) > span.jsSidePanelSectionIndicator:after {
+	content: '▸';
+}
+
+div.jsSidePanelSectionTitle:last-child {
+	border-bottom: 1px solid #444;
+}
+
+div.jsSidePanelSection {
+	padding: 10px;
+}
+
+div.jsSidePanelSectionTitle:not(.jsspDisabled) + div.jsSidePanelSection {
+	margin-bottom: 20px;
+}
+
+div.jsSidePanelSectionTitle:not(.active) + .jsSidePanelSection {
+	display: none;
+}
+
+div.jsSidePanelSectionTitle.jsspDisabled, div.jsSidePanelSectionTitle.jsspDisabled + .jsSidePanelSection {
+	display: none;
+}
+
+/* @end */
+
+/* @group input fields */
+
+input[type="text"], input[type="number"], input[type="password"] {
+	font: 16px "Open Sans";
+	font-style: inherit;
+	padding: 3px 8px 3px 8px;
+	color: inherit;
+	box-sizing: border-box;
+	border: 1px solid #888;
+	outline: none;
+}
+
+input[type="number"] {
+	text-align: right;
+}
+
+input[type="text"][readonly], input[type="number"][readonly], input[type="password"][readonly] {
+	outline: none;
+	border: 1px solid #FFF;
+	background: none;
+}
+
+/* @end */
+
+/* @group jsSelectList */
+
+.jsSelectList ul > li {
+	padding: 2px 5px;
+	position: relative;
+	font-size: 14px;
+}
+.jsSelectList:not(.disabled) ul > li:hover {
+	background: #eeeeee;
+	color: #272727;
+	text-decoration: underline;
+}
+.jsSelectList:not(.disabled) ul > li:hover .passwTagClass{
+	display: none;
+}
+.jsSelectListSectionTitle {
+	margin-bottom: 5px;
+	border-bottom: 2px solid #7b7b7b;
+}
+.jsSelectListSectionTitle b{
+	color: #175978;
+	font-size: 13px;
+	text-transform: uppercase;
+	padding:  2px 0;
+	line-height: 18px;
+	font-weight: 600;
+}
+.jsSelectList:not(.disabled)  li.selected {
+	background: #e6e6e6;
+	font-weight: 600;
+}
+
+.jsSelectListSectionUl:not(:empty) {
+	border-top: none
+}
+
+/* @end */
+
+/* @group jsLabel */
+
+.jsLabel {
+	font: 14px "Open Sans";
+}
+
+/* @end */
+
+
+/* @group jsDashWidget */
+
+.jsDashWidget {
+	margin: 8px;
+	border-radius: 8px;
+	border: 2px solid lightgray;
+	background-color: white;
+	display: flex;
+	flex-direction: column;
+	overflow:hidden;
+	box-shadow: 4px 1px 12px 0 rgba(0, 0, 0, 0.13);
+	-webkit-box-shadow: 4px 1px 12px 0 rgba(0, 0, 0, 0.13);
+	-moz-box-shadow: 4px 1px 12px 0 rgba(0, 0, 0, 0.13);
+}
+
+.jsDashWidgetTitle{
+	border-bottom: 2px solid #d3d3d3;
+	height: 40px;
+	display: flex;
+	align-self: flex-start;
+	width: 100%;
+}
+.jsDashWidgetTitleText{
+	font-size: 1.2em;
+	line-height: 40px;
+	vertical-align: middle;
+}
+.jsDashWidgetIcon{
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	margin: 8px 12px;
+}
+.jsDashWidgetContentBox{
+	padding: 8px 0;
+	height: fit-content;
+}
+
+/* @end */

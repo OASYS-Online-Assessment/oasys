@@ -1,0 +1,140 @@
+a {
+	color: inherit;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+a:hover {
+	color: #0096d4 ;
+}
+
+* {
+	-webkit-tap-highlight-color: rgba(0,0,0,0);
+	-webkit-tap-highlight-color: transparent; /* For some Androids */
+}
+
+.rightAligned {
+	text-align: right;
+}
+
+#logoOASYS {
+	height: 180px;
+	/*width: 171px;*/
+}
+
+#LogoLUCET {
+	height: 34px;
+	position: relative;
+	margin: 40px 30px 40px 0;
+	text-align: right;
+}
+
+#LogoLUCET > img {
+	height: 34px;
+	width: 225px;
+}
+
+#login_main {
+	max-width: 600px;
+	margin: auto;
+	text-align: center;
+}
+
+#formDiv {
+	background: #ff712b;
+	margin: 10px 20px;
+	padding: 20px;
+	overflow: hidden;
+	color: white;
+	border-radius: 5px;
+	text-align: left;
+}
+
+#languageButtons {
+	margin-bottom: 10px;
+	text-align: center;
+}
+
+input[type="text"], input[type="password"] {
+	font-size: 18pt;
+	width: 100%;
+	position: relative;
+	margin-top: 3px;
+	margin-bottom: 10px;
+	outline: none;
+	box-sizing: border-box;
+	background-color: #ffffff;
+	color: #444;
+	padding: 5px;
+	border-radius: 3px;
+	font-style: normal;
+	border: none;
+}
+
+
+/* --------- nxButton ---------------*/
+
+.nxButtonBackground.theme_orange {
+	border-radius: 20px;
+}
+
+.nxButton.theme_orange:not(.nxButtonIconOnly) {
+	font-size: 20px;
+	padding: 5px 15px;
+	background-color: #ff712b;
+	color: #FFF;
+	border: 2px white solid;
+	position: relative;
+	margin-top: -1px;
+	border-radius: 20px;
+}
+
+.nxButtonHovered.theme_orange:not(.nxButtonPressed):not(.nxButtonIconOnly) {
+	/* text or mixed button, hovered but not pressed */
+	background-color: #cd4300;
+}
+
+.nxButton.theme_orange.nxButtonActive:not(.nxButtonIconOnly), .nxButton.theme_orange.nxButtonSelected:not(.nxButtonIconOnly) {
+	/* text or mixed button, active or selected */
+	background-color: #FFF;
+	color: #ff712b;
+}
+
+.nxButtonDisabled.theme_orange:not(.nxButtonIconOnly) {
+	/* text or mixed button, disabled */
+	color: #ffac83;
+	border-color: #ffac83;
+}
+
+/*---*/
+
+.nxButtonBackground.theme_language {
+	border-radius: 20px;
+	height: 60px;
+	width: 60px;
+}
+
+.nxButton.theme_language:not(.nxButtonIconOnly) {
+	height: 100%;
+	font-size: 20px;
+	line-height: 55px;
+	box-sizing: border-box;
+	background-color: #ff712b;
+	color: #FFF;
+	border: 2px white solid;
+	position: relative;
+	margin-top: -1px;
+	border-radius: 50%;
+}
+
+
+.nxButtonHovered.theme_language:not(.nxButtonPressed):not(.nxButtonIconOnly) {
+	/* text or mixed button, hovered but not pressed */
+	background-color: #cd4300;
+}
+
+.nxButton.theme_language.nxButtonActive:not(.nxButtonIconOnly), .nxButton.theme_language.nxButtonSelected:not(.nxButtonIconOnly) {
+	/* text or mixed button, active or selected */
+	background-color: #FFF;
+	color: #ff712b;
+}

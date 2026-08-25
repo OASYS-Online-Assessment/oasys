@@ -1,0 +1,6 @@
+[
+  {"value": "", "localized": false, "flags": [], "path": ["id"]},
+  {"value": "", "localized": false, "flags": [], "path": ["visibility"]},
+  {"value": "", "localized": true, "flags": ["parseForMedia"], "path": ["label"], "context": "parsed", "contextPath": []},
+  {"value": "center", "localized": false, "flags": [], "path": ["align"]}
+]

@@ -1,0 +1,368 @@
+body {
+	--color-content: rgb(49 154 130);
+	--color-preview: #175978;
+	--color-scoring: #70599e;
+	--color-scripting: #666666;
+    --editor-block-margin: 0 8px 0 8px;
+    --block-switch-margin: 6px 8px 0 8px;
+    --editor-block-border-size: 0;
+	--editor-background: #f4f3f3;
+	--editor-block-padding: 20px;
+	--editor-textbox-background: #ffffff;
+	--editor-textbox-text-color: #333333;
+	font-size: 14px;
+}
+
+body[data-managerid="pages"] em {
+    color: red;
+}
+
+div#scoringEditorSwitch {}
+
+.align_center {
+	text-align: center;
+}
+
+.align_left {
+	text-align: left;
+}
+
+.align_right {
+	text-align: right;
+}
+
+#outerUI {
+	overflow: hidden!important;
+}
+
+#UI {
+    margin-top: 30px;
+	overflow: auto;
+}
+
+#editorPane {
+    flex:  1;
+    height: 100%;
+	display: flex;
+	flex-direction: column;
+	overflow-x: visible;
+	overflow-y: clip;
+}
+
+#interactionBlocks {
+    background-color: #FFFFFF;
+    flex: 1;
+    padding: 8px;
+    overflow: auto;
+}
+
+#blockEditor {
+    background-color: #FFFFFF;
+    flex: 1;
+    max-height: 100%;
+    display: grid;
+    position: relative;
+	min-width: fit-content;
+}
+
+.interactionGrid {
+	display: grid;
+	grid-gap: 24px;
+	grid-template-columns: repeat(auto-fill, 90px);
+}
+
+.interactionWidgetIcon {
+	pointer-events: none;
+	height: 40px;
+}
+
+.interactionWidgetIcon > img {
+	display: block;
+	margin: auto;
+	height: 100%;
+}
+
+.interactionWidgetLabel {
+	text-align: center;
+	font-size: 0.8em;
+	color: #272727;
+}
+
+#dragAndDropGhost {
+	background-color: white;
+	box-shadow: rgb(0 0 0 / 60%) 2px 2px 10px;
+	position: absolute;
+	z-index: 10;
+	pointer-events: none;
+	border-radius: 4px;
+}
+
+#dragAndDropGhost img{
+	width: auto;
+	display: block;
+}
+
+#dragAndDropGhost div.interactionBlockButtons {
+	display: none;
+}
+
+#insertionArrow {
+	width: 70px;
+	height: 3px;
+	position: absolute;
+	z-index: 8;
+	margin-top: 3px;
+	margin-left: 8px;
+	pointer-events: none;
+	background: #28ABE2;
+	-webkit-box-shadow: inset 0 0 4px 0 #28abe2, 0 0 12px 0 #28abe2;
+	box-shadow: inset 0 0 4px 0 #28abe2, 0 0 12px 0 #28abe2;
+}
+#insertionArrow img{
+	display: none;
+}
+
+#languageSelector {
+	margin: 10px 20px;
+}
+
+div.interactionBlock {
+	border: 2px solid #e6e6e6;
+	background-color: #FFFFFF;
+	margin: 10px 0;
+	border-radius: 4px;
+}
+
+div.interactionBlock.dragging {
+	-webkit-box-shadow: 0 0 8px 3px #28abe2;
+	box-shadow: 0 0 8px 3px #28abe2;
+}
+
+div.interactionBlockHeader {
+	height: 40px;
+	display: grid;
+	grid-template-columns: 60px auto 200px;
+	background: #f2f2f2;
+	color: #333333;
+}
+
+div.ghostBlockHeader{
+	height: 40px;
+	background: #f2f2f2;
+	color: #333333;
+	display: grid;
+	grid-template-columns: 60px auto;
+}
+
+div.interactionBlockTitle span{
+	font-size: 11pt!important;
+}
+
+#dragAndDropGhost >.interactionBlockButtons{
+	display: none;
+	width: 0;
+}
+
+div.interactionBlockIcon {
+	height: 40px;
+	pointer-events: none;
+}
+
+div.interactionBlockIcon > img {
+	height: 30px;
+	margin: 5px;
+	pointer-events: none;
+}
+
+div.interactionBlockTitle {
+	line-height: 40px;
+	padding: 0 10px;
+	vertical-align: top;
+	pointer-events: none;
+	white-space: nowrap;
+	font-size: 11pt;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+div.interactionBlockTitle > * {
+	margin-top: 0;
+	margin-bottom: 0;
+}
+
+div.interactionBlockButtons {
+	height: 40px;
+	padding: 0 10px;
+}
+
+div.interactionBlockButtons > div {
+	display: inline-block;
+	height: 30px;
+	padding: 5px;
+	vertical-align: top;
+}
+
+.interactionBlockRemoveButton > div[id$="removeButton"] .nxButtonHovered {
+	color: #DD1A00!important;
+}
+
+div.interactionBlockPreview {
+	margin: 0 10px 10px 10px;
+	padding-top: 10px;
+	display: none;
+	min-height: 50px;
+	overflow: hidden;
+}
+
+div.interactionBlockPreview * {
+	pointer-events: none;
+}
+
+div.interactionBlock.expanded div.interactionBlockPreview {
+	display: block;
+}
+
+div.interactionHeader {
+	margin: auto;
+}
+
+div.interactionEditorSwitch {
+	padding: 0 20px;
+	font-weight: bold;
+	text-transform: uppercase;
+	cursor: pointer;
+	color: #ffffff;
+	text-decoration: none;
+	text-align: left;
+	font-size: 15px;
+	line-height: 28px;
+	height: 25px;
+	margin: var(--block-switch-margin);
+	border-radius: 2px 2px 0 0;
+}
+div.interactionEditor{
+	border-radius: 0 0 4px 4px;
+}
+
+div.interactionEditorSwitch.collapsed {
+	background-color: #CCC;
+	border-radius: 4px;
+}
+
+div.interactionEditorSwitch.collapsed + div.interactionEditor {
+	display: none;
+}
+
+div#contentEditorSwitch:not(.collapsed) {
+	background-color: var(--color-content);
+}
+
+div#scoringEditorSwitch:not(.collapsed) {
+	background-color:  var(--color-scoring);
+	color: white;
+}
+
+div#previewEditorSwitch:not(.collapsed) {
+	background-color:  var(--color-preview);
+	color: white;
+}
+
+div.interactionEditor {
+	padding: 0 20px;
+	margin: var(--editor-block-margin);
+}
+
+div.interactionEditorSpace {
+	height: 25vh;
+}
+
+div#contentEditor {
+	border: var(--editor-block-border-size) solid var(--color-content);
+	background: var(--editor-background);
+	padding: var(--editor-block-padding);
+	/* box-shadow: 1px -1px 12px 4px rgba(49,154,130,1) inset; */
+	/* -webkit-box-shadow: 1px -1px 12px 4px rgba(49,154,130,1) inset; */
+	-moz-box-shadow: 1px -1px 12px 2px rgba(49,154,130,1) inset;
+	/* background: #dcdcdc38; */
+	/*overflow: hidden;*/
+}
+
+div#scoringEditor {
+	border: var(--color-scoring) var(--editor-block-border-size) solid;
+	padding: var(--editor-block-padding);
+	background: var(--editor-background);
+	/* background: pink; */
+}
+
+div#previewEditor {
+	border: var(--color-preview) var(--editor-block-border-size) solid;
+	background: var(--editor-background);
+	padding: var(--editor-block-padding);
+}
+
+iframe#externalEditor {
+	width: 100%;
+	height: 100%;
+	position: absolute;
+	z-index: 99999;
+	border: none;
+}
+.interactionGhost > img {
+	height: 40px;
+	margin: 0 auto;
+}
+
+.interactionHeaderGhost{
+	background: deeppink!important;
+}
+
+.interactionHeaderGhost > img {
+	height: 30px;
+}
+
+div#contentEditorTopButton {
+	background-color: var(--color-content);
+	color: var(--color-content);
+}
+
+div#scoringEditorTopButton {
+	color: var(--color-scoring);
+}
+
+div#previewEditorTopButton {
+	color: var(--color-preview);
+}
+
+div.spanningEditor {
+	grid-column: 1 / 3;
+}
+
+#interactionEditorBox {
+	overflow: auto;
+	padding-top: 6px;
+	min-width: fit-content;
+}
+
+#interactionEditorBox.spanningEditor > div.interactionEditor {
+	border-left: none;
+}
+
+#interactionEditorTopButtons {
+	position: absolute;
+	top: -24px;
+	padding: 0 4px 0 4px;
+	right: 0;
+}
+
+.editorTopButton {
+	display: inline-block;
+	padding: 0 6px;
+	font-size: 11px;
+	margin: 0 3px;
+	color: #ffffff;
+	border-radius: 20px;
+	cursor: pointer;
+	font-weight: 600;
+	text-transform: uppercase;
+	background: transparent!important;
+}

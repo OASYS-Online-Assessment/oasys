@@ -1,0 +1,88 @@
+.matrixWrapper {
+	display: grid;
+	/*row-gap: 5px;*/
+}
+
+.matrixWrapper.matrixStackedLayout {
+	row-gap: 20px;
+}
+
+.matrixTableHeader {
+	display: grid;
+	padding: 5px 10px;
+	font-size: 90%;
+}
+
+.matrixRow {
+	display: grid;
+	padding: 5px 10px;
+}
+
+.matrixTableHeaderCell, .matrixStackedHeaderCell {
+	text-align: center;
+	padding: 5px;
+	justify-self: center;
+	align-self: end;
+}
+
+.matrixChoiceCell {
+	text-align: center;
+	padding: 5px;
+	justify-self: center;
+	align-self: center;
+}
+
+.matrixWrapper.matrixStackedLayout .matrixTableHeader {
+	display: none;
+}
+
+.matrixWrapper.matrixTableLayout .matrixTableHeader > .matrixTableHeaderCell:first-child {
+	grid-column: 2;
+}
+
+.matrixWrapper.matrixTableLayout .matrixStackedHeaderCell {
+	display: none;
+}
+
+.matrixWrapper.matrixTableLayout .matrixChoiceCell {
+	grid-row: 1;
+}
+
+.matrixWrapper.matrixTableLayout .matrixStackedHeaderCell {
+	grid-row: 2;
+}
+
+.matrixWrapper.matrixStackedLayout .matrixChoiceCell {
+	grid-row: 3;
+}
+
+.matrixRowLabel {
+	grid-row: 1;
+	grid-column: 1;
+	align-self: center;
+}
+
+.matrixWrapper.matrixStackedLayout .matrixRowLabel {
+	grid-column-start: 1;
+	grid-column-end: -1;
+}
+
+.matrixLegend {
+	border: 1px solid #333;
+	display: inline-block;
+	padding: 5px 10px;
+}
+
+.matrixLegendItem {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	column-gap: 0.3em;
+}
+
+.matrixChoiceCell > .oasysTag > .jsMultipleChoice_button {
+	bottom: 0;
+}
+
+.matrixRow.dark {
+	background-color: rgba(0,0,0,0.15);
+}

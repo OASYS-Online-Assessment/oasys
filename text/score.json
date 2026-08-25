@@ -1,0 +1,20 @@
+{
+  "score": {
+	"EN": "score",
+	"DE": "Punktzahl",
+	"FR": "score",
+	"LU": "Punktzuel"
+  },
+  "percentage": {
+	"EN": "percentage",
+	"DE": "Prozentsatz",
+	"FR": "pourcentage",
+	"LU": "Prozentsaz"
+  },
+  "closeTest": {
+	"EN": "Close test",
+	"DE": "Test schließen",
+	"FR": "Fermer le test",
+	"LU": "Test zoumaachen"
+  }
+}
