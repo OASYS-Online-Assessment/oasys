@@ -1,7 +1,7 @@
 \documentclass[12pt]{article} % Default font size is 12pt, it can be changed here
 \usepackage{fontspec}
 %Ligatures=TexOff disable the Tex specific ligatures which converst quotes into typographic quotes
-\setmainfont{OpenSans}[Ligatures=TeXOff, Path=fonts/,Extension=.ttf, UprightFont=*-Regular, ItalicFont=*-Italic, BoldFont=*-Bold, BoldItalicFont=*-BoldItalic]
+\setmainfont{OpenSans}[Path=fonts/,Extension=.ttf, UprightFont=*-Regular, ItalicFont=*-Italic, BoldFont=*-Bold, BoldItalicFont=*-BoldItalic]
 \usepackage{microtype}
 
 %\usepackage{tabulary}
@@ -251,12 +251,16 @@
 
     Alternatively, you can also define your encryption key in environment variables, by defining the following variables:
     \begin{itemize}
-        \item \kw{oasys\_aes\_key} - the key (32 bit) written in hexadecimal
-        \item \kw{oasys\_aes\_iv} - the iv (16 bit) written in hexadecimal
+        \item \kw{oasys\_aes\_key} - the key (32 bytes) written in hexadecimal
+        \item \kw{oasys\_aes\_iv} - the IV (16 bytes) written in hexadecimal
     \end{itemize}
     \vspace{0.3cm}
 
     As with the database credentials, you can also define custom names for these variables by editing the file \kw{<root folder>/conf/env.ini} and changing the values as you see fit.\\
+
+    Superadmins can rotate the database encryption key in System Settings while both frontend and backend maintenance mode are enabled. If \kw{crypt.ini} is active, OASYS generates and activates the replacement key automatically after all encrypted database values have been verified.\\
+
+    For environment-managed keys, the rotation uses temporary pending variables. Their default names are \kw{OASYS\_AES\_PENDING\_KEY} and \kw{OASYS\_AES\_PENDING\_IV}; custom variable names can be configured with \kw{aes\_pending\_key} and \kw{aes\_pending\_iv} in \kw{env.ini}. The System Settings dialog guides the administrator through generating the values, reloading PHP, verifying the pending variables, re-encrypting the database, promoting them to the active variables and performing a final verification. Pending key material must be handled as a secret and removed after a completed rotation.\\
 
 %\section{xxx}\label{sec:xxx}
 %
@@ -275,6 +279,3 @@
 %\end{exampleBox}
 
 \end{document}
-
-
-

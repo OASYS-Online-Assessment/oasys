@@ -53,7 +53,9 @@ oasysRegisterActionAllowlists([
     'editor/systemSettingActions.php' => [
         'm_status', 'change_m_status', 'file_cleanup', 'filesyscheck', 'syscheck',
         'fetchSettings', 'export_settings_values', 'saveSetting', 'resetSetting',
-        'import_settings',
+        'import_settings', 'encryptionRotationStatus', 'rotateManagedEncryptionKey',
+        'prepareEnvironmentEncryptionKey', 'verifyEnvironmentEncryptionKey',
+        'rotateEnvironmentEncryptedData', 'finalizeEnvironmentEncryptionKey',
     ],
     'editor/testActions.php' => [
         'fetchLibrary', 'fetchPreSelect', 'fetchItemLibrary', 'checkTest', 'newFolder',

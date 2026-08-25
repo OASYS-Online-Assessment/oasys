@@ -34,5 +34,8 @@ composer.lock
 modules/*
 !modules/README.md
 *.ini
+/conf/crypt-rotation.json
+/conf/crypt-rotation.json.tmp.*
+/conf/crypt.ini.tmp.*
 customContent/*
 !customContent/.gitkeep

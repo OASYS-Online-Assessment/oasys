@@ -8,6 +8,7 @@ require_once 'inc/php/userHandling.php';
 include_once 'userMgmtActions.php';
 include_once 'inc/php/systemState.php';
 require_once 'inc/php/syscheck.php';
+require_once 'inc/php/EncryptionKeyRotation.php';
 
 # ----------------------- #
 # Authentication Includes #
@@ -113,6 +114,75 @@ function change_m_status(array $data, rixPDO &$db, array &$returnData)
 
 	set_mmode($section, $state, $db);
 	m_status($data, $db, $returnData);
+}
+
+function encryptionRotationStatus(array $data, rixPDO &$db, array &$returnData): void
+{
+	global $myAuth;
+	if ($myAuth->checkSA() !== true) {
+		$returnData['error'] = 'This function is reserved for superadmins only!';
+		return;
+	}
+	try {
+		$returnData['data'] = EncryptionKeyRotation::status($db);
+	} catch (Throwable $e) {
+		$returnData['error'] = $e->getMessage();
+	}
+}
+
+function rotateManagedEncryptionKey(array $data, rixPDO &$db, array &$returnData): void
+{
+	global $myAuth;
+	if ($myAuth->checkSA() !== true) { $returnData['error'] = 'This function is reserved for superadmins only!'; return; }
+	try {
+		$returnData['data'] = EncryptionKeyRotation::rotateManaged($db, (int)$myAuth->userid);
+	} catch (Throwable $e) {
+		$returnData['error'] = $e->getMessage();
+	}
+}
+
+function prepareEnvironmentEncryptionKey(array $data, rixPDO &$db, array &$returnData): void
+{
+	global $myAuth;
+	if ($myAuth->checkSA() !== true) { $returnData['error'] = 'This function is reserved for superadmins only!'; return; }
+	try {
+		$returnData['data'] = EncryptionKeyRotation::prepareEnvironment($db, (int)$myAuth->userid);
+	} catch (Throwable $e) {
+		$returnData['error'] = $e->getMessage();
+	}
+}
+
+function verifyEnvironmentEncryptionKey(array $data, rixPDO &$db, array &$returnData): void
+{
+	global $myAuth;
+	if ($myAuth->checkSA() !== true) { $returnData['error'] = 'This function is reserved for superadmins only!'; return; }
+	try {
+		$returnData['data'] = EncryptionKeyRotation::verifyEnvironment($db, (int)$myAuth->userid);
+	} catch (Throwable $e) {
+		$returnData['error'] = $e->getMessage();
+	}
+}
+
+function rotateEnvironmentEncryptedData(array $data, rixPDO &$db, array &$returnData): void
+{
+	global $myAuth;
+	if ($myAuth->checkSA() !== true) { $returnData['error'] = 'This function is reserved for superadmins only!'; return; }
+	try {
+		$returnData['data'] = EncryptionKeyRotation::rotateEnvironmentData($db, (int)$myAuth->userid);
+	} catch (Throwable $e) {
+		$returnData['error'] = $e->getMessage();
+	}
+}
+
+function finalizeEnvironmentEncryptionKey(array $data, rixPDO &$db, array &$returnData): void
+{
+	global $myAuth;
+	if ($myAuth->checkSA() !== true) { $returnData['error'] = 'This function is reserved for superadmins only!'; return; }
+	try {
+		$returnData['data'] = EncryptionKeyRotation::finalizeEnvironment($db, (int)$myAuth->userid);
+	} catch (Throwable $e) {
+		$returnData['error'] = $e->getMessage();
+	}
 }
 
 /** File cleanup using sha1 file as reference for extraneous files */
