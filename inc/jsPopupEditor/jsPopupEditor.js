@@ -318,7 +318,7 @@ class jsPopupEditor {
 	}
 
 	show(callback) {
-		this.setData(this.controller.getData(...this.path), this.language);
+		this.setData();
 		this.sendDataCallback = callback;
 		this.tabs.select(this.language);
 		this.setContent();

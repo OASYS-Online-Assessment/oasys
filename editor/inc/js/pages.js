@@ -1408,9 +1408,10 @@ function duplicateInteraction(blockNum) {
 	rixToolsDebug(1, `duplicateInteraction(${blockNum})`);
 	let blocks = controller.getData('blocks');
 	let blockData = deepCopy(blocks[blockNum]);
+	let insertPosition = Number(blockNum) + 1;
 	blockData.id = '';
-	blocks.splice(blockNum + 1, 0, blockData);
-	blockStates.splice(blockNum + 1, 0, true);
+	blocks.splice(insertPosition, 0, blockData);
+	blockStates.splice(insertPosition, 0, true);
 	controller.setData(blocks, 'blocks');
 }
 

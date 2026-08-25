@@ -1134,6 +1134,10 @@ class editorList {
 			};
 			this.addButton = new nxButton(this.buttons, `editorList_${this.id}_importButton`, buttonData);
 		}
+		this.copyLabelsButton = new nxButton(this.buttons, `editorList_${this.id}_copyLabels`, {
+			label: settings.copyLabelsLabel ?? UILANG.m('copy labels to values'),
+			callback: () => this.copyLabelsToValues()
+		});
 		this.controller = settings.controller;
 		this.path = settings.path;
 		this.items = this.controller.getData(...this.path);
@@ -1239,7 +1243,7 @@ class editorList {
 				}
 				let value = $(el).find('.editorListValue').val();
 				if ((item.value ?? '') !== value) {
-					$(el).find('.editorListValue').val(item.value?.replace(/"/g, '&quot;'));
+					$(el).find('.editorListValue').val(item.value ?? '');
 				}
 				let label;
 				if (this.plainText) {
@@ -1403,6 +1407,16 @@ class editorList {
 		let value = target.val();
 		let id = target.parent().data('itemid');
 		this.items[id].value = value;
+		this.storeItems();
+	}
+
+	copyLabelsToValues() {
+		this.db(1, "copyLabelsToValues");
+		for (let item of this.items) {
+			let label = item.label?.[selectedLanguage] ?? '';
+			item.value = he.decode(stripHTMLTags(label));
+		}
+		this.renderItems();
 		this.storeItems();
 	}
 
@@ -1681,6 +1695,7 @@ class editorList {
 		this.db(1, "destroy");
 		jsph.clear(this.element.find(`#editorList_${this.id}_dz div.editorListHandle`));
 		$(`#editorList_${this.id} input`).off('input');
+		this.copyLabelsButton.destroy();
 	}
 
 	db(level,...args) {
