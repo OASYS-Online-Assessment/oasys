@@ -548,8 +548,8 @@
 							}
 							$scripts = $scriptsData;
 						}
-						$query = "SELECT testPools.`name` AS name, testPools.`structure` AS itemStructure, testFluidStructure.numberOfItems AS itemsUsed, testFluidStructure.random as itemOrder   FROM testFluidStructure INNER JOIN testPools ON testPools.id = testFluidStructure.poolID WHERE testFluidStructure.id=? LIMIT 1";
-						$parameters = array($value['hiddenID']);
+						$query = "SELECT testPools.`name` AS name, testPools.`structure` AS itemStructure, testFluidStructure.numberOfItems AS itemsUsed, testFluidStructure.random as itemOrder FROM testFluidStructure INNER JOIN testPools ON testPools.id = testFluidStructure.poolID AND testPools.testID = testFluidStructure.testID WHERE testFluidStructure.id=? AND testFluidStructure.testID=? LIMIT 1";
+						$parameters = array($value['hiddenID'], $data['dbId']);
 						$queryResult = $db->fetchRow($query, $parameters);
 						if ($queryResult['rows'] === 0) {
 							$itemArray = array('name' => $uiLang->translate('Testpool has been deleted!'), 'hiddenID' => $value['hiddenID'], 'itemsUsed' => '-', 'itemsTotal' => '-', 'itemOrder' => '-', 'label' => '-', 'actionField' => '-', 'actionButton' => '-', 'fixedPosition' => '-', 'removed' => true);
@@ -904,8 +904,8 @@
 			die();
 		}
 		//read testpool
-		$query = "SELECT * FROM testPools WHERE id=? LIMIT 1";
-		$parameters = array($pool);
+		$query = "SELECT * FROM testPools WHERE id=? AND testID=? LIMIT 1";
+		$parameters = array($pool, $test);
 		$result = $db->fetchRow($query, $parameters);
 
 		//Show error message if testpool is not present anymore
@@ -998,8 +998,8 @@
 			die();
 		}
 		//if testpool is not present anymore, throw an error message and leave edit mode
-		$query = "SELECT * FROM testPools WHERE id=? LIMIT 1";
-		$parameters = array($tpId);
+		$query = "SELECT * FROM testPools WHERE id=? AND testID=? LIMIT 1";
+		$parameters = array($tpId, $test);
 		$result = $db->fetchRow($query, $parameters);
 
 		//Show error message
@@ -1011,8 +1011,8 @@
 		}
 
 		//read structure from testpool
-		$query = "SELECT *, 'test' as type FROM testPools WHERE id=?";
-		$parameters = array($tpId);
+		$query = "SELECT *, 'test' as type FROM testPools WHERE id=? AND testID=?";
+		$parameters = array($tpId, $test);
 		$result = $db->fetchRow($query, $parameters);
 
 		//json block for structure
@@ -2436,29 +2436,29 @@ function resetResults($data, &$db, &$returnData)
 					$oldFluidBlock = $structureItem['hiddenID'];
 					array_push($usedTestPools, $oldFluidBlock);
 					//read Pool ID
-					$query = "SELECT poolID FROM testFluidStructure WHERE id=? LIMIT 1";
-					$parameters = array($oldFluidBlock);
+					$query = "SELECT poolID FROM testFluidStructure WHERE id=? AND testID=? LIMIT 1";
+					$parameters = array($oldFluidBlock, $test);
 					$res2 = $db->fetchTable($query, $parameters);
 
 					$oldPoolId = $res2['data']['0']['poolID'];
 					//Check if pool is still available
-					$query = "SELECT id FROM testPools WHERE id=?";
-					$parameters = array($oldPoolId);
+					$query = "SELECT id FROM testPools WHERE id=? AND testID=?";
+					$parameters = array($oldPoolId, $test);
 					$res2 = $db->fetchTable($query, $parameters);
 
 					if ($res2['rows'] > 0) {
 						if (!isset($createArray[$oldPoolId])) {
 							//copy Pool
-							$db->prepare("INSERT INTO testPools SELECT NULL as id, ? as testID,structure,name FROM testPools WHERE id=?");
-							$db->executePrepared(array($newTest, $oldPoolId));
+							$db->prepare("INSERT INTO testPools SELECT NULL as id, ? as testID,structure,name FROM testPools WHERE id=? AND testID=?");
+							$db->executePrepared(array($newTest, $oldPoolId, $test));
 							$res3 = $db->results();
 							$createArray[$oldPoolId] = $res3['id'];
 						}
 						$newPoolId = $createArray[$oldPoolId];
 
 						//copy fluid structure with new PoolID
-						$db->prepare("INSERT INTO testFluidStructure SELECT NULL as id, ? as testID, ? as poolID, numberOfItems, random FROM testFluidStructure WHERE id=?");
-						$db->executePrepared(array($newTest, $newPoolId, $oldFluidBlock));
+						$db->prepare("INSERT INTO testFluidStructure SELECT NULL as id, ? as testID, ? as poolID, numberOfItems, random FROM testFluidStructure WHERE id=? AND testID=?");
+						$db->executePrepared(array($newTest, $newPoolId, $oldFluidBlock, $test));
 						$res4 = $db->results();
 						//copy labels
 						$oldLabelId = $structureItem['labelID'];
@@ -2472,8 +2472,8 @@ function resetResults($data, &$db, &$returnData)
 				//Copy unused testpools as well
 				if (count($usedTestPools) > 0) {
 					$questionMarks = str_repeat('?,', count($usedTestPools) - 1) . '?';
-					$query = "SELECT poolID FROM testFluidStructure WHERE id IN (" . $questionMarks . ")";
-					$parameters = $usedTestPools;
+					$query = "SELECT poolID FROM testFluidStructure WHERE testID=? AND id IN (" . $questionMarks . ")";
+					$parameters = array_merge(array($test), $usedTestPools);
 					$res5 = $db->fetchTable($query, $parameters);
 					$usedTestPools = $res5['data'];
 					$queryArray = array();
@@ -2658,7 +2658,7 @@ function resetResults($data, &$db, &$returnData)
 	{
 		global $uiLang, $myAuth;
 		/* @var $db rixPDO */
-		checkParams($data, array('id'));
+		checkParams($data, array('id', 'testId'));
 
 		//Check if the pool assignment is still present and fetch order value
 		$query = 'SELECT random, testID FROM testFluidStructure WHERE id=? LIMIT 1';
@@ -2670,22 +2670,33 @@ function resetResults($data, &$db, &$returnData)
 			$returnData['closeEditMode'] = true;
 			die();
 		}
-		tmAbortIfPublishedTestId((int)$result['data']['testID'], $db, $returnData, 'This test is Published (Locked). The fluid test structure cannot be changed while the test is locked.');
-		$orderVal = (int)$result['data']['random'];
-		$db->prepare("UPDATE testFluidStructure SET random=? WHERE id=?");
-		if ($orderVal === 0) {
-			$db->executePrepared(array(1, $data['id']));
-		} else {
-			$db->executePrepared(array(0, $data['id']));
+		$testId = (int)$result['data']['testID'];
+		if ($testId !== (int)$data['testId']) {
+			$returnData['error'] = $uiLang->translate('This pool assignment does not belong to the selected test. Test Manager will be closed.');
+			$returnData['closeEditMode'] = true;
+			return;
 		}
-		registerActivity($db, (int)$myAuth->userid, $data['testId'], 'test');
+		$test = $db->fetchRow('SELECT id, parent, structure FROM tests WHERE id=? LIMIT 1', array($testId));
+		if (($test['rows'] ?? 0) === 0 || !tmCanModifyTest($test['data'], $db)) {
+			$returnData['error'] = $uiLang->translate('You do not have permission to change this test.');
+			return;
+		}
+		tmAbortIfPublishedTestId($testId, $db, $returnData, 'This test is Published (Locked). The fluid test structure cannot be changed while the test is locked.');
+		$orderVal = (int)$result['data']['random'];
+		$db->prepare("UPDATE testFluidStructure SET random=? WHERE id=? AND testID=?");
+		if ($orderVal === 0) {
+			$db->executePrepared(array(1, $data['id'], $testId));
+		} else {
+			$db->executePrepared(array(0, $data['id'], $testId));
+		}
+		registerActivity($db, (int)$myAuth->userid, $testId, 'test');
 	}
 
 	function saveFluidPageUsage($data, &$db, &$returnData): void
 	{
 		global $uiLang, $myAuth;
 		/* @var $db rixPDO */
-		checkParams($data, array('id', 'pageUsage'));
+		checkParams($data, array('id', 'pageUsage', 'testId'));
 
 		//Check if the pool assignment is still present and fetch order value
 		$query = 'SELECT random, testID FROM testFluidStructure WHERE id=? LIMIT 1';
@@ -2697,10 +2708,21 @@ function resetResults($data, &$db, &$returnData)
 			$returnData['closeEditMode'] = true;
 			die();
 		}
-		tmAbortIfPublishedTestId((int)$result['data']['testID'], $db, $returnData, 'This test is Published (Locked). The fluid test structure cannot be changed while the test is locked.');
-		$db->prepare("UPDATE testFluidStructure SET numberOfItems=? WHERE id=?");
-		$db->executePrepared(array($data['pageUsage'], $data['id']));
-		registerActivity($db, (int)$myAuth->userid, $data['testId'], 'test');
+		$testId = (int)$result['data']['testID'];
+		if ($testId !== (int)$data['testId']) {
+			$returnData['error'] = $uiLang->translate('This pool assignment does not belong to the selected test. Test Manager will be closed.');
+			$returnData['closeEditMode'] = true;
+			return;
+		}
+		$test = $db->fetchRow('SELECT id, parent, structure FROM tests WHERE id=? LIMIT 1', array($testId));
+		if (($test['rows'] ?? 0) === 0 || !tmCanModifyTest($test['data'], $db)) {
+			$returnData['error'] = $uiLang->translate('You do not have permission to change this test.');
+			return;
+		}
+		tmAbortIfPublishedTestId($testId, $db, $returnData, 'This test is Published (Locked). The fluid test structure cannot be changed while the test is locked.');
+		$db->prepare("UPDATE testFluidStructure SET numberOfItems=? WHERE id=? AND testID=?");
+		$db->executePrepared(array($data['pageUsage'], $data['id'], $testId));
+		registerActivity($db, (int)$myAuth->userid, $testId, 'test');
 	}
 
 	function tmNormalizeTestState($state): string
@@ -5107,6 +5129,16 @@ function resetResults($data, &$db, &$returnData)
 			$returnData['reloadFolder'] = true;
 			die();
 		}
+		$poolResult = $db->fetchRow(
+			'SELECT id FROM testPools WHERE id=? AND testID=? LIMIT 1',
+			array($poolId, $testId)
+		);
+		if (($poolResult['rows'] ?? 0) === 0) {
+			$returnData['error'] = $uiLang->translate('The selected test pool does not belong to this test. The view will be refreshed.');
+			$returnData['closeEditMode'] = true;
+			$returnData['reloadFolder'] = true;
+			return;
+		}
 		$labelObject = json_decode($result['data']['labels'] ?? '');
 		$labelDefault = null;
 		//Find default label
@@ -5181,6 +5213,19 @@ function resetResults($data, &$db, &$returnData)
 			die();
 		}
 		//End check
+		foreach ($newStructure as $structureItem) {
+			$blockId = (int)($structureItem['hiddenID'] ?? 0);
+			$block = $db->fetchRow(
+				'SELECT id FROM testFluidStructure WHERE id=? AND testID=? LIMIT 1',
+				array($blockId, $testId)
+			);
+			if ($blockId <= 0 || ($block['rows'] ?? 0) === 0) {
+				$returnData['error'] = $uiLang->translate('The fluid test structure contains a block that does not belong to this test. The view will be refreshed.');
+				$returnData['closeEditMode'] = true;
+				$returnData['reloadFolder'] = true;
+				return;
+			}
+		}
 		$labelObject = json_decode($result['data']['labels'] ?? '');
 		$labelDefault = null;
 		//Find default label
@@ -5192,8 +5237,18 @@ function resetResults($data, &$db, &$returnData)
 
 		//Delete fluid block in db if update was a deletion
 		if (isset($data['deletedFluidBlock'])) {
-			$db->prepare("DELETE FROM testFluidStructure WHERE id=?");
-			$db->executePrepared(array($data['deletedFluidBlock']));
+			$deletedBlock = $db->fetchRow(
+				'SELECT id FROM testFluidStructure WHERE id=? AND testID=? LIMIT 1',
+				array($data['deletedFluidBlock'], $testId)
+			);
+			if (($deletedBlock['rows'] ?? 0) === 0) {
+				$returnData['error'] = $uiLang->translate('The selected fluid block does not belong to this test. The view will be refreshed.');
+				$returnData['closeEditMode'] = true;
+				$returnData['reloadFolder'] = true;
+				return;
+			}
+			$db->prepare("DELETE FROM testFluidStructure WHERE id=? AND testID=?");
+			$db->executePrepared(array($data['deletedFluidBlock'], $testId));
 		}
 
 		//Save new structure to the test
@@ -5506,12 +5561,16 @@ function resetResults($data, &$db, &$returnData)
 		if (count($structure) > 0) {
 			foreach ($structure as $key => $structureItem) {
 				//reading fluid block info from DB
-				$query = 'SELECT * FROM testFluidStructure WHERE id=?';
-				$parameters = array($structureItem['hiddenID']);
+				$query = 'SELECT * FROM testFluidStructure WHERE id=? AND testID=?';
+				$parameters = array($structureItem['hiddenID'], $id);
 				$result = $db->fetchTable($query, $parameters);
+				if (($result['rows'] ?? 0) === 0) {
+					$returnData['error'] = $uiLang->translate('The fluid test structure contains a block that does not belong to this test.');
+					return;
+				}
 				//Check if the items to be used are available in the testpool
-				$query = 'SELECT * FROM testPools WHERE id=?';
-				$parameters = array($result['data']['0']['poolID']);
+				$query = 'SELECT * FROM testPools WHERE id=? AND testID=?';
+				$parameters = array($result['data']['0']['poolID'], $id);
 				$queryResult = $db->fetchTable($query, $parameters);
 				$pageUsage = [];
 				$name = '';
@@ -5711,6 +5770,7 @@ function resetResults($data, &$db, &$returnData)
 
 	function quickFluidCheck($data, &$db, &$returnData): void
 	{
+		global $uiLang;
 		/* @var $db rixPDO */
 		checkParams($data, array('id', 'languages', 'structure'));
 		$id = $data['id'];
@@ -5719,12 +5779,16 @@ function resetResults($data, &$db, &$returnData)
 		if (count($structure) > 0) {
 			foreach ($structure as $key => $structureItem) {
 				//reading fluid block info from DB
-				$query = 'SELECT * FROM testFluidStructure WHERE id=?';
-				$parameters = array($structureItem['hiddenID']);
+				$query = 'SELECT * FROM testFluidStructure WHERE id=? AND testID=?';
+				$parameters = array($structureItem['hiddenID'], $id);
 				$result = $db->fetchTable($query, $parameters);
+				if (($result['rows'] ?? 0) === 0) {
+					$returnData['error'] = $uiLang->translate('The fluid test structure contains a block that does not belong to this test.');
+					return;
+				}
 				//Check if the items to be used are available in the testpool
-				$query = 'SELECT * FROM testPools WHERE id=?';
-				$parameters = array($result['data']['0']['poolID']);
+				$query = 'SELECT * FROM testPools WHERE id=? AND testID=?';
+				$parameters = array($result['data']['0']['poolID'], $id);
 				$queryResult = $db->fetchTable($query, $parameters);
 				if ($queryResult['rows'] > 0) {
 					$jsonValue = json_decode($queryResult['data']['0']['structure'] ?? '', true);
@@ -5880,8 +5944,8 @@ function resetResults($data, &$db, &$returnData)
 		}
 		tmAbortIfPublishedTestRow($result['data'], $returnData, 'This test is Published (Locked). Test pools cannot be changed while the test is locked.');
 		//if testpool is not present anymore, throw an error message and leave edit mode
-		$query = 'SELECT * FROM testPools WHERE id=? LIMIT 1';
-		$parameters = array($tpId);
+		$query = 'SELECT * FROM testPools WHERE id=? AND testID=? LIMIT 1';
+		$parameters = array($tpId, $test);
 		$result = $db->fetchRow($query, $parameters);
 		//Show error message
 		if ($result['rows'] === 0) {
@@ -5904,7 +5968,7 @@ function resetResults($data, &$db, &$returnData)
 			}
 		}
 
-		$db->update('testPools', array('name' => $newName), 'id=?', array($tpId));
+		$db->update('testPools', array('name' => $newName), 'id=? AND testID=?', array($tpId, $test));
 		//re-read testpools
 		$query = 'SELECT * FROM testPools WHERE testID=? order by name';
 		$parameters = array($test);
@@ -5937,8 +6001,15 @@ function resetResults($data, &$db, &$returnData)
 		}
 		tmAbortIfPublishedTestRow($result['data'], $returnData, 'This test is Published (Locked). Test pools cannot be changed while the test is locked.');
 		//End check
-		$db->prepare("DELETE FROM testPools WHERE id=?");
-		$db->executePrepared(array($tbId));
+		$pool = $db->fetchRow('SELECT id FROM testPools WHERE id=? AND testID=? LIMIT 1', array($tbId, $test));
+		if (($pool['rows'] ?? 0) === 0) {
+			$returnData['error'] = $uiLang->translate('This test pool does not belong to the selected test. The view will be refreshed.');
+			$returnData['closeEditMode'] = true;
+			$returnData['reloadFolder'] = true;
+			return;
+		}
+		$db->prepare("DELETE FROM testPools WHERE id=? AND testID=?");
+		$db->executePrepared(array($tbId, $test));
 		//re-read testpools
 		$query = 'SELECT * FROM testPools WHERE testID=? order by name';
 		$parameters = array($test);
@@ -5969,8 +6040,8 @@ function resetResults($data, &$db, &$returnData)
 		}
 		tmAbortIfPublishedTestRow($result['data'], $returnData, 'This test is Published (Locked). Test pools cannot be changed while the test is locked.');
 		//if testpool is not present anymore, throw an error message and leave edit mode
-		$query = 'SELECT * FROM testPools WHERE id=? LIMIT 1';
-		$parameters = array($tpId);
+		$query = 'SELECT * FROM testPools WHERE id=? AND testID=? LIMIT 1';
+		$parameters = array($tpId, $test);
 		$result = $db->fetchRow($query, $parameters);
 		//Show error message
 		if ($result['rows'] === 0) {
@@ -5992,8 +6063,8 @@ function resetResults($data, &$db, &$returnData)
 		}
 		$structureSave = array('items' => $structure);
 		$structureSave = json_encode($structureSave);
-		$db->prepare("UPDATE testPools SET structure=? WHERE id=?");
-		$db->executePrepared(array($structureSave, $tpId));
+		$db->prepare("UPDATE testPools SET structure=? WHERE id=? AND testID=?");
+		$db->executePrepared(array($structureSave, $tpId, $test));
 
 		registerActivity($db, (int)$myAuth->userid, $test, 'test');
 	}
