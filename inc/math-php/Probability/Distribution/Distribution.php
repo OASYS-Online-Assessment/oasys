@@ -7,12 +7,12 @@ use MathPHP\Functions\Support;
 abstract class Distribution
 {
     // Overridden by implementing classes
-    const PARAMETER_LIMITS = [];
+    public const PARAMETER_LIMITS = [];
 
     /**
      * Constructor
      *
-     * @param number ...$params
+     * @param int|float ...$params
      */
     public function __construct(...$params)
     {

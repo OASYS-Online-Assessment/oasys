@@ -41,7 +41,7 @@ class Advanced
      *
      * @param  int $n How many numbers in the sequence
      *
-     * @return array Indexed from 0
+     * @return array<int> Indexed from 0
      */
     public static function fibonacci(int $n): array
     {
@@ -89,7 +89,7 @@ class Advanced
      *
      * @param  int $n How many numbers in the sequence
      *
-     * @return array Indexed from 0
+     * @return array<int> Indexed from 0
      */
     public static function lucasNumber(int $n): array
     {
@@ -106,7 +106,7 @@ class Advanced
             return $lucas;
         }
 
-        // Base case (n = 2): , L₀ = 2L₁ = 1
+        // Base case (n = 2): , L₀ = 2, L₁ = 1
         $lucas[] = 1;
         if ($n === 2) {
             return $lucas;
@@ -136,7 +136,7 @@ class Advanced
      *
      * @param  int $n How many numbers in the sequence
      *
-     * @return array Indexed from 0
+     * @return array<int> Indexed from 0
      */
     public static function pellNumber(int $n): array
     {
@@ -183,7 +183,7 @@ class Advanced
      *
      * @param  int $n How many numbers in the sequence
      *
-     * @return array Indexed from 1
+     * @return array<float> Indexed from 1
      */
     public static function triangularNumber(int $n): array
     {
@@ -217,7 +217,7 @@ class Advanced
      *
      * @param  int $n How many numbers in the sequence
      *
-     * @return array Indexed from 1
+     * @return array<float> Indexed from 1
      */
     public static function pentagonalNumber(int $n): array
     {
@@ -251,7 +251,7 @@ class Advanced
      *
      * @param  int $n How many numbers in the sequence
      *
-     * @return array Indexed from 1
+     * @return array<float> Indexed from 1
      */
     public static function hexagonalNumber(int $n): array
     {
@@ -286,7 +286,7 @@ class Advanced
      *
      * @param  int $n How many numbers in the sequence
      *
-     * @return array Indexed from 1
+     * @return array<float> Indexed from 1
      */
     public static function heptagonalNumber(int $n): array
     {
@@ -331,7 +331,7 @@ class Advanced
      *
      * @param  int $n How many numbers in the sequence
      *
-     * @return array of strings indexed from 1
+     * @return array<string> of strings indexed from 1
      */
     public static function lookAndSay(int $n): array
     {
@@ -351,18 +351,18 @@ class Advanced
         for ($i = 2; $i <= $n; $i++) {
             $sequence = "";
             $count    = 1;
-            $len      = strlen($previous);
+            $len      = \strlen($previous);
 
             for ($j = 1; $j < $len; $j++) {
-                if (substr($previous, $j, 1) === substr($previous, $j - 1, 1)) {
+                if (\substr($previous, $j, 1) === \substr($previous, $j - 1, 1)) {
                     $count++;
                 } else {
-                    $sequence .= $count . substr($previous, $j - 1, 1);
+                    $sequence .= $count . \substr($previous, $j - 1, 1);
                     $count = 1;
                 }
             }
 
-            $sequence .= $count . substr($previous, $j - 1, 1);
+            $sequence .= $count . \substr($previous, $j - 1, 1);
             $previous = $sequence;
             $list[$i] = $sequence;
         }
@@ -395,7 +395,7 @@ class Advanced
      *
      * @param int $n How many numbers in the sequence
      *
-     * @return array
+     * @return array<float>
      */
     public static function lazyCaterers(int $n): array
     {
@@ -431,7 +431,7 @@ class Advanced
      *
      * @param int $n How many numbers in the sequence
      *
-     * @return array
+     * @return array<float>
      */
     public static function magicSquares(int $n): array
     {
@@ -448,7 +448,7 @@ class Advanced
         return $M;
     }
 
-    const PERFECT_NUMBERS = [
+    private const PERFECT_NUMBERS = [
         6, 28, 496, 8128, 33550336, 8589869056, 137438691328, 2305843008139952128, 2658455991569831744654692615953842176, 191561942608236107294793378084303638130997321548169216
     ];
 
@@ -463,7 +463,7 @@ class Advanced
      *
      * @param  int $n
      *
-     * @return array
+     * @return array<int|float> May return float due to integer precision limitations of large numbers
      *
      * @throws OutOfBoundsException
      */
@@ -474,7 +474,7 @@ class Advanced
         }
 
         if ($n <= 10) {
-            return array_slice(self::PERFECT_NUMBERS, 0, $n);
+            return \array_slice(self::PERFECT_NUMBERS, 0, $n);
         }
 
         throw new OutOfBoundsException("Perfect numbers beyond the tenth are too large to compute");
@@ -495,7 +495,7 @@ class Advanced
      *
      * @param  int $n How many numbers in the sequence
      *
-     * @return array
+     * @return array<int>
      */
     public static function perfectPowers(int $n): array
     {
@@ -530,7 +530,7 @@ class Advanced
      *
      * @param  int $n How many numbers in the sequence
      *
-     * @return array
+     * @return array<int>
      */
     public static function notPerfectPowers(int $n): array
     {
@@ -574,7 +574,7 @@ class Advanced
      *
      * @param  int   $n Prime numbers up to this n
      *
-     * @return array
+     * @return array<int>
      */
     public static function primesUpTo(int $n): array
     {
@@ -582,8 +582,8 @@ class Advanced
             return [];
         }
 
-        $primes = array_fill_keys(range(2, $n), true);
-        $√n     = ceil(sqrt($n));
+        $primes = \array_fill_keys(\range(2, $n), true);
+        $√n     = \ceil(\sqrt($n));
 
         for ($i = 2; $i <= $√n; $i++) {
             if ($primes[$i] === true) {
@@ -594,6 +594,6 @@ class Advanced
             }
         }
 
-        return array_keys(array_filter($primes));
+        return \array_keys(\array_filter($primes));
     }
 }

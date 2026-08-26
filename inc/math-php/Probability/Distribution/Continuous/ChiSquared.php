@@ -14,18 +14,18 @@ class ChiSquared extends Continuous
     /**
      * Distribution parameter bounds limits
      * k ∈ [1,∞)
-     * @var array
+     * @var array{"k": string}
      */
-    const PARAMETER_LIMITS = [
+    public const PARAMETER_LIMITS = [
         'k' => '[1,∞)',
     ];
 
     /**
      * Distribution support bounds limits
      * x ∈ [0,∞)
-     * @var array
+     * @var array{x: string}
      */
-    const SUPPORT_LIMITS = [
+    public const SUPPORT_LIMITS = [
         'x' => '[0,∞)',
     ];
 
@@ -62,8 +62,13 @@ class ChiSquared extends Continuous
         $k = $this->k;
 
         // Numerator
-        $x⁽ᵏ／²⁾⁻¹ = $x ** (($k / 2) - 1);
-        $ℯ⁻⁽ˣ／²⁾  = exp(-($x / 2));
+        // Note: Avoid raising 0 to negative exponent (deprecated in PHP 8)
+        // This represents a singularity at x = 0 when k < 2
+        $⁽ᵏ／²⁾⁻¹ = ($k / 2) - 1;
+        $x⁽ᵏ／²⁾⁻¹ = ($x == 0 && $⁽ᵏ／²⁾⁻¹ < 0)
+            ? \INF
+            : $x ** $⁽ᵏ／²⁾⁻¹;
+        $ℯ⁻⁽ˣ／²⁾  = \exp(-($x / 2));
 
         // Denominator
         $２ᵏ／²  = 2 ** ($k / 2);
@@ -103,7 +108,7 @@ class ChiSquared extends Continuous
 
         return $γ⟮k／2、x／2⟯ / $Γ⟮k／2⟯;
     }
-    
+
     /**
      * Mean of the distribution
      *
@@ -136,13 +141,13 @@ class ChiSquared extends Continuous
     /**
      * Mode of the distribution
      *
-     * max(k - 2, 0)
+     * \max(k - 2, 0)
      *
      * @return float
      */
     public function mode(): float
     {
-        return max($this->k - 2, 0);
+        return \max($this->k - 2, 0);
     }
 
     /**

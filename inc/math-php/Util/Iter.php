@@ -2,8 +2,6 @@
 
 namespace MathPHP\Util;
 
-use MathPHP\Exception;
-
 /**
  * @internal
  */
@@ -14,13 +12,11 @@ class Iter
      * Similar to Python's zip function
      * @internal
      *
-     * @param iterable ...$iterables
+     * @param iterable<mixed> ...$iterables
      *
      * @return \MultipleIterator
-     *
-     * @throws Exception\BadDataException if one of the parametesr is nto iterable
      */
-    public static function zip(...$iterables): \MultipleIterator
+    public static function zip(iterable ...$iterables): \MultipleIterator
     {
         $zippedIterator = new \MultipleIterator();
         foreach ($iterables as $iterable) {
@@ -31,13 +27,11 @@ class Iter
     }
 
     /**
-     * @param iterable $iterable
+     * @param iterable<mixed> $iterable
      *
      * @return \Iterator|\IteratorIterator|\ArrayIterator
-     *
-     * @throws Exception\BadDataException if the parameter is not iterable
      */
-    private static function makeIterator($iterable): \Iterator
+    private static function makeIterator(iterable $iterable): \Iterator
     {
         switch (true) {
             case $iterable instanceof \Iterator:
@@ -48,10 +42,8 @@ class Iter
 
             case \is_array($iterable):
                 return new \ArrayIterator($iterable);
-
-            default:
-                $type = \gettype($iterable);
-                throw new Exception\BadDataException("'{$type}' type is not iterable");
         }
+
+        throw new \LogicException(\gettype($iterable) . ' type is not an expected iterable type (Iterator|Traversable|array)');
     }
 }

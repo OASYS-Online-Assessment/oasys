@@ -63,17 +63,19 @@ class BoolesRule extends NumericalIntegration
      *           ⁱ⁼¹   45
      * where h = (xn - x₁) / (n - 1)
      *
-     * @param callable|array $source  The source of our approximation. Should be either
-     *                                a callback function or a set of arrays. Each array
-     *                                (point) contains precisely two numbers, an x and y.
-     *                                Example array: [[1,2], [2,3], [3,4], [4,5], [5,6]].
-     *                                Example callback: function($x) {return $x**2;}
-     * @param number         ...$args The arguments of our callback function: start,
-     *                                end, and n. Example: approximate($source, 0, 8, 4).
-     *                                If $source is a set of points, do not input any
-     *                                $args. Example: approximate($source).
+     * @param callable|array<array{int|float, int|float}> $source
+     *      The source of our approximation. Should be either
+     *      a callback function or a set of arrays. Each array
+     *      (point) contains precisely two numbers, an x and y.
+     *      Example array: [[1,2], [2,3], [3,4], [4,5], [5,6]].
+     *      Example callback: function($x) {return $x**2;}
+     * @param int|float ...$args
+     *      The arguments of our callback function: start,
+     *      end, and n. Example: approximate($source, 0, 8, 4).
+     *      If $source is a set of points, do not input any
+     *      $args. Example: approximate($source).
      *
-     * @return float                  The approximation to the integral of f(x)
+     * @return float The approximation to the integral of f(x)
      *
      * @throws Exception\BadDataException
      * @throws Exception\IncorrectTypeException
@@ -94,7 +96,7 @@ class BoolesRule extends NumericalIntegration
         $y = self::Y;
 
         // Initialize
-        $n             = count($sorted);
+        $n             = \count($sorted);
         $subIntervals  = $n - 1;
         $a             = $sorted[0][$x];
         $b             = $sorted[$n - 1][$x];

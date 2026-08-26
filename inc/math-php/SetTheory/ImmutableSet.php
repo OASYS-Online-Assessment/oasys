@@ -37,11 +37,11 @@ class ImmutableSet extends Set
     /**
      * Cannot add members to an immutable set
      *
-     * @param array $x
+     * @param array<mixed> $members
      *
      * @return Set (this set unchanged)
      */
-    public function addMulti(array $x): Set
+    public function addMulti(array $members): Set
     {
         return $this;
     }
@@ -61,7 +61,7 @@ class ImmutableSet extends Set
     /**
      * Cannot remove members of an immutable set
      *
-     * @param  array $x
+     * @param  array<mixed> $x
      *
      * @return Set (this set unchanged)
      */

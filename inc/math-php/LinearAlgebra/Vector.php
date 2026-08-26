@@ -8,13 +8,16 @@ use MathPHP\Statistics\Distance;
 
 /**
  * 1 x n Vector
+ *
+ * @implements \Iterator<int|float>
+ * @implements \ArrayAccess<int, int|float>
  */
 class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
 {
     /** @var int Number of elements */
     private $n;
 
-    /** @var array of numbers */
+    /** @var array<int|float> of numbers */
     private $A;
 
     /** @var int Iterator position */
@@ -23,14 +26,14 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
     /**
      * Constructor
      *
-     * @param array $A 1 x n vector
+     * @param array<int|float> $A 1 x n vector
      *
      * @throws Exception\BadDataException if the Vector is empty
      */
     public function __construct(array $A)
     {
         $this->A = $A;
-        $this->n = count($A);
+        $this->n = \count($A);
         $this->i = 0;
 
         if ($this->n === 0) {
@@ -50,7 +53,7 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
     /**
      * Get matrix
      *
-     * @return array
+     * @return array<int|float>
      */
     public function getVector(): array
     {
@@ -72,7 +75,7 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *
      * @param  int $i index
      *
-     * @return number
+     * @return int|float
      *
      * @throws Exception\VectorException
      */
@@ -95,20 +98,20 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *  R = [2]
      *      [3]
      *
-     * @return Matrix
+     * @return NumericMatrix
      *
      * @throws Exception\MathException
      */
-    public function asColumnMatrix()
+    public function asColumnMatrix(): NumericMatrix
     {
-        $matrix = array_map(
+        $matrix = \array_map(
             function ($element) {
                 return [$element];
             },
             $this->A
         );
 
-        return new Matrix($matrix);
+        return new NumericMatrix($matrix);
     }
 
     /**
@@ -120,19 +123,21 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *   [1, 2, 3]
      *  ]
      *
-     * @return Matrix
+     * @return NumericMatrix
      *
      * @throws Exception\MathException
      */
-    public function asRowMatrix()
+    public function asRowMatrix(): NumericMatrix
     {
-        return new Matrix([$this->A]);
+        return new NumericMatrix([$this->A]);
     }
 
     /**************************************************************************
      * VECTOR NUMERIC OPERATIONS - Return a number
      *  - sum
      *  - length (magnitude)
+     *  - max
+     *  - min
      *  - dotProduct (innerProduct)
      *  - perpDotProduct
      *  - angleBetween
@@ -144,22 +149,46 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
     /**
      * Sum of all elements
      *
-     * @return number
+     * @return float|int
      */
     public function sum()
     {
-        return array_sum($this->A);
+        return \array_sum($this->A);
     }
 
     /**
      * Vector length (magnitude)
      * Same as l2-norm
      *
-     * @return number
+     * @return int|float
      */
     public function length()
     {
         return $this->l2Norm();
+    }
+
+    /**
+     * Max of all the elements
+     *
+     * @return int|float|false
+     *
+     * Note: Remove false from return value after PHP 8.0
+     */
+    public function max()
+    {
+        return \max($this->A);
+    }
+
+    /**
+     * Min of all the elements
+     *
+     * @return int|float|false
+     *
+     * Note: Remove false from return value after PHP 8.0
+     */
+    public function min()
+    {
+        return \min($this->A);
     }
 
     /**
@@ -168,7 +197,7 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *
      * @param Vector $B
      *
-     * @return number
+     * @return float|int
      *
      * @throws Exception\VectorException
      */
@@ -178,7 +207,7 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
             throw new Exception\VectorException('Vectors have different number of items');
         }
 
-        return array_sum(array_map(
+        return \array_sum(\array_map(
             function ($a, $b) {
                 return $a * $b;
             },
@@ -192,7 +221,7 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *
      * @param Vector $B
      *
-     * @return number
+     * @return float|int
      */
     public function innerProduct(Vector $B)
     {
@@ -207,7 +236,7 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *
      * @param Vector $B
      *
-     * @return number
+     * @return float|int
      *
      * @throws Exception\VectorException
      */
@@ -240,10 +269,10 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
     public function angleBetween(Vector $B, bool $inDegrees = false)
     {
         $cos⟮α⟯ = Distance::cosineSimilarity($this->getVector(), $B->getVector());
-        $angle = acos($cos⟮α⟯);
+        $angle = \acos($cos⟮α⟯);
 
         return $inDegrees
-            ? rad2deg($angle)
+            ? \rad2deg($angle)
             : $angle;
     }
 
@@ -254,7 +283,7 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *
      * @param Vector $B
      *
-     * @return float|int
+     * @return float
      *
      * @throws Exception\BadDataException
      */
@@ -270,7 +299,7 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *
      * @param Vector $B
      *
-     * @return float|int The euclidean distance between the vectors
+     * @return float The euclidean distance between the vectors
      *
      * @throws Exception\BadDataException
      */
@@ -288,7 +317,7 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      * @param Vector $B
      * @param int    $p
      *
-     * @return float|int
+     * @return float
      *
      * @throws Exception\BadDataException
      */
@@ -405,11 +434,11 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      * Scalar multiplication (scale)
      * kA = [k * a₁, k * a₂, k * a₃ ...]
      *
-     * @param number $k Scale factor
+     * @param int|float $k Scale factor
      *
      * @return Vector
      */
-    public function scalarMultiply($k)
+    public function scalarMultiply($k): Vector
     {
         return new Vector(Map\Single::multiply($this->A, $k));
     }
@@ -418,11 +447,11 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      * Scalar divide
      * kA = [k / a₁, k / a₂, k / a₃ ...]
      *
-     * @param number $k Scale factor
+     * @param int|float $k Scale factor
      *
      * @return Vector
      */
-    public function scalarDivide($k)
+    public function scalarDivide($k): Vector
     {
         return new Vector(Map\Single::divide($this->A, $k));
     }
@@ -445,9 +474,9 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *
      * @param Vector $B
      *
-     * @return Matrix
+     * @return NumericMatrix
      */
-    public function outerProduct(Vector $B): Matrix
+    public function outerProduct(Vector $B): NumericMatrix
     {
         $m = $this->n;
         $n = $B->getN();
@@ -459,6 +488,7 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
             }
         }
 
+        /** @var NumericMatrix */
         return MatrixFactory::create($R);
     }
 
@@ -475,9 +505,9 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *
      * @param Vector $B
      *
-     * @return Matrix
+     * @return NumericMatrix
      */
-    public function directProduct(Vector $B): Matrix
+    public function directProduct(Vector $B): NumericMatrix
     {
         $A  = $this->asColumnMatrix();
         $Bᵀ = $B->asRowMatrix();
@@ -638,11 +668,11 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *
      * |x|₁ = ∑|xᵢ|
      *
-     * @return number
+     * @return float|int
      */
     public function l1Norm()
     {
-        return array_sum(Map\Single::abs($this->A));
+        return \array_sum(Map\Single::abs($this->A));
     }
 
     /**
@@ -655,11 +685,11 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *         ______
      * |x|₂ = √∑|xᵢ|²
      *
-     * @return number
+     * @return float
      */
     public function l2Norm()
     {
-        return sqrt(array_sum(Map\Single::square($this->A)));
+        return \sqrt(\array_sum(Map\Single::square($this->A)));
     }
 
     /**
@@ -670,13 +700,13 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *
      * |x|p = (∑|xᵢ|ᵖ)¹/ᵖ
      *
-     * @param number $p
+     * @param int|float $p
      *
-     * @return number
+     * @return int|float
      */
     public function pNorm($p)
     {
-        return array_sum(Map\Single::pow(Map\Single::abs($this->A), $p)) ** (1 / $p);
+        return \array_sum(Map\Single::pow(Map\Single::abs($this->A), $p)) ** (1 / $p);
     }
 
     /**
@@ -684,11 +714,13 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *
      * |x|∞ = max |x|
      *
-     * @return number
+     * @return int|float|false
+     *
+     * Note: Remove false from return value after PHP 8.0
      */
     public function maxNorm()
     {
-        return max(Map\Single::abs($this->A));
+        return \max(Map\Single::abs($this->A));
     }
 
     /**************************************************************************
@@ -703,9 +735,9 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      *
      * @return string
      */
-    public function __toString()
+    public function __toString(): string
     {
-        return '[' . implode(', ', $this->A) . ']';
+        return '[' . \implode(', ', $this->A) . ']';
     }
 
     /**************************************************************************
@@ -717,7 +749,7 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      */
     public function count(): int
     {
-        return count($this->A);
+        return \count($this->A);
     }
 
     /**************************************************************************
@@ -735,28 +767,29 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
 
     /**
      * @param mixed $i
-     * @return mixed
+     * @return int|float
      */
+    #[\ReturnTypeWillChange]
     public function offsetGet($i)
     {
         return $this->A[$i];
     }
 
     /**
-     * @param mixed $i
-     * @param mixed $value
+     * @param int $i
+     * @param int|float $value
      * @throws Exception\VectorException
      */
-    public function offsetSet($i, $value)
+    public function offsetSet($i, $value): void
     {
         throw new Exception\VectorException('Vector class does not allow setting values');
     }
 
     /**
-     * @param mixed $i
+     * @param int $i
      * @throws Exception\VectorException
      */
-    public function offsetUnset($i)
+    public function offsetUnset($i): void
     {
         throw new Exception\VectorException('Vector class does not allow unsetting values');
     }
@@ -766,9 +799,9 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      **************************************************************************/
 
     /**
-     * @return array
+     * @return array<int|float>
      */
-    public function jsonSerialize()
+    public function jsonSerialize(): array
     {
         return $this->A;
     }
@@ -777,22 +810,33 @@ class Vector implements \Countable, \Iterator, \ArrayAccess, \JsonSerializable
      * Iterator INTERFACE
      **************************************************************************/
 
-    public function rewind()
+    public function rewind(): void
     {
         $this->i = 0;
     }
 
+    /**
+     * @return int|float
+     */
+    #[\ReturnTypeWillChange]
     public function current()
     {
         return $this->A[$this->i];
     }
 
+    /**
+     * @return int
+     */
+    #[\ReturnTypeWillChange]
     public function key()
     {
         return $this->i;
     }
 
-    public function next()
+    /**
+     * @return void
+     */
+    public function next(): void
     {
         ++$this->i;
     }

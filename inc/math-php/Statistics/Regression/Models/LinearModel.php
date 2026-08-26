@@ -9,13 +9,13 @@ trait LinearModel
 
     /** @var int m parameter index */
     protected static $M = 1;
-    
+
     /**
      * Evaluate the model given all the model parameters
      * y = mx + b
      *
      * @param float $x
-     * @param array $params
+     * @param array<int, float> $params
      *
      * @return float y evaluated
      */
@@ -31,9 +31,9 @@ trait LinearModel
      * m = slope
      * b = y intercept
      *
-     * @param array $params
+     * @param array<int, float> $params
      *
-     * @return array [ m => number, b => number ]
+     * @return array{m: float, b: float} [ m => number, b => number ]
      */
     public function getModelParameters(array $params): array
     {
@@ -42,16 +42,16 @@ trait LinearModel
             'b' => $params[self::$B],
         ];
     }
-    
+
     /**
      * Get regression equation (y = mx + b)
      *
-     * @param array $params
+     * @param array<int, float> $params
      *
      * @return string
      */
     public function getModelEquation(array $params): string
     {
-        return sprintf('y = %fx + %f', $params[self::$M], $params[self::$B]);
+        return \sprintf('y = %fx + %f', $params[self::$M], $params[self::$B]);
     }
 }

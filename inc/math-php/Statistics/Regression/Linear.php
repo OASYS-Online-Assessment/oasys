@@ -31,30 +31,6 @@ class Linear extends ParametricRegression
     use Models\LinearModel;
 
     /**
-     * Average of x
-     * @var number
-     */
-    private $xbar;
-
-    /**
-     * Average of y
-     * @var number
-     */
-    private $ybar;
-
-    /**
-     * Sum of squared deviations of x
-     * @var number
-     */
-    private $SSx;
-
-    /**
-     * Sum of squares residuals
-     * @var number
-     */
-    private $SSres;
-
-    /**
      * Calculates the regression parameters.
      *
      * @throws Exception\BadDataException
@@ -62,7 +38,7 @@ class Linear extends ParametricRegression
      * @throws Exception\MatrixException
      * @throws Exception\MathException
      */
-    public function calculate()
+    public function calculate(): void
     {
         $this->parameters = $this->leastSquares($this->ys, $this->xs)->getColumn(0);
     }

@@ -61,15 +61,15 @@ class Search
         }
 
         // Special case: NAN wins if present
-        $nanPresent = array_filter(
+        $nanPresent = \array_filter(
             $values,
             function ($value) {
-                return is_float($value) && is_nan($value);
+                return \is_float($value) && \is_nan($value);
             }
         );
-        if (count($nanPresent) > 0) {
+        if (\count($nanPresent) > 0) {
             foreach ($values as $i => $v) {
-                if (is_nan($v)) {
+                if (\is_nan($v)) {
                     return $i;
                 }
             }
@@ -100,13 +100,13 @@ class Search
             throw new Exception\BadDataException('Cannot find the argMax of an empty array');
         }
 
-        $valuesWithoutNans = array_filter(
+        $valuesWithoutNans = \array_filter(
             $values,
             function ($value) {
-                return !is_nan($value);
+                return !\is_nan($value);
             }
         );
-        if (count($valuesWithoutNans) === 0) {
+        if (\count($valuesWithoutNans) === 0) {
             throw new Exception\BadDataException('Array of all NANs has no nanArgMax');
         }
 
@@ -122,15 +122,19 @@ class Search
      * @param float[]|int[] $values
      *
      * @return int Index of the first occurrence of the maximum value
+     *
+     * @throws \LogicException if the array of values is empty - should never happen
      */
     private static function baseArgMax(array $values): int
     {
-        $max = max($values);
+        $max = \max($values);
         foreach ($values as $i => $v) {
             if ($v === $max) {
                 return $i;
             }
         }
+
+        throw new \LogicException('argMax values is empty--should not happen');
     }
 
     /**
@@ -155,21 +159,21 @@ class Search
         }
 
         // Special case: NAN wins if present
-        $nanPresent = array_filter(
+        $nanPresent = \array_filter(
             $values,
             function ($value) {
-                return is_float($value) && is_nan($value);
+                return \is_float($value) && \is_nan($value);
             }
         );
-        if (count($nanPresent) > 0) {
+        if (\count($nanPresent) > 0) {
             foreach ($values as $i => $v) {
-                if (is_nan($v)) {
+                if (\is_nan($v)) {
                     return $i;
                 }
             }
         }
 
-        // Standard case: Find max and return index
+        // Standard case: Find min and return index
         return self::baseArgMin($values);
     }
 
@@ -194,14 +198,14 @@ class Search
             throw new Exception\BadDataException('Cannot find the nanArgMin of an empty array');
         }
 
-        $valuesWithoutNans = array_filter(
+        $valuesWithoutNans = \array_filter(
             $values,
             function ($value) {
-                return !is_nan($value);
+                return !\is_nan($value);
             }
         );
-        if (count($valuesWithoutNans) === 0) {
-            throw new Exception\BadDataException('Array of all NANs has no nanArgMax');
+        if (\count($valuesWithoutNans) === 0) {
+            throw new Exception\BadDataException('Array of all NANs has no nanArgMin');
         }
 
         return self::baseArgMin($valuesWithoutNans);
@@ -211,20 +215,24 @@ class Search
      * Base argMin calculation
      * Find the array index of the minimum value.
      *
-     * In case of the maximum value appearing multiple times, the index of the first occurrence is returned.
+     * In case of the minimum value appearing multiple times, the index of the first occurrence is returned.
      *
      * @param float[]|int[] $values
      *
      * @return int Index of the first occurrence of the minimum value
+     *
+     * @throws \LogicException if the array of values is empty - should never happen
      */
     private static function baseArgMin(array $values): int
     {
-        $max = min($values);
+        $min = \min($values);
         foreach ($values as $i => $v) {
-            if ($v === $max) {
+            if ($v === $min) {
                 return $i;
             }
         }
+
+        throw new \LogicException('argMin values is empty--should not happen');
     }
 
     /**
@@ -247,7 +255,7 @@ class Search
     {
         $indices = [];
         foreach ($values as $i => $v) {
-            if (!is_scalar($v)) {
+            if (!\is_scalar($v)) {
                 continue;
             }
             if ($v != 0) {

@@ -17,26 +17,26 @@ class Circular
      * _
      * α = atan2(∑sin αⱼ, ∑cos αⱼ)
      *
-     * @param  array $angles
+     * @param  array<float> $angles
      *
      * @return float mean direction of circular data
      */
     public static function mean(array $angles): float
     {
-        $∑sinαⱼ = array_sum(array_map(
+        $∑sinαⱼ = \array_sum(\array_map(
             function ($αⱼ) {
-                return sin($αⱼ);
+                return \sin($αⱼ);
             },
             $angles
         ));
-        $∑cosαⱼ = array_sum(array_map(
+        $∑cosαⱼ = \array_sum(\array_map(
             function ($αⱼ) {
-                return cos($αⱼ);
+                return \cos($αⱼ);
             },
             $angles
         ));
 
-        return atan2($∑sinαⱼ, $∑cosαⱼ);
+        return \atan2($∑sinαⱼ, $∑cosαⱼ);
     }
 
     /**
@@ -49,21 +49,21 @@ class Circular
      * R² = S² + C²
      * R  = √(S² + C²)
      *
-     * @param  array $angles
+     * @param  array<float> $angles
      *
      * @return float
      */
     public static function resultantLength(array $angles): float
     {
-        $S = array_sum(array_map(
+        $S = \array_sum(\array_map(
             function ($θᵢ) {
-                return sin($θᵢ);
+                return \sin($θᵢ);
             },
             $angles
         ));
-        $C = array_sum(array_map(
+        $C = \array_sum(\array_map(
             function ($θᵢ) {
-                return cos($θᵢ);
+                return \cos($θᵢ);
             },
             $angles
         ));
@@ -71,7 +71,7 @@ class Circular
         $S² = $S ** 2;
         $C² = $C ** 2;
         $R² = $S² + $C²;
-        $R  = sqrt($R²);
+        $R  = \sqrt($R²);
 
         return $R;
     }
@@ -93,13 +93,13 @@ class Circular
      *      _
      * ρ  = R
      *
-     * @param  array $angles
+     * @param  array<float> $angles
      *
      * @return float
      */
     public static function meanResultantLength(array $angles): float
     {
-        $n = count($angles);
+        $n = \count($angles);
         $R = self::resultantLength($angles);
         $ρ = $R / $n;
 
@@ -115,7 +115,7 @@ class Circular
      * Var(θ) = 1 - R
      * Var(θ) = 1 - ρ
      *
-     * @param  array $angles
+     * @param  array<float> $angles
      *
      * @return float
      */
@@ -138,14 +138,14 @@ class Circular
      *       _
      * Where R = ρ = mean resultant length
      *
-     * @param  array $angles
+     * @param  array<float> $angles
      *
      * @return float
      */
     public static function standardDeviation(array $angles): float
     {
         $ρ       = self::meanResultantLength($angles);
-        $√⟮−2ln⟮R⟯⟯ = sqrt(-2 * log($ρ));
+        $√⟮−2ln⟮R⟯⟯ = \sqrt(-2 * \log($ρ));
 
         return $√⟮−2ln⟮R⟯⟯;
     }
@@ -154,14 +154,21 @@ class Circular
      * Get a report of all the descriptive circular statistics over a list of angles
      * Includes mean, resultant length, mean resultant length, variance, standard deviation.
      *
-     * @param array $angles
+     * @param array<float> $angles
      *
-     * @return array [ n, mean, resultant_length, mean_resultant_length, variance, sd]
+     * @return array{
+     *     n:                       int,
+     *     mean:                    float,
+     *     resultant_length:        float,
+     *     mean_resultant_length:   float,
+     *     variance:                float,
+     *     sd:                      float,
+     * }
      */
     public static function describe(array $angles): array
     {
         return [
-            'n'                     => count($angles),
+            'n'                     => \count($angles),
             'mean'                  => self::mean($angles),
             'resultant_length'      => self::resultantLength($angles),
             'mean_resultant_length' => self::meanResultantLength($angles),

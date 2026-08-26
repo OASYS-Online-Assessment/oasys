@@ -13,18 +13,18 @@ class Exponential extends Continuous
     /**
      * Distribution parameter bounds limits
      * λ ∈ (0,∞)
-     * @var array
+     * @var array{"λ": string}
      */
-    const PARAMETER_LIMITS = [
+    public const PARAMETER_LIMITS = [
         'λ' => '(0,∞)',
     ];
 
     /**
      * Distribution support bounds limits
      * x ∈ [0,∞)
-     * @var array
+     * @var array{x: string}
      */
-    const SUPPORT_LIMITS = [
+    public const SUPPORT_LIMITS = [
         'x' => '[0,∞)',
     ];
 
@@ -59,7 +59,7 @@ class Exponential extends Continuous
 
         $λ = $this->λ;
 
-        return $λ * exp(-$λ * $x);
+        return $λ * \exp(-$λ * $x);
     }
     /**
      * Cumulative distribution function
@@ -79,7 +79,7 @@ class Exponential extends Continuous
 
         $λ = $this->λ;
 
-        return 1 - exp(-$λ * $x);
+        return 1 - \exp(-$λ * $x);
     }
 
     /**
@@ -104,9 +104,9 @@ class Exponential extends Continuous
             return \INF;
         }
 
-        return -log(1 - $p) / $this->λ;
+        return -\log(1 - $p) / $this->λ;
     }
-    
+
     /**
      * Mean of the distribution
      *
@@ -130,7 +130,7 @@ class Exponential extends Continuous
      */
     public function median(): float
     {
-        return log(2) / $this->λ;
+        return \log(2) / $this->λ;
     }
 
     /**

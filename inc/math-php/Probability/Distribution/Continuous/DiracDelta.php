@@ -11,17 +11,17 @@ class DiracDelta extends Continuous
     /**
      * Distribution parameter bounds limits
      *
-     * @var array
+     * @var array{}
      */
-    const PARAMETER_LIMITS = [];
+    public const PARAMETER_LIMITS = [];
 
     /**
      * Distribution support bounds limits
      * x  ∈ (-∞,∞)
      *
-     * @var array
+     * @var array{x: string}
      */
-    const SUPPORT_LIMITS = [
+    public const SUPPORT_LIMITS = [
         'x'  => '(-∞,∞)',
     ];
 
@@ -77,7 +77,7 @@ class DiracDelta extends Continuous
         }
         return 0;
     }
-    
+
     /**
      * The inverse of the CDF function
      *

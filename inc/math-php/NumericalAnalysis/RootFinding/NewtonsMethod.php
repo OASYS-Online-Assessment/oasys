@@ -17,15 +17,15 @@ class NewtonsMethod
      * $args is an array of parameters to pass to $function, but having the element that
      * will be changed and serve as the initial guess in position $position.
      *
-     * @param callable $function     f(x) callback function
-     * @param array    $args         Parameters to pass to callback function. The initial value for the
-     *                               parameter of interest must be in this array.
-     * @param number   $target       Value of f(x) we a trying to solve for
-     * @param float    $tol          Tolerance; How close to the actual solution we would like.
-     * @param int      $position     Which element in the $args array will be changed; also serves as initial guess
-     * @param int      $iterations
+     * @param callable     $function     f(x) callback function
+     * @param array<mixed> $args         Parameters to pass to callback function. The initial value for the
+     *                                   parameter of interest must be in this array.
+     * @param int|float    $target       Value of f(x) we a trying to solve for
+     * @param float        $tol          Tolerance; How close to the actual solution we would like.
+     * @param int          $position     Which element in the $args array will be changed; also serves as initial guess
+     * @param int          $iterations
      *
-     * @return number
+     * @return int|float
      *
      * @throws Exception\OutOfBoundsException if the tolerance is not valid
      */
@@ -45,16 +45,16 @@ class NewtonsMethod
             $y_at_xplusdelx   = $function(...$args1);
             $slope            = ($y_at_xplusdelx - $y) / $tol;
             $del_y            = $target - $y;
-            if (abs($slope) < $tol) {
-                return NAN;
+            if (\abs($slope) < $tol) {
+                return \NAN;
             }
             $guess            = $del_y / $slope + $guess;
-            $dif              = abs($del_y);
+            $dif              = \abs($del_y);
             $i++;
         } while ($dif > $tol && $i < $iterations);
 
         if ($dif > $tol) {
-            return NAN;
+            return \NAN;
         }
         return $guess;
     }

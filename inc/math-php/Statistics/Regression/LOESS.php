@@ -19,7 +19,7 @@ class LOESS extends NonParametricRegression
 
     /**
      * Smoothness parameter
-     * @var number
+     * @var int|float
      */
     protected $α;
 
@@ -36,19 +36,19 @@ class LOESS extends NonParametricRegression
     protected $number_of_points;
 
     /**
-     * @param array $points [ [x, y], [x, y], ... ]
-     * @param float $α      Smoothness parameter (bandwidth)
-     *                       Determines how much of the data is used to fit each local polynomial
-     *                       ((λ + 1) / n, 1]
-     * @param int    $λ      Order of the polynomial to fit
+     * @param array<array{float, float}> $points [ [x, y], [x, y], ... ]
+     * @param float                      $α      Smoothness parameter (bandwidth)
+     *                                           Determines how much of the data is used to fit each local polynomial
+     *                                           ((λ + 1) / n, 1]
+     * @param int                        $λ      Order of the polynomial to fit
      *
      * @throws Exception\OutOfBoundsException if α is ≤ λ + 1 or > 1
      */
-    public function __construct($points, float $α, int $λ)
+    public function __construct(array $points, float $α, int $λ)
     {
         $this->α = $α;
         $this->λ = $λ;
-        
+
         parent::__construct($points);
 
         // α ∈ ((λ + 1) / n, 1]
@@ -57,7 +57,7 @@ class LOESS extends NonParametricRegression
         }
 
         // Number of points considered in the local regression
-        $this->number_of_points = min((int) ceil($this->α * $this->n), $this->n);
+        $this->number_of_points = \min((int) \ceil($this->α * $this->n), $this->n);
     }
 
     /**
@@ -84,8 +84,8 @@ class LOESS extends NonParametricRegression
         // The number of points considered in the local regression
         $Δx    = Single::abs(Single::subtract($this->xs, $x));
         $αᵗʰΔx = Average::kthSmallest($Δx, $this->number_of_points - 1);
-        $arg   = Single::min(Single::divide($Δx, $αᵗʰΔx * max($α, 1)), 1);
-        
+        $arg   = Single::min(Single::divide($Δx, $αᵗʰΔx * \max($α, 1)), 1);
+
         // Kernel function: tricube = (1-arg³)³
         $tricube = Single::cube(Single::multiply(Single::subtract(Single::cube($arg), 1), -1));
         $weights = $tricube;

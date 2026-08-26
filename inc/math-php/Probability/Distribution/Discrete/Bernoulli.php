@@ -14,9 +14,9 @@ class Bernoulli extends Discrete
     /**
      * Distribution parameter bounds limits
      * p ∈ (0,1)
-     * @var array
+     * @var array{"p": string, "q": string}
      */
-    const PARAMETER_LIMITS = [
+    public const PARAMETER_LIMITS = [
         'p' => '(0,1)',
         'q' => '[0,1)',
     ];
@@ -25,9 +25,9 @@ class Bernoulli extends Discrete
      * Distribution support bounds limits
      * k ∈ [0,1]
      * p ∈ (0,1)
-     * @var array
+     * @var array{"k": string}
      */
-    const SUPPORT_LIMITS = [
+    public const SUPPORT_LIMITS = [
         'k' => '[0,1]',
     ];
 

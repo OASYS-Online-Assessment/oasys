@@ -17,9 +17,9 @@ class Binomial extends Discrete
      * Distribution parameter bounds limits
      * n ∈ [0,∞)
      * p ∈ [0,1]
-     * @var array
+     * @var array{"n": string, "p": string}
      */
-    const PARAMETER_LIMITS = [
+    public const PARAMETER_LIMITS = [
         'n' => '[0,∞)',
         'p' => '[0,1]',
     ];
@@ -27,9 +27,9 @@ class Binomial extends Discrete
     /**
      * Distribution support bounds limits
      * r ∈ [0,∞)
-     * @var array
+     * @var array{"r": string}
      */
-    const SUPPORT_LIMITS = [
+    public const SUPPORT_LIMITS = [
         'r' => '[0,∞)',
     ];
 
@@ -87,8 +87,8 @@ class Binomial extends Discrete
         $n = $this->n;
         $p = $this->p;
         $nCr       = Combinatorics::combinations($n, $r);
-        $pʳ        = pow($p, $r);
-        $⟮1 − p⟯ⁿ⁻ʳ = pow(1 - $p, $n - $r);
+        $pʳ        = \pow($p, $r);
+        $⟮1 − p⟯ⁿ⁻ʳ = \pow(1 - $p, $n - $r);
 
         return $nCr * $pʳ * $⟮1 − p⟯ⁿ⁻ʳ;
     }
@@ -116,7 +116,7 @@ class Binomial extends Discrete
             return $this->multiplicationMethod($n - $r, $n, 1 - $p);
         }
 
-        list($j₀, $j₁, $j₂) = [0, 0, 0];
+        [$j₀, $j₁, $j₂] = [0, 0, 0];
         $f = 1;
 
         while (($j₀ < $r) | ($j₁ < $r) | ($j₂ < $n - $r)) {

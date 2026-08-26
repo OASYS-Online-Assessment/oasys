@@ -15,9 +15,9 @@ namespace MathPHP\SampleData;
  */
 class MtCars
 {
-    const LABELS = ['mpg', 'cyl', 'disp', 'hp', 'drat', 'wt', 'qsec', 'vs', 'am', 'gear', 'carb'];
+    private const LABELS = ['mpg', 'cyl', 'disp', 'hp', 'drat', 'wt', 'qsec', 'vs', 'am', 'gear', 'carb'];
 
-    const DATA = [
+    private const DATA = [
         'Mazda RX4'           => [21, 6, 160, 110, 3.9, 2.62, 16.46, 0, 1, 4, 4],
         'Mazda RX4 Wag'       => [21, 6, 160, 110, 3.9, 2.875, 17.02, 0, 1, 4, 4],
         'Datsun 710'          => [22.8, 4, 108, 93, 3.85, 2.32, 18.61, 1, 1, 4, 1],
@@ -56,24 +56,25 @@ class MtCars
      * Raw data without labels
      * [[21, 6, 160, ... ], [30.4, 4, 71.1, ... ], ... ]
      *
-     * @return number[][]
+     * @return int[][]|float[][]
      */
     public function getData(): array
     {
-        return array_values(self::DATA);
+        return \array_values(self::DATA);
     }
 
     /**
      * Raw data with each observation labeled
      * ['Car Model' => ['mpg' => 21, 'cyl' => 6, 'disp' => 160, ... ]]
      *
-     * @return number[]
+     * @return array<string, array<string, int|float>>
      */
     public function getLabeledData(): array
     {
-        return array_map(
+        /** @var array<string, array<string, int|float>> */
+        return \array_map(
             function (array $data) {
-                return array_combine(self::LABELS, $data);
+                return \array_combine(self::LABELS, $data);
             },
             self::DATA
         );
@@ -82,11 +83,11 @@ class MtCars
     /**
      * Car model names
      *
-     * @return string[]
+     * @return array<string>
      */
     public function getModels(): array
     {
-        return array_keys(self::DATA);
+        return \array_keys(self::DATA);
     }
 
     /**
@@ -95,131 +96,133 @@ class MtCars
      *
      * @param string $model
      *
-     * @return number[]
+     * @return array<string, int|float>
      */
     public function getModelData(string $model): array
     {
-        return array_combine(self::LABELS, self::DATA[$model]);
+        /** @var array<string, int|float> */
+        return \array_combine(self::LABELS, self::DATA[$model]);
     }
 
     /**
      * Miles per gallon observations for all models
      * ['Mazda RX4' => 21, 'Honda civic' => 30.4, ... ]
      *
-     * @return number[]
+     * @return array<string, int|float>
      */
     public function getMpg(): array
     {
-        return array_combine($this->getModels(), array_column(self::DATA, 0));
+        /** @var array<string, int|float> */
+        return \array_combine($this->getModels(), \array_column(self::DATA, 0));
     }
 
     /**
      * Number of cylinders observations for all models
      * ['Mazda RX4' => 6, 'Honda civic' => 4, ... ]
      *
-     * @return number[]
+     * @return int[]
      */
     public function getCyl(): array
     {
-        return array_column(self::DATA, 1);
+        return \array_column(self::DATA, 1);
     }
 
     /**
      * Displacement (cubic inches) observations for all models
      * ['Mazda RX4' => 160, 'Honda civic' => 75.7, ... ]
      *
-     * @return number[]
+     * @return int[]|float[]
      */
     public function getDisp(): array
     {
-        return array_column(self::DATA, 2);
+        return \array_column(self::DATA, 2);
     }
 
     /**
      * Gross horsepower observations for all models
      * ['Mazda RX4' => 110, 'Honda civic' => 52, ... ]
      *
-     * @return number[]
+     * @return int[]
      */
     public function getHp(): array
     {
-        return array_column(self::DATA, 3);
+        return \array_column(self::DATA, 3);
     }
 
     /**
      * Rear axle ratio observations for all models
      * ['Mazda RX4' => 3.9, 'Honda civic' => 4.93, ... ]
      *
-     * @return number[]
+     * @return float[]
      */
     public function getDrat(): array
     {
-        return array_column(self::DATA, 4);
+        return \array_column(self::DATA, 4);
     }
 
     /**
      * Weight (1,000 pounds) observations for all models
      * ['Mazda RX4' => 2.62, 'Honda civic' => 1.615, ... ]
      *
-     * @return number[]
+     * @return float[]
      */
     public function getWt(): array
     {
-        return array_column(self::DATA, 5);
+        return \array_column(self::DATA, 5);
     }
 
     /**
      * Quarter-mile time observations for all models
      * ['Mazda RX4' => 16.46, 'Honda civic' => 18.52, ... ]
      *
-     * @return number[]
+     * @return float[]
      */
     public function getQsec(): array
     {
-        return array_column(self::DATA, 6);
+        return \array_column(self::DATA, 6);
     }
 
     /**
      * V/S observations for all models
      * ['Mazda RX4' => 0, 'Honda civic' => 1, ... ]
      *
-     * @return number[]
+     * @return int[]
      */
     public function getVs(): array
     {
-        return array_column(self::DATA, 7);
+        return \array_column(self::DATA, 7);
     }
 
     /**
      * Transmission (automatic: 0, manual: 1) observations for all models
      * ['Mazda RX4' => 1, 'Honda civic' => 1, ... ]
      *
-     * @return number[]
+     * @return int[]
      */
     public function getAm(): array
     {
-        return array_column(self::DATA, 8);
+        return \array_column(self::DATA, 8);
     }
 
     /**
      * Number of forward gears observations for all models
      * ['Mazda RX4' => 4, 'Honda civic' => 4, ... ]
      *
-     * @return number[]
+     * @return int[]
      */
     public function getGear(): array
     {
-        return array_column(self::DATA, 9);
+        return \array_column(self::DATA, 9);
     }
 
     /**
      * Number of carburetors observations for all models
      * ['Mazda RX4' => 4, 'Honda civic' => 2, ... ]
      *
-     * @return number[]
+     * @return int[]
      */
     public function getCarb(): array
     {
-        return array_column(self::DATA, 10);
+        return \array_column(self::DATA, 10);
     }
 }

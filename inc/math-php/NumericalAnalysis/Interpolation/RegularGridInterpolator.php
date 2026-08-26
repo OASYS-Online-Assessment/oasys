@@ -47,22 +47,22 @@ use MathPHP\Util\Iter;
  */
 class RegularGridInterpolator
 {
-    const METHOD_LINEAR  = 'linear';
-    const METHOD_NEAREST = 'nearest';
+    public const METHOD_LINEAR  = 'linear';
+    public const METHOD_NEAREST = 'nearest';
 
     /** @var string Interpolation method (linear or nearest) */
     private $method;
 
-    /** @var array[] Points defining the regular grid in n dimensions */
+    /** @var array<array<int|float>> Points defining the regular grid in n dimensions */
     private $grid;
 
-    /** @var array Data on the regular grid in n dimensions */
+    /** @var array<mixed> Data on the regular grid in n dimensions */
     private $values;
 
     /**
-     * @param array  $points Points defining the regular grid in n dimensions
-     * @param array  $values Data on the regular grid in n dimensions
-     * @param string $method (optional - default: linear) Interpolation method (linear or nearest)
+     * @param array<array<int|float>> $points Points defining the regular grid in n dimensions
+     * @param array<mixed>            $values Data on the regular grid in n dimensions
+     * @param string                  $method (optional - default: linear) Interpolation method (linear or nearest)
      *
      * @throws Exception\BadDataException the points and value dimensions do not align, or if an unknown method is used
      */
@@ -76,7 +76,7 @@ class RegularGridInterpolator
         $pointsCount     = \count($points);
 
         if ($pointsCount > $valuesDimension) {
-            throw new Exception\BadDataException(sprintf('There are %d point arrays, but values has %d dimensions', $pointsCount, $valuesDimension));
+            throw new Exception\BadDataException(\sprintf('There are %d point arrays, but values has %d dimensions', $pointsCount, $valuesDimension));
         }
 
         $this->grid   = $points;
@@ -86,14 +86,14 @@ class RegularGridInterpolator
     /**
      * Count dimensions of a multi-dimensional array
      *
-     * @param  array $array
+     * @param  array<mixed> $array
      *
      * @return int
      */
     private function countDimensions(array $array): int
     {
-        if (is_array(reset($array))) {
-            $return = $this->countDimensions(reset($array)) + 1;
+        if (\is_array(\reset($array))) {
+            $return = $this->countDimensions(\reset($array)) + 1;
         } else {
             $return = 1;
         }
@@ -104,7 +104,7 @@ class RegularGridInterpolator
     /**
      * Interpolation of the grid at some coordinates
      *
-     * @param  array $xi n-dimensional array containing the coordinates to sample the gridded data at
+     * @param  array<float> $xi n-dimensional array containing the coordinates to sample the gridded data at
      *
      * @return float
      *
@@ -118,7 +118,7 @@ class RegularGridInterpolator
             throw new Exception\BadDataException('The requested sample points xi have dimension ' . "{$pointDimension}, but this RegularGridInterpolator has " . "dimension {$gridDimension}");
         }
 
-        list($indices, $normDistances) = $this->findIndices($xi);
+        [$indices, $normDistances] = $this->findIndices($xi);
 
         return $this->method === self::METHOD_LINEAR
             ? $this->evaluateLinear($indices, $normDistances)
@@ -126,8 +126,8 @@ class RegularGridInterpolator
     }
 
     /**
-     * @param array $indices
-     * @param array $normDistances
+     * @param array<int>       $indices
+     * @param array<int|float> $normDistances
      *
      * @return float|int
      */
@@ -143,7 +143,7 @@ class RegularGridInterpolator
         $values = 0;
         foreach ($edges as $edge_indices) {
             $weight = 1;
-            foreach (Iter::zip($edge_indices, $indices, $normDistances) as list($ei, $i, $yi)) {
+            foreach (Iter::zip($edge_indices, $indices, $normDistances) as [$ei, $i, $yi]) {
                 $weight *= ($ei == $i)
                     ? 1 - $yi
                     : $yi;
@@ -155,20 +155,21 @@ class RegularGridInterpolator
     }
 
     /**
-     * @param array $indices
-     * @param array $normDistances
+     * @param array<int>       $indices
+     * @param array<int|float> $normDistances
      *
      * @return float|int
      */
     private function evaluateNearest(array $indices, array $normDistances)
     {
         $idxRes = [];
-        foreach (Iter::zip($indices, $normDistances) as list($i, $yi)) {
+        foreach (Iter::zip($indices, $normDistances) as [$i, $yi]) {
             $idxRes[] = $yi <= 0.5
                 ? $i
                 : $i + 1;
         }
 
+        /** @var float|int */
         return $this->flatCall($this->values, $idxRes);
     }
 
@@ -177,7 +178,7 @@ class RegularGridInterpolator
      *
      * @param float[] $xi 1-dimensional array ( search point = [x,y,z ....] )
      *
-     * @return array[] (indices in grid for search point, normDistances for search point)
+     * @return array{int[], float[]} (indices in grid for search point, normDistances for search point)
      */
     private function findIndices($xi): array
     {
@@ -187,7 +188,7 @@ class RegularGridInterpolator
         // Iterate through dimensions x-y-z-...>
         // $grid - 1nd array, example all x values (or all y..)
         // $x float, search point: x or y or z...
-        foreach (Iter::zip($xi, $this->grid) as list($x, $grid)) {
+        foreach (Iter::zip($xi, $this->grid) as [$x, $grid]) {
             $gridSize = \count($grid);                       // Column count
             $i        = Search::sorted($grid, $x) - 1;  // Min match index
             if ($i < 0) {
@@ -209,15 +210,16 @@ class RegularGridInterpolator
     /**
      * Dynamically accessing multidimensional array value.
      *
-     * @param array $data
-     * @param array $keys
+     * @param array<mixed> $data
+     * @param array<int|string> $keys
      *
-     * @return array|mixed
+     * @return array<mixed>|mixed
      */
     private function flatCall(array $data, array $keys)
     {
         $current = $data;
         foreach ($keys as $key) {
+            // @phpstan-ignore-next-line
             $current = $current[$key];
         }
 
@@ -229,20 +231,24 @@ class RegularGridInterpolator
      * Output is lexicographic ordered
      *
      * @param mixed ...$args ...$iterables[, $repeat]
-*
-     * @return \Generator
+     *
+     * @return \Generator<array<int|string>>
      */
     private function product(...$args): \Generator
     {
-        $repeat = array_pop($args);
-        $pools  = array_merge(...array_fill(0, $repeat, $args));
+        /** @var int $repeat */
+        $repeat = \array_pop($args);
+        /** @var array<array<mixed>> $fill */
+        $fill = \array_fill(0, $repeat, $args);
+        $pools  = \array_merge(...$fill);
         $result = [[]];
 
+        /** @var array<int|string> $pool */
         foreach ($pools as $pool) {
             $result_inner = [];
             foreach ($result as $x) {
                 foreach ($pool as $y) {
-                    $result_inner[] = array_merge($x, [$y]);
+                    $result_inner[] = \array_merge($x, [$y]);
                 }
             }
             $result = $result_inner;

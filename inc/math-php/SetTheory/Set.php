@@ -37,7 +37,7 @@ namespace MathPHP\SetTheory;
  * $set = new Set([$array1, $array2]);
  *
  * The set will have only one element, because the arrays are equal.
- * $array2 === $array2 evaluates to true.
+ * $array1 === $array2 evaluates to true.
  *
  * Example (different objects):
  * $object1 = new \StdClass();
@@ -72,6 +72,9 @@ namespace MathPHP\SetTheory;
  * already is a member of the set. When accessing the actual set member, you
  * will always get back the original one added, whether it was a Set object or
  * a string.
+ *
+ * @implements \Iterator<mixed>
+ * @phpstan-consistent-constructor
  */
 class Set implements \Countable, \Iterator
 {
@@ -79,14 +82,14 @@ class Set implements \Countable, \Iterator
      * Set as a hash.
      * Keys are a representation of the members of the set.
      * Values are the values/objects themselves.
-     * @var array
+     * @var array<mixed>
      */
     protected $A = [];
 
     /**
      * Constructor - Initialize set members
      *
-     * @param array $members
+     * @param array<mixed> $members
      */
     public function __construct(array $members = [])
     {
@@ -104,7 +107,7 @@ class Set implements \Countable, \Iterator
     /**
      * Get the set as an array
      *
-     * @return array (values are the set members)
+     * @return array<mixed> (values are the set members)
      */
     public function asArray(): array
     {
@@ -118,7 +121,7 @@ class Set implements \Countable, \Iterator
      */
     public function length(): int
     {
-        return count($this->A);
+        return \count($this->A);
     }
 
     /**************************************************************************
@@ -147,7 +150,8 @@ class Set implements \Countable, \Iterator
      */
     public function isMember($x): bool
     {
-        return array_key_exists($this->getKey($x), $this->A);
+        // @phpstan-ignore-next-line ($this->getKey() may return null, int|string required)
+        return \array_key_exists($this->getKey($x), $this->A);
     }
 
     /**
@@ -160,7 +164,8 @@ class Set implements \Countable, \Iterator
      */
     public function isNotMember($x): bool
     {
-        return !array_key_exists($this->getKey($x), $this->A);
+        // @phpstan-ignore-next-line ($this->getKey() may return null, int|string required)
+        return !\array_key_exists($this->getKey($x), $this->A);
     }
 
     /**************************************************************************
@@ -190,7 +195,7 @@ class Set implements \Countable, \Iterator
      * Add an array of elements to the set
      * Does nothing if element already exists in the set.
      *
-     * @param array $members
+     * @param array<mixed> $members
      *
      * @return Set (this set)
      */
@@ -222,7 +227,7 @@ class Set implements \Countable, \Iterator
      * Remove elements from the set
      * Does nothing if the element does not exist in the set.
      *
-     * @param  array $x
+     * @param  array<mixed> $x
      *
      * @return Set (this set)
      */
@@ -251,16 +256,16 @@ class Set implements \Countable, \Iterator
      *
      * @return string|null
      */
-    protected function getKey($x)
+    protected function getKey($x): ?string
     {
-        if (is_int($x) || is_float($x) || is_string($x) || $x instanceof Set) {
+        if (\is_int($x) || \is_float($x) || \is_string($x) || $x instanceof Set) {
             return "$x";
-        } elseif (is_object($x)) {
-            return get_class($x) . '(' . spl_object_hash($x) . ')';
-        } elseif (is_array($x)) {
+        } elseif (\is_object($x)) {
+            return \get_class($x) . '(' . \spl_object_hash($x) . ')';
+        } elseif (\is_array($x)) {
             return 'Array(' . serialize($x) . ')';
-        } elseif (is_resource($x)) {
-            return 'Resource(' . strval($x) . ')';
+        } elseif (\is_resource($x)) {
+            return 'Resource(' . $x . ')';
         }
 
         return null;
@@ -289,7 +294,7 @@ class Set implements \Countable, \Iterator
      */
     public function isDisjoint(Set $other): bool
     {
-        return empty(array_intersect_key($this->A, $other->asArray()));
+        return empty(\array_intersect_key($this->A, $other->asArray()));
     }
 
     /**
@@ -305,10 +310,10 @@ class Set implements \Countable, \Iterator
     {
         $B_array  = $B->asArray();
 
-        $A∩B = array_intersect_key($this->A, $B_array);
-        $A∖B = array_diff_key($this->A, $B_array);
+        $A∩B = \array_intersect_key($this->A, $B_array);
+        $A∖B = \array_diff_key($this->A, $B_array);
 
-        return (count($A∩B) === count($this->A)) && (empty($A∖B));
+        return (\count($A∩B) === \count($this->A)) && (empty($A∖B));
     }
 
     /**
@@ -325,10 +330,10 @@ class Set implements \Countable, \Iterator
     {
         $B_array  = $B->asArray();
 
-        $A∩B = array_intersect_key($this->A, $B_array);
-        $A∖B = array_diff_key($this->A, $B_array);
+        $A∩B = \array_intersect_key($this->A, $B_array);
+        $A∖B = \array_diff_key($this->A, $B_array);
 
-        return (count($A∩B) === count($this->A)) && (empty($A∖B)) && (count($this->A) === count($B));
+        return (\count($A∩B) === \count($this->A)) && (empty($A∖B)) && ($this != $B);
     }
 
     /**
@@ -344,16 +349,16 @@ class Set implements \Countable, \Iterator
     {
         $B_array  = $B->asArray();
 
-        $A∩B = array_intersect_key($this->A, $B_array);
-        $A∖B = array_diff_key($B_array, $this->A);
+        $A∩B = \array_intersect_key($this->A, $B_array);
+        $A∖B = \array_diff_key($B_array, $this->A);
 
-        return (count($A∩B) === $B->length()) && (empty($A∖B));
+        return (\count($A∩B) === $B->length()) && (empty($A∖B));
     }
 
     /**
      * Superset (A ⊇ B & A ≠ B)
      * Is the set a superset of the other set?
-     * In other words, does the the set contain all the elements of the other set,
+     * In other words, does the set contain all the elements of the other set,
      * and the set is not the same set as the other set?
      *
      * @param  Set $B
@@ -364,10 +369,10 @@ class Set implements \Countable, \Iterator
     {
         $B_array  = $B->asArray();
 
-        $A∩B = array_intersect_key($this->A, $B_array);
-        $A∖B = array_diff_key($B_array, $this->A);
+        $A∩B = \array_intersect_key($this->A, $B_array);
+        $A∖B = \array_diff_key($B_array, $this->A);
 
-        return (count($A∩B) === $B->length()) && (empty($A∖B)) && ($this != $B);
+        return (\count($A∩B) === $B->length()) && (empty($A∖B)) && ($this != $B);
     }
 
     /**************************************************************************
@@ -395,7 +400,7 @@ class Set implements \Countable, \Iterator
         $new_members = [];
 
         foreach ($Bs as $B) {
-            $new_members += array_diff_key($B->asArray(), $union);
+            $new_members += \array_diff_key($B->asArray(), $union);
         }
 
         foreach ($new_members as $member => $value) {
@@ -423,7 +428,7 @@ class Set implements \Countable, \Iterator
             $B_members[] = $B->asArray();
         }
 
-        $intersection = array_intersect_key($this->A, ...$B_members);
+        $intersection = \array_intersect_key($this->A, ...$B_members);
 
         return new Set($intersection);
     }
@@ -443,7 +448,7 @@ class Set implements \Countable, \Iterator
             $B_members += $B->asArray();
         }
 
-        $difference = array_diff_key($this->A, $B_members);
+        $difference = \array_diff_key($this->A, $B_members);
 
         return new Set($difference);
     }
@@ -464,10 +469,10 @@ class Set implements \Countable, \Iterator
     {
         $B_array = $B->asArray();
 
-        $A∪B = array_intersect_key($this->A, $B_array);
+        $A∩B = \array_intersect_key($this->A, $B_array);
 
-        $A∖B = array_diff_key($this->A, $A∪B);
-        $B∖A = array_diff_key($B_array, $A∪B);
+        $A∖B = \array_diff_key($this->A, $A∩B);
+        $B∖A = \array_diff_key($B_array, $A∩B);
 
         return new Set($A∖B + $B∖A);
     }
@@ -497,24 +502,24 @@ class Set implements \Countable, \Iterator
             $sets[]   = $B->asArray();
         }
 
-        $l = count($sets);
+        $l = \count($sets);
 
         for ($i = 0; $i < $product; ++$i) {
             $elements = [];
             for ($i2 = 0; $i2 < $l; ++$i2) {
-                $elements[] = current($sets[$i2]);
+                $elements[] = \current($sets[$i2]);
             }
 
             $A×B[] = new Set($elements);
 
             // Advance array pointers
             for ($i2 = 0; $i2 < $l; ++$i2) {
-                next($sets[$i2]);
+                \next($sets[$i2]);
                 $key = key($sets[$i2]);
                 if ($key !== null) {
                     break;
                 }
-                reset($sets[$i2]);
+                \reset($sets[$i2]);
             }
         }
 
@@ -559,9 +564,9 @@ class Set implements \Countable, \Iterator
     public function powerSet(): Set
     {
         // Setup
-        $n   = count($this->A);         // Size of the original set
-        $２ⁿ = pow(2, $n);              // Size of the power set
-        $A   = array_values($this->A); //  Original set as an array with numbered indices
+        $n   = \count($this->A);         // Size of the original set
+        $２ⁿ = \pow(2, $n);              // Size of the power set
+        $A   = \array_values($this->A); //  Original set as an array with numbered indices
         $P⟮S⟯ = new Set();              //  Power set to be created
 
         // Populate power set
@@ -614,7 +619,7 @@ class Set implements \Countable, \Iterator
         if ($this->isEmpty()) {
             return 'Ø';
         }
-        return 'Set{' . implode(', ', array_keys($this->A)) . '}';
+        return 'Set{' . \implode(', ', \array_keys($this->A)) . '}';
     }
 
     /**************************************************************************
@@ -631,12 +636,12 @@ class Set implements \Countable, \Iterator
      */
     public function count(): int
     {
-        return count($this->A);
+        return \count($this->A);
     }
 
     /**
      * Iterator interface array to iterate over
-     * @var array
+     * @var array<mixed>
      */
     protected $iterator_keys;
 
@@ -649,10 +654,10 @@ class Set implements \Countable, \Iterator
     /**
      * Rewind (Iterator interface)
      */
-    public function rewind()
+    public function rewind(): void
     {
-        $this->iterator_keys     = array_keys($this->A);
-        $this->iterator_position = array_shift($this->iterator_keys);
+        $this->iterator_keys     = \array_keys($this->A);
+        $this->iterator_position = \array_shift($this->iterator_keys);
     }
 
     /**
@@ -668,6 +673,7 @@ class Set implements \Countable, \Iterator
     /**
      * Current (Iterator interface)
      */
+    #[\ReturnTypeWillChange]
     public function current()
     {
         return $this->A[$this->iterator_position];
@@ -676,6 +682,7 @@ class Set implements \Countable, \Iterator
     /**
      * Key (Iterator interface)
      */
+    #[\ReturnTypeWillChange]
     public function key()
     {
         return $this->iterator_position;
@@ -684,8 +691,8 @@ class Set implements \Countable, \Iterator
     /**
      * Next (Iterator interface)
      */
-    public function next()
+    public function next(): void
     {
-        $this->iterator_position = array_shift($this->iterator_keys);
+        $this->iterator_position = \array_shift($this->iterator_keys);
     }
 }

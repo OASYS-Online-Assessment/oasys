@@ -15,9 +15,9 @@ class LogLogistic extends Continuous
      * Distribution parameter bounds limits
      * α ∈ (0,∞)
      * β ∈ (0,∞)
-     * @var array
+     * @var array{"α": string, "β": string}
      */
-    const PARAMETER_LIMITS = [
+    public const PARAMETER_LIMITS = [
         'α' => '(0,∞)',
         'β' => '(0,∞)',
     ];
@@ -25,9 +25,9 @@ class LogLogistic extends Continuous
     /**
      * Distribution support bounds limits
      * x ∈ [0,∞)
-     * @var array
+     * @var array{x: string}
      */
-    const SUPPORT_LIMITS = [
+    public const SUPPORT_LIMITS = [
         'x' => '[0,∞)',
     ];
 
@@ -67,8 +67,17 @@ class LogLogistic extends Continuous
         $α = $this->α;
         $β = $this->β;
 
-        $⟮β／α⟯⟮x／α⟯ᵝ⁻¹  = ($β / $α) * pow($x / $α, $β - 1);
-        $⟮1 ＋ ⟮x／α⟯ᵝ⟯² = pow(1 + ($x / $α) ** $β, 2);
+        // Note: Avoid raising 0 to negative exponent (deprecated in PHP 8)
+        // This represents a singularity at x = 0 when β < 1
+        $ᵝ⁻¹       = $β - 1;
+        $⟮x／α⟯ᵝ⁻¹ = ($x == 0 && $ᵝ⁻¹ < 0)
+            ? \INF
+            : \pow($x / $α, $ᵝ⁻¹);
+
+        $⟮β／α⟯⟮x／α⟯ᵝ⁻¹  = ($β / $α) * $⟮x／α⟯ᵝ⁻¹;
+
+        $⟮1 ＋ ⟮x／α⟯ᵝ⟯² = \pow(1 + ($x / $α) ** $β, 2);
+
         return $⟮β／α⟯⟮x／α⟯ᵝ⁻¹ / $⟮1 ＋ ⟮x／α⟯ᵝ⟯²;
     }
 
@@ -90,7 +99,12 @@ class LogLogistic extends Continuous
         $α = $this->α;
         $β = $this->β;
 
-        $⟮x／α⟯⁻ᵝ = pow($x / $α, -$β);
+        // Note: Avoid raising 0 to negative exponent (deprecated in PHP 8)
+        // When x = 0, (x/α)⁻ᵝ = 0⁻ᵝ = ∞, so cdf = 1/(1+∞) = 0
+        $⟮x／α⟯⁻ᵝ = ($x == 0)
+            ? \INF
+            : \pow($x / $α, -$β);
+
         return 1 / (1 + $⟮x／α⟯⁻ᵝ);
     }
 
@@ -114,7 +128,7 @@ class LogLogistic extends Continuous
 
         return $α * ($p / (1 - $p)) ** (1 / $β);
     }
-    
+
     /**
      * Mean of the distribution
      *
@@ -131,7 +145,7 @@ class LogLogistic extends Continuous
         $π = \M_PI;
 
         if ($β > 1) {
-            return (($α * $π) / $β) / sin($π / $β);
+            return (($α * $π) / $β) / \sin($π / $β);
         }
 
         return \NAN;
@@ -169,7 +183,7 @@ class LogLogistic extends Continuous
             return 0;
         }
 
-        return $α * pow(($β - 1) / ($β + 1), 1 / $β);
+        return $α * \pow(($β - 1) / ($β + 1), 1 / $β);
     }
 
     /**
@@ -193,8 +207,8 @@ class LogLogistic extends Continuous
         $α²    = $α ** 2;
         $β²    = $β ** 2;
         $２β   = 2 * $β;
-        $sin2β = sin($２β);
-        $sin²β = sin($β) ** 2;
+        $sin2β = \sin($２β);
+        $sin²β = \sin($β) ** 2;
 
         return $α² * (($２β / $sin2β) - ($β² / $sin²β));
     }

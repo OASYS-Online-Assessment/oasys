@@ -7,6 +7,9 @@ use MathPHP\Functions\Support;
 /**
  * Geometric distribution
  *
+ * The probability distribution of the number Y = X - 1 of failures
+ * before the first success, supported on the set { 0, 1, 2, 3, ...}
+ *
  * https://en.wikipedia.org/wiki/Geometric_distribution
  */
 class Geometric extends Discrete
@@ -14,18 +17,18 @@ class Geometric extends Discrete
     /**
      * Distribution parameter bounds limits
      * p ∈ (0,1]
-     * @var array
+     * @var array{"p": string}
      */
-    const PARAMETER_LIMITS = [
+    public const PARAMETER_LIMITS = [
         'p' => '(0,1]',
     ];
 
     /**
      * Distribution parameter bounds limits
      * k ∈ [1,∞)
-     * @var array
+     * @var array{"k": string}
      */
-    const SUPPORT_LIMITS = [
+    public const SUPPORT_LIMITS = [
         'k' => '[1,∞)',
     ];
 
@@ -61,7 +64,7 @@ class Geometric extends Discrete
         Support::checkLimits(self::SUPPORT_LIMITS, ['k' => $k]);
         $p = $this->p;
 
-        $⟮1 − p⟯ᵏ = pow(1 - $p, $k);
+        $⟮1 − p⟯ᵏ = \pow(1 - $p, $k);
         return $⟮1 − p⟯ᵏ * $p;
     }
 
@@ -73,7 +76,7 @@ class Geometric extends Discrete
      *
      * k failures where k ∈ {0, 1, 2, 3, ...}
      *
-     * pmf = 1 - (1 - p)ᵏ⁺¹
+     * cdf = 1 - (1 - p)ᵏ⁺¹
      *
      * @param  int   $k number of trials     k ≥ 0
      *
@@ -84,7 +87,7 @@ class Geometric extends Discrete
         Support::checkLimits(self::SUPPORT_LIMITS, ['k' => $k]);
         $p = $this->p;
 
-        $⟮1 − p⟯ᵏ⁺¹ = pow(1 - $p, $k + 1);
+        $⟮1 − p⟯ᵏ⁺¹ = \pow(1 - $p, $k + 1);
         return 1 - $⟮1 − p⟯ᵏ⁺¹;
     }
 
@@ -114,9 +117,9 @@ class Geometric extends Discrete
      */
     public function median(): float
     {
-        $log₂⟮1 − p⟯ = log(1 - $this->p, 2);
+        $log₂⟮1 − p⟯ = \log(1 - $this->p, 2);
 
-        return ceil(-1 / $log₂⟮1 − p⟯) - 1;
+        return \ceil(-1 / $log₂⟮1 − p⟯) - 1;
     }
 
     /**

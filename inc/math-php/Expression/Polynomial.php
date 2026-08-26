@@ -1,11 +1,16 @@
 <?php
 
-namespace MathPHP\Functions;
+namespace MathPHP\Expression;
 
 use MathPHP\Algebra;
 use MathPHP\Exception;
-use MathPHP\Number\ObjectArithmetic;
+use MathPHP\Functions\Arithmetic;
 use MathPHP\Functions\Map;
+use MathPHP\LinearAlgebra\MatrixFactory;
+use MathPHP\LinearAlgebra\NumericSquareMatrix;
+use MathPHP\LinearAlgebra\Vector;
+use MathPHP\Number\Complex;
+use MathPHP\Number\ObjectArithmetic;
 
 /**
  * A convenience class for one-dimension polynomials.
@@ -51,22 +56,22 @@ class Polynomial implements ObjectArithmetic
     /** @var int */
     private $degree;
 
-    /** @var array */
+    /** @var array<int|float> */
     private $coefficients;
 
     /** @var string */
     private $variable;
 
     /**
-     * @var array Unicode characters for exponents
+     * @var array<string> Unicode characters for exponents
      */
-    const SYMBOLS = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+    private const SYMBOLS = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
 
     /**
      * When a polynomial is instantiated, set the coefficients and degree of
      * that polynomial as its object parameters.
      *
-     * @param array  $coefficients An array of coefficients in decreasing powers
+     * @param array<int|float> $coefficients An array of coefficients in decreasing powers
      *                            Example: new Polynomial([1, 2, 3]) will create
      *                            a polynomial that looks like x² + 2x + 3.
      * @param string $variable
@@ -74,7 +79,7 @@ class Polynomial implements ObjectArithmetic
     public function __construct(array $coefficients, string $variable = "x")
     {
         // Remove coefficients that are leading zeros
-        $initial_count = count($coefficients);
+        $initial_count = \count($coefficients);
         for ($i = 0; $i < $initial_count; $i++) {
             if ($coefficients[$i] != 0) {
                 break;
@@ -83,11 +88,21 @@ class Polynomial implements ObjectArithmetic
         }
 
         // If coefficients remain, re-index them. Otherwise return [0] for p(x) = 0
-        $coefficients       = ($coefficients != []) ? array_values($coefficients) : [0];
+        $coefficients       = ($coefficients != []) ? \array_values($coefficients) : [0];
 
-        $this->degree       = count($coefficients) - 1;
+        $this->degree       = \count($coefficients) - 1;
         $this->coefficients = $coefficients;
         $this->variable     = $variable;
+    }
+
+    /**
+     * Zero value: 0
+     *
+     * @return Polynomial
+     */
+    public static function createZeroValue(): ObjectArithmetic
+    {
+        return new Polynomial([0]);
     }
 
     /**
@@ -116,8 +131,8 @@ class Polynomial implements ObjectArithmetic
 
             // Build the exponent of our string as a unicode character
             $exponent = '';
-            for ($j = 0; $j < strlen(strval($power)); $j++) {
-                $digit     = intval(strval($power)[$j]); // The j-th digit of $power
+            for ($j = 0; $j < \strlen(\strval($power)); $j++) {
+                $digit     = \intval(\strval($power)[$j]); // The j-th digit of $power
                 $exponent .= self::SYMBOLS[$digit];      // The corresponding unicode character
             };
 
@@ -125,7 +140,7 @@ class Polynomial implements ObjectArithmetic
             $sign = ($coefficient > 0) ? '+' : '-';
 
             // Drop the sign from the coefficient, as it is handled by $sign
-            $coefficient = abs($coefficient);
+            $coefficient = \abs($coefficient);
 
             // Drop coefficients that equal 1 (and -1) if they are not the 0th-degree term
             if ($coefficient == 1 and $this->degree - $i != 0) {
@@ -144,8 +159,8 @@ class Polynomial implements ObjectArithmetic
         }
 
         // Cleanup front and back; drop redundant ¹ and ⁰ terms from monomials
-        $polynomial = trim(str_replace([$variable . '¹ ', $variable . '⁰ '], $variable . ' ', $polynomial), '+ ');
-        $polynomial = preg_replace('/^-\s/', '-', $polynomial);
+        $polynomial = \trim(\str_replace([$variable . '¹ ', $variable . '⁰ '], $variable . ' ', $polynomial), '+ ');
+        $polynomial = \preg_replace('/^-\s/', '-', $polynomial);
 
         $polynomial = ($polynomial !== '') ? $polynomial : '0';
 
@@ -159,7 +174,7 @@ class Polynomial implements ObjectArithmetic
      *          echo $polynomial(4);
      *          // prints -13
      *
-     * @param number $x₀ The value at which we are evaluating our polynomial
+     * @param int|float $x₀ The value at which we are evaluating our polynomial
      *
      * @return float The result of our polynomial evaluated at $x₀
      */
@@ -199,12 +214,14 @@ class Polynomial implements ObjectArithmetic
     {
         if ($input instanceof Polynomial) {
             return $input;
-        } elseif (is_numeric($input)) {
+        } elseif (\is_numeric($input)) {
+            /** @var int|float $input */
             return new Polynomial([$input]);
         } else {
             throw new Exception\IncorrectTypeException('Input must be a Polynomial or a number');
         }
     }
+
     /**
      * Getter method for the degree of a polynomial
      *
@@ -218,7 +235,7 @@ class Polynomial implements ObjectArithmetic
     /**
      * Getter method for the coefficients of a polynomial
      *
-     * @return array The coefficients array of a polynomial object
+     * @return array<int|float> The coefficients array of a polynomial object
      */
     public function getCoefficients(): array
     {
@@ -240,7 +257,7 @@ class Polynomial implements ObjectArithmetic
      *
      * @param string $variable The new dependent variable of a polynomial object
      */
-    public function setVariable(string $variable)
+    public function setVariable(string $variable): void
     {
         $this->variable = $variable;
     }
@@ -313,11 +330,11 @@ class Polynomial implements ObjectArithmetic
         // If degrees are unequal, make coefficient array sizes equal so we can do component-wise addition
         $degreeDifference = $this->getDegree() - $polynomial->getDegree();
         if ($degreeDifference !== 0) {
-            $zeroArray = array_fill(0, abs($degreeDifference), 0);
+            $zeroArray = \array_fill(0, \abs($degreeDifference), 0);
             if ($degreeDifference < 0) {
-                $coefficientsA = array_merge($zeroArray, $coefficientsA);
+                $coefficientsA = \array_merge($zeroArray, $coefficientsA);
             } else {
-                $coefficientsB = array_merge($zeroArray, $coefficientsB);
+                $coefficientsB = \array_merge($zeroArray, $coefficientsB);
             }
         }
 
@@ -368,11 +385,12 @@ class Polynomial implements ObjectArithmetic
         $productDegree = $this->degree + $polynomial->degree;
 
         // Reverse the coefficients arrays so you can multiply component-wise
-        $coefficientsA = array_reverse($this->coefficients);
-        $coefficientsB = array_reverse($polynomial->coefficients);
+        $coefficientsA = \array_reverse($this->coefficients);
+        $coefficientsB = \array_reverse($polynomial->coefficients);
 
         // Start with an array of coefficients that all equal 0
-        $productCoefficients = array_fill(0, $productDegree + 1, 0);
+        /** @var array<int> $productCoefficients */
+        $productCoefficients = \array_fill(0, $productDegree + 1, 0);
 
         // Iterate through the product of terms component-wise
         for ($i = 0; $i < $this->degree + 1; $i++) {
@@ -408,23 +426,90 @@ class Polynomial implements ObjectArithmetic
      *
      * Closed form solutions only exist if the degree is less than 5
      *
-     * @return array of roots
+     * @return array<numeric|Complex|null> of roots
      *
      * @throws Exception\IncorrectTypeException
      */
     public function roots(): array
     {
+        $floatCoefficients = array_map(static function ($coefficient) {
+            return (float)$coefficient;
+        }, $this->coefficients);
+
         switch ($this->degree) {
+            case 0:
+                return [null];
             case 1:
-                return [-1 * $this->coefficients[1] / $this->coefficients[0]];
+                return [Algebra::linear(...$floatCoefficients)];
             case 2:
-                return Algebra::quadratic(...$this->coefficients);
+                return Algebra::quadratic(...$floatCoefficients);
             case 3:
-                return Algebra::cubic(...$this->coefficients);
+                return Algebra::cubic(...$floatCoefficients);
             case 4:
-                return Algebra::quartic(...$this->coefficients);
+                return Algebra::quartic(...$floatCoefficients);
             default:
                 return [\NAN];
         }
+    }
+
+    /**
+     * Companion matrix (Frobenius companion matrix of the monic polynomial)
+     *
+     * https://en.wikipedia.org/wiki/Companion_matrix
+     *
+     * p(t) = c₀ + c₁t + ⋯ + cᶰ₋₁tⁿ⁻¹ + tⁿ
+     *
+     *
+     *        | 0 0 ⋯ 0   -c₀ |
+     *        | 1 0 ⋯ 0   -c₁ |
+     * C(p) = | 0 1 ⋯ 0   -c₂ |
+     *        | ⋮ ⋮  ⋱ ⋮    ⋮   |
+     *        | 0 0 ⋯ 1 -cᶰ₋₁ |
+     *
+     * @return NumericSquareMatrix
+     */
+    public function companionMatrix(): NumericSquareMatrix
+    {
+        if ($this->degree === 0) {
+            throw new Exception\OutOfBoundsException('Polynomial must be 1st degree or greater.');
+        }
+
+        $coefficients         = $this->getCoefficients();
+        $reversedCoefficients = new Vector(array_reverse($coefficients));
+
+        /* Make a column matrix without the largest factor, after setting it to 1
+         *  |  -c₀  |
+         *  |  -c₁  |
+         *  |  -c₂  |
+         *  |   ⋮   |
+         *  | -cᶰ₋₁ |
+         */
+        $columnMatrix = Matrixfactory::createFromVectors([$reversedCoefficients])
+            ->scalarDivide(-1 * $coefficients[0])
+            ->rowExclude($this->getDegree());
+
+        /* Identity matrix with one fewer row and column than there are coefficients
+         *  | 1 0 ⋯ 0 |
+         *  | 0 1 ⋯ 0 |
+         *  | ⋮ ⋮  ⋱ ⋮ |
+         *  | 0 0 ⋯ 1 |
+         */
+        $identityMatrix = MatrixFactory::identity($columnMatrix->getM() - 1);
+
+        // Zero row to augment above identity matrix | 0 0 ⋯ 0 |
+        $zero_row = MatrixFactory::zero(1, $columnMatrix->getM() - 1);
+
+        /** Companion matrix is identity augmented above with the zero matrix and augmented to the right with the column matrix of coefficients
+         *  | 0 0 ⋯ 0   -c₀ |
+         *  | 1 0 ⋯ 0   -c₁ |
+         *  | 0 1 ⋯ 0   -c₂ |
+         *  | ⋮ ⋮  ⋱ ⋮    ⋮   |
+         *  | 0 0 ⋯ 1 -cᶰ₋₁ |
+         * @var NumericSquareMatrix $companion
+         */
+        $companion = $identityMatrix
+            ->augmentAbove($zero_row)
+            ->augment($columnMatrix);
+        return $companion;
     }
 }
