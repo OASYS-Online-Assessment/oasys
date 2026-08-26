@@ -2794,14 +2794,144 @@ function resetResults($data, &$db, &$returnData)
 			'</div>';
 	}
 
-	function tmPublishMutationChildren(array $structure, rixPDO &$db): void
+	function tmMutationChildIds(array $structure): array
 	{
-		if (($structure['type'] ?? null) !== 'mutation') return;
+		if (($structure['type'] ?? null) !== 'mutation') return [];
+		$ids = [];
 		foreach (($structure['items'] ?? []) as $item) {
-			if (isset($item['hiddenID'])) {
-				tmSetStructureState((int)$item['hiddenID'], 'published', $db, 'linear');
+			$childId = (int)($item['hiddenID'] ?? 0);
+			if ($childId > 0) $ids[$childId] = $childId;
+		}
+		ksort($ids, SORT_NUMERIC);
+		return array_values($ids);
+	}
+
+	function tmTestReferenceListHtml(array $entries): string
+	{
+		$rows = [];
+		foreach ($entries as $entry) {
+			$name = trim((string)($entry['name'] ?? ''));
+			$id = (int)($entry['id'] ?? 0);
+			$label = $name !== '' ? htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') : 'Test';
+			$reason = trim((string)($entry['reason'] ?? ''));
+			$reasonHtml = $reason !== ''
+				? '<span style="display:block;color:#60758a;margin-top:2px;">' . htmlspecialchars($reason, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</span>'
+				: '';
+			$rows[] = '<li style="margin-top:6px;"><strong>' . $label . '</strong> <span style="color:#60758a;">(ID: ' . $id . ')</span>' . $reasonHtml . '</li>';
+		}
+		return '<ul style="margin:8px 0 14px 20px;padding:0;">' . implode('', $rows) . '</ul>';
+	}
+
+	function tmHtmlMessageText(string $message): string
+	{
+		$message = str_replace(['</p>', '</li>', '<br>', '<br/>', '<br />'], [' ', '; ', ' ', ' ', ' '], $message);
+		$message = html_entity_decode(strip_tags($message), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+		return trim((string)preg_replace('/\s+/', ' ', $message));
+	}
+
+	function tmMutationPublishValidationError(array $structure, rixPDO &$db): ?string
+	{
+		global $uiLang;
+		$childIds = tmMutationChildIds($structure);
+		if (empty($childIds)) return null;
+
+		$placeholders = implode(',', array_fill(0, count($childIds), '?'));
+		$children = $db->fetchTable(
+			"SELECT id, name, parent, structure FROM tests WHERE id IN ($placeholders) ORDER BY id FOR UPDATE",
+			$childIds
+		)['data'] ?? [];
+		$byId = [];
+		foreach ($children as $child) $byId[(int)$child['id']] = $child;
+
+		$issues = [];
+		foreach ($childIds as $childId) {
+			if (!isset($byId[$childId])) {
+				$issues[] = [
+					'id' => $childId,
+					'name' => $uiLang->translate('Missing test'),
+					'reason' => $uiLang->translate('The attached test no longer exists.')
+				];
+				continue;
+			}
+			$child = $byId[$childId];
+			$childStructure = json_decode($child['structure'] ?? '', true);
+			if (!is_array($childStructure) || ($childStructure['type'] ?? null) !== 'linear') {
+				$issues[] = [
+					'id' => $childId,
+					'name' => $child['name'] ?? $uiLang->translate('Invalid test'),
+					'reason' => $uiLang->translate('The attached test is not a valid linear test.')
+				];
+				continue;
+			}
+			$state = tmNormalizeTestState($childStructure['state'] ?? 'draft');
+			$canRead = tmCanAccessEditorEntryTemplate($child, $db);
+			$canModify = tmCanModifyTest($child, $db);
+			if (!$canRead) {
+				$issues[] = [
+					'id' => $childId,
+					'name' => $child['name'] ?? $uiLang->translate('Inaccessible test'),
+					'reason' => $uiLang->translate('You do not have read access to this test.')
+				];
+			} elseif ($state === 'draft' && !$canModify) {
+				$issues[] = [
+					'id' => $childId,
+					'name' => $child['name'] ?? $uiLang->translate('Inaccessible test'),
+					'reason' => $uiLang->translate('The following draft linear tests connected to this mutation test have read-only access. Write access is required to publish them.')
+				];
 			}
 		}
+
+		if (empty($issues)) return null;
+		$groups = [];
+		foreach ($issues as $issue) {
+			$reason = (string)($issue['reason'] ?? $uiLang->translate('The attached test cannot be published.'));
+			unset($issue['reason']);
+			$groups[$reason][] = $issue;
+		}
+
+		$message = '<p><strong>' . $uiLang->translate('The mutation test cannot be published.') . '</strong></p>';
+		foreach ($groups as $reason => $tests) {
+			$message .= '<p>' . htmlspecialchars($reason, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>' .
+				tmTestReferenceListHtml($tests);
+		}
+		return $message;
+	}
+
+	function tmPublishMutationChildren(array $structure, rixPDO &$db): void
+	{
+		foreach (tmMutationChildIds($structure) as $childId) {
+			tmSetStructureState($childId, 'published', $db, 'linear');
+		}
+	}
+
+	function tmPublishedMutationParents(int $linearTestId, rixPDO &$db): array
+	{
+		$rows = $db->fetchTable(
+			"SELECT id, name, structure FROM tests " .
+			"WHERE JSON_UNQUOTE(JSON_EXTRACT(structure, '$.type'))='mutation' " .
+			"AND JSON_UNQUOTE(JSON_EXTRACT(structure, '$.state'))='published' " .
+			"ORDER BY name, id FOR UPDATE"
+		)['data'] ?? [];
+
+		$parents = [];
+		foreach ($rows as $row) {
+			$parentStructure = json_decode($row['structure'] ?? '', true);
+			if (in_array($linearTestId, tmMutationChildIds(is_array($parentStructure) ? $parentStructure : []), true)) {
+				$parents[] = ['id' => (int)$row['id'], 'name' => (string)($row['name'] ?? '')];
+			}
+		}
+		return $parents;
+	}
+
+	function tmLinearDraftMutationError(int $linearTestId, rixPDO &$db): ?string
+	{
+		global $uiLang;
+		$parents = tmPublishedMutationParents($linearTestId, $db);
+		if (empty($parents)) return null;
+		return '<p><strong>' . $uiLang->translate('This linear test cannot be set to Draft.') . '</strong></p>' .
+			'<p>' . $uiLang->translate('It is part of the following published mutation test(s):') . '</p>' .
+			tmTestReferenceListHtml($parents) .
+			'<p>' . $uiLang->translate('Set the mutation test(s) to Draft first, then try again.') . '</p>';
 	}
 
 	function tmIncludeLinkedStimuliForPages(array $pageIds, rixPDO &$db): array
@@ -3038,6 +3168,15 @@ function resetResults($data, &$db, &$returnData)
 		}
 		$currentState = tmNormalizeTestState($currentStructure['state'] ?? 'draft');
 		$requestedState = isset($data['structureState']) ? tmNormalizeTestState($data['structureState']) : $currentState;
+		if (($currentStructure['type'] ?? null) === 'linear' && $currentState === 'published' && $requestedState === 'draft') {
+			$mutationError = tmLinearDraftMutationError((int)$data['id'], $db);
+			if ($mutationError !== null) {
+				$db->rollback();
+				$returnData['error'] = $mutationError;
+				$returnData['reloadTest'] = true;
+				return;
+			}
+		}
 		if ($currentState !== 'published' && $requestedState === 'published') {
 			$structureForLockCheck = $currentStructure;
 			if (isset($data['structure']) && is_array($data['structure'])) {
@@ -3153,6 +3292,15 @@ function resetResults($data, &$db, &$returnData)
 				$structureSaveComplete = array('type' => 'mutation', 'state' => $requestedState, 'pointer' => 0, 'items' => $structureSave);
 			}
 			$data['structure'] = json_encode($structureSaveComplete);
+			if ($requestedState === 'published' && ($structureSaveComplete['type'] ?? null) === 'mutation') {
+				$mutationError = tmMutationPublishValidationError($structureSaveComplete, $db);
+				if ($mutationError !== null) {
+					$db->rollback();
+					$returnData['error'] = $mutationError;
+					$returnData['reloadTest'] = true;
+					return;
+				}
+			}
 
 			//save modified test-structure to db
 			$db->prepare("UPDATE tests SET structure=? WHERE id=?");
@@ -3162,10 +3310,19 @@ function resetResults($data, &$db, &$returnData)
 				$returnData['error'] = $uiLang->translate('The test could not be saved. No changes were applied.');
 				return;
 			}
-			if (($data['publishMutationChildren'] ?? false) && $requestedState === 'published') {
+			if ($requestedState === 'published' && ($structureSaveComplete['type'] ?? null) === 'mutation') {
 				tmPublishMutationChildren($structureSaveComplete, $db);
 			}
 		} elseif (isset($data['structureState'])) {
+			if ($requestedState === 'published' && ($currentStructure['type'] ?? null) === 'mutation') {
+				$mutationError = tmMutationPublishValidationError($currentStructure, $db);
+				if ($mutationError !== null) {
+					$db->rollback();
+					$returnData['error'] = $mutationError;
+					$returnData['reloadTest'] = true;
+					return;
+				}
+			}
 			$currentStructure['state'] = $requestedState;
 			$db->prepare("UPDATE tests SET structure=? WHERE id=?");
 			$db->executePrepared(array(json_encode($currentStructure), $data['id']));
@@ -3174,7 +3331,7 @@ function resetResults($data, &$db, &$returnData)
 				$returnData['error'] = $uiLang->translate('The test could not be saved. No changes were applied.');
 				return;
 			}
-			if (($data['publishMutationChildren'] ?? false) && $requestedState === 'published') {
+			if ($requestedState === 'published' && ($currentStructure['type'] ?? null) === 'mutation') {
 				tmPublishMutationChildren($currentStructure, $db);
 			}
 		}
@@ -3333,10 +3490,6 @@ function resetResults($data, &$db, &$returnData)
 		$changes = $data['changes'];
 		$bulkStructureState = null;
 		if (array_key_exists('testState', $changes)) {
-			if (!($myAuth->checkSA() || $myAuth->checkAdmin() || $myAuth->checkElevatedAdmin())) {
-				$returnData['error'] = $uiLang->translate('Only Superadmins, Elevated Admins and Admins may change the test state in bulk edit.');
-				return;
-			}
 			if (!in_array($changes['testState'], ['draft', 'published'], true)) {
 				$returnData['error'] = $uiLang->translate('Invalid test state selected.');
 				return;
@@ -3400,7 +3553,7 @@ function resetResults($data, &$db, &$returnData)
 				$perId[$testId] = ['ok' => false, 'msg' => $denyMsg];
 				continue;
 			}
-			$row = $db->fetchRow('SELECT id, active, options, skin, structure FROM tests WHERE id=? LIMIT 1', [$testId]);
+			$row = $db->fetchRow('SELECT id, name, active, options, skin, structure FROM tests WHERE id=? LIMIT 1 FOR UPDATE', [$testId]);
 			if (($row['rows'] ?? 0) === 0) {
 				$perId[$testId] = ['ok' => false, 'msg' => $uiLang->translate('Test no longer exists.')];
 				continue;
@@ -3438,7 +3591,26 @@ function resetResults($data, &$db, &$returnData)
 				}
 				$currentStructureState = tmNormalizeTestState($structureArr['state'] ?? 'draft');
 				if ($currentStructureState !== $bulkStructureState) {
+					if ($currentStructureState === 'published' && $bulkStructureState === 'draft' && !tmCanSwitchStructureStateToDraft($testId, $db)) {
+						$draftError = tmPublishedToDraftError($testId, $db);
+						$perId[$testId] = ['ok' => false, 'msg' => tmHtmlMessageText($draftError), 'html' => $draftError, 'testName' => $cur['name'] ?? ''];
+						continue;
+					}
+					if ($bulkStructureState === 'draft' && ($structureArr['type'] ?? null) === 'linear') {
+						$mutationError = tmLinearDraftMutationError($testId, $db);
+						if ($mutationError !== null) {
+							$perId[$testId] = ['ok' => false, 'msg' => tmHtmlMessageText($mutationError), 'html' => $mutationError, 'testName' => $cur['name'] ?? ''];
+							continue;
+						}
+					}
 					if ($bulkStructureState === 'published') {
+						if (($structureArr['type'] ?? null) === 'mutation') {
+							$mutationError = tmMutationPublishValidationError($structureArr, $db);
+							if ($mutationError !== null) {
+								$perId[$testId] = ['ok' => false, 'msg' => tmHtmlMessageText($mutationError), 'html' => $mutationError, 'testName' => $cur['name'] ?? ''];
+								continue;
+							}
+						}
 						$invalidPages = tmInvalidCompiledPages($structureArr, $db);
 						if (!empty($invalidPages)) {
 							$page = $invalidPages[0];
@@ -3577,6 +3749,11 @@ function resetResults($data, &$db, &$returnData)
 				$sql = 'UPDATE tests SET ' . implode(', ', $updates) . ' WHERE id=?';
 				$db->prepare($sql);
 				$db->executePrepared($params);
+				if (!empty($db->results()['error'])) {
+					$db->rollback();
+					$returnData['error'] = $uiLang->translate('The tests could not be saved. No changes were applied.');
+					return;
+				}
 
 				$updated++;
 				registerActivity($db, (int)$myAuth->userid, $testId, 'test');
@@ -3619,7 +3796,9 @@ function resetResults($data, &$db, &$returnData)
 		foreach ($perId as $id => $r) {
 			if (isset($r['ok']) && $r['ok'] === false) {
 				$msg = !empty($r['msg']) ? $r['msg'] : $uiLang->translate('Could not update.');
-				$warn[] = ['message' => sprintf('#%d — %s', $id, $msg)];
+				$warning = ['testId' => (int)$id, 'testName' => (string)($r['testName'] ?? ''), 'message' => $msg];
+				if (!empty($r['html'])) $warning['html'] = $r['html'];
+				$warn[] = $warning;
 			}
 		}
 		$returnData['warnings'] = $warn;
@@ -4553,13 +4732,14 @@ function resetResults($data, &$db, &$returnData)
 				$skippedMissing++;
 				continue;
 			}
-			if (!tmCanAccessEditorEntryTemplate($linearMap[$testId], $db) || !tmCanModifyTest($linearMap[$testId], $db)) {
-				$skippedBlocked++;
-				continue;
-			}
 			$linearStructure = json_decode($linearMap[$testId]['structure'] ?? '', true);
 			if (!is_array($linearStructure) || ($linearStructure['type'] ?? '') !== 'linear') {
 				$skippedInvalidType++;
+				continue;
+			}
+			$linearState = tmNormalizeTestState($linearStructure['state'] ?? 'draft');
+			if (!tmCanAccessEditorEntryTemplate($linearMap[$testId], $db) || ($linearState === 'draft' && !tmCanModifyTest($linearMap[$testId], $db))) {
+				$skippedBlocked++;
 				continue;
 			}
 
@@ -4574,8 +4754,29 @@ function resetResults($data, &$db, &$returnData)
 		}
 
 		$targetStructure['pointer'] = (int)($targetStructure['pointer'] ?? 0);
+		$db->startTransaction();
+		$lockedTarget = $db->fetchRow('SELECT structure FROM tests WHERE id=? LIMIT 1 FOR UPDATE', [$targetTestId]);
+		if (($lockedTarget['rows'] ?? 0) === 0 || (string)($lockedTarget['data']['structure'] ?? '') !== (string)($target['structure'] ?? '')) {
+			$db->rollback();
+			$returnData['error'] = $uiLang->translate('This mutation test has changed. Nothing was imported; reload it and try again.');
+			$returnData['reloadTest'] = true;
+			return;
+		}
+		if (tmNormalizeTestState($targetStructure['state'] ?? 'draft') === 'published') {
+			$mutationError = tmMutationPublishValidationError($targetStructure, $db);
+			if ($mutationError !== null) {
+				$db->rollback();
+				$returnData['error'] = $mutationError;
+				return;
+			}
+		}
 		$db->prepare('UPDATE tests SET structure=? WHERE id=?');
 		$db->executePrepared(array(json_encode($targetStructure), $targetTestId));
+		if (!empty($db->results()['error'])) {
+			$db->rollback();
+			$returnData['error'] = $uiLang->translate('The mutation test could not be updated. No changes were applied.');
+			return;
+		}
 		if (tmNormalizeTestState($targetStructure['state'] ?? 'draft') === 'published') {
 			tmPublishMutationChildren($targetStructure, $db);
 		}
@@ -4588,6 +4789,12 @@ function resetResults($data, &$db, &$returnData)
 		$returnData['reloadTest'] = true;
 
 		registerActivity($db, (int)$myAuth->userid, $targetTestId, 'test');
+		if (!empty($db->results()['error'])) {
+			$db->rollback();
+			$returnData['error'] = $uiLang->translate('The mutation test could not be updated. No changes were applied.');
+			return;
+		}
+		$db->commit();
 	}
 
 	function tmDecodeEditorEntries(?string $json): array

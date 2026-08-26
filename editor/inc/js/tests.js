@@ -2684,7 +2684,7 @@ function openBulkEditDialog() {
         <div class="bulkCol" id="bulkColR">
           <div id="bulk_langs" class="bulkBlock"></div>
           <div id="bulk_skin" class="bulkBlock"></div>
-          ${isTestStateAdminAllowed() ? '<div id="bulk_state" class="bulkBlock"></div>' : ''}
+	          <div id="bulk_state" class="bulkBlock"></div>
         </div>
       </div>
     </div>
@@ -2803,7 +2803,7 @@ function openBulkEditDialog() {
     const $misc   = $('#bulk_misc').append("<h3>" + UILANG.m('Miscellaneous') + "</h3>");
     const $langs  = $('#bulk_langs').append("<h3>" + UILANG.m('Languages') + "</h3>");
     const $skin = $('#bulk_skin').append(`<h3>${UILANG.m('Skin')}</h3><div id="bulk_skin_row"></div><div id="bulk_skin_opts"></div>`);
-    const $state = isTestStateAdminAllowed() ? $('#bulk_state').append("<h3>" + UILANG.m('Test state') + "</h3>") : null;
+	    const $state = $('#bulk_state').append("<h3>" + UILANG.m('Test state') + "</h3>");
     var ctl = window.ctl = { misc:{}, lang:{}, skinOpts:{} };
     const $skinRow  = $('#bulk_skin_row');
     const $skinOpts = $('#bulk_skin_opts');
@@ -13753,13 +13753,27 @@ function ajaxSuccess(res) {
             $box.append('<br />');
 
             // Warnings (e.g., skipped IDs, not found, no permission, etc.)
-            if ((res.warnings || []).length > 0) {
-                $boxRoot.append('<br /><div class="add2selError">' +
-                    UILANG.m('Warning:') + ' ' + UILANG.m('The following issues have been detected:') + '</div><br />');
-                (res.warnings || []).forEach(w =>
-                    $boxRoot.append(UILANG.e(w.message || String(w)) + '<hr class="add2selHR" />')
-                );
-            } else {
+	            if ((res.warnings || []).length > 0) {
+	                $boxRoot.append('<br /><div class="add2selError">' +
+	                    UILANG.m('Warning:') + ' ' + UILANG.m('The following issues have been detected:') + '</div><br />');
+	                (res.warnings || []).forEach(w => {
+	                    const testId = (w && typeof w.testId !== 'undefined') ? String(w.testId) : '';
+	                    const testName = (w && w.testName) ? String(w.testName) : '';
+	                    const testLabel = testName
+	                        ? UILANG.e(testName) + (testId ? ' <span style="font-weight:400;color:#60758a;">(ID: ' + UILANG.e(testId) + ')</span>' : '')
+	                        : (testId ? UILANG.m('Test ID') + ': ' + UILANG.e(testId) : '');
+	                    const heading = testLabel
+	                        ? '<div style="font-weight:700;color:#173c55;margin-bottom:8px;">' + testLabel + '</div>'
+	                        : '';
+	                    const details = (w && w.html)
+	                        ? w.html
+	                        : '<div>' + UILANG.e((w && w.message) ? w.message : String(w)) + '</div>';
+	                    $boxRoot.append(
+	                        '<div style="margin:0 0 12px;padding:12px 14px;border:1px solid #edc36c;border-radius:7px;background:#fffaf0;">' +
+	                        heading + details + '</div>'
+	                    );
+	                });
+	            } else {
                 $boxRoot.append('<br /><div class="add2selSuccessDiv">' +
                     UILANG.m('All tasks completed successfully. No issues found!') + '</div>');
             }
