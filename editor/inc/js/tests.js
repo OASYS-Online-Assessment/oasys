@@ -3703,7 +3703,13 @@ function fillDataFields(fillMode) {
                         } else {
                             value.maxScore = serverData.testLevel.scoring[value.hiddenID];
                         }
-                        gui.structureView.addElement(value, true);
+                        // itemGroupId is supplemental preview metadata, not a
+                        // visible sortable-table column. Keep it in serverData,
+                        // but do not pass it to jsSortableTable because that
+                        // component renders every enumerable property as a cell.
+                        const structureRow = {...value};
+                        delete structureRow.itemGroupId;
+                        gui.structureView.addElement(structureRow, true);
                     })
                 }
                 if (mode !== 'editTest') gui.structureView.lock('greyout');

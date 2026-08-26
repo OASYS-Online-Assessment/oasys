@@ -6635,6 +6635,10 @@ function resetResults($data, &$db, &$returnData)
 			$returnData['reloadFolder'] = true;
 			die();
 		}
+		if (!tmCanModifyTest($result['data'], $db)) {
+			$returnData['error'] = $uiLang->translate('You do not have permission to change this test.');
+			return;
+		}
 		tmAbortIfPublishedTestRow($result['data'], $returnData, 'This test is Published (Locked). Test variables cannot be changed while the test is locked.');
 
 		//update test variables

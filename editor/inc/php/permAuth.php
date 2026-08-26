@@ -218,6 +218,22 @@ class permAuth
 			array_push($this->folder_id['folders'], $data['i_id']);
 		}
 		# --------------------------------------------------------- #
+		# Test Manager folder modification permission handler       #
+		# --------------------------------------------------------- #
+		elseif ($action === 'saveTestFolder') {
+			$this->folder_id['folders'] = [];
+			array_push($this->folder_id['folders'], $data['id'] ?? null);
+		}
+		# --------------------------------------------------------- #
+		# Test Manager bulk modification permission handler         #
+		# --------------------------------------------------------- #
+		elseif ($action === 'saveTestBulk') {
+			$this->folder_id['files'] = array_values(array_filter(
+				array_map('intval', is_array($data['targets'] ?? null) ? $data['targets'] : []),
+				static fn(int $id): bool => $id > 0
+			));
+		}
+		# --------------------------------------------------------- #
 		# Single itemGroup (file) handling or library folder access #
 		# --------------------------------------------------------- #
 		elseif (isset($data['type']) && $data['type'] === 'folder') {
