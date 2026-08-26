@@ -142,14 +142,16 @@ if (!function_exists('oasys_syscheck')) {
         // ---------- PHP version ----------
         $pv = phpversion();
         $phpMin = '8.3.23';
-        $phpMax = '8.5.9';
-        $flag   = (version_compare($pv, $phpMin) >= 0 && version_compare($pv, $phpMax) <= 0) ? true : (version_compare($pv, $phpMax) > 0 ? 'warn' : false);
+        $phpMaxExclusive = '8.6.0';
+        $flag = (version_compare($pv, $phpMin, '>=') && version_compare($pv, $phpMaxExclusive, '<'))
+            ? true
+            : (version_compare($pv, $phpMaxExclusive, '>=') ? 'warn' : false);
         $set(
             'Php Version',
             $flag,
-            ">= $phpMin <= $phpMax",
+            ">= $phpMin < $phpMaxExclusive",
             $pv,
-            "Oasys is officially supported on versions between {$phpMin} and {$phpMax}. Please update your Php version to a supported version.",
+            "Oasys is officially supported on versions from {$phpMin} up to, but not including, {$phpMaxExclusive}. Please update your Php version to a supported version.",
             "{$pv}\n\nPlease note that Oasys has not been officially verified on this version of Php. You may continue to use this version at your own risk!",
             "PHP runtime"
         );
@@ -325,12 +327,14 @@ if (!function_exists('oasys_syscheck')) {
             "Database"
         );
         $minDB = '11.8.2';
-        $maxDB = '12.3.2';
-        $flagDB = (version_compare($dbVersion, $minDB) >= 0 && version_compare($dbVersion, $maxDB) <= 0) ? true : (version_compare($dbVersion, $maxDB) > 0 ? 'warn' : false);
+        $maxDBExclusive = '12.4.0';
+        $flagDB = (version_compare($dbVersion, $minDB, '>=') && version_compare($dbVersion, $maxDBExclusive, '<'))
+            ? true
+            : (version_compare($dbVersion, $maxDBExclusive, '>=') ? 'warn' : false);
         $set(
             'Database Version',
             $flagDB,
-            ">= {$minDB} <= {$maxDB}",
+            ">= {$minDB} < {$maxDBExclusive}",
             (string)$dbVersion,
             "Not running the correct database version. Although Oasys may continue to run, MariaDB version {$dbVersion} is no longer officially supported.",
             "{$dbVersion}\n\nPlease note this version has not been officially verified for Oasys. You may continue to use this version at your own risk!",
