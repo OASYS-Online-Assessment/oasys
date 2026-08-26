@@ -485,6 +485,24 @@ class pageClass
 			if ($pageData['blocks'] === null || $pageData['languages'] === null) {
 				return;
 			}
+			if ($pageData['metadata'] !== null && $pageData['metadata'] !== '') {
+				$pageData['metadata'] = json_decode($pageData['metadata']);
+				if (json_last_error() !== JSON_ERROR_NONE || !$pageData['metadata'] instanceof stdClass) {
+					$this->returnData['error'] = "Error decoding metadata: " . json_last_error_msg();
+					return;
+				}
+			} else {
+				$pageData['metadata'] = new stdClass();
+			}
+			$customCSS = null;
+			if (property_exists($pageData['metadata'], 'customCSS')) {
+				try {
+					$customCSS = $this->sanitizeCustomCSS($pageData['metadata']->customCSS);
+				} catch (InvalidArgumentException $e) {
+					$this->returnData['error'] = $e->getMessage();
+					return;
+				}
+			}
 
 			$compiler = new InteractionCompiler($pageData['blocks'], $pageData['languages'], $id, $this->db, []);
 			$compiler->compileBlocks();
@@ -497,24 +515,16 @@ class pageClass
 				$pageData['scripts'] = null;
 			} else {
 				$pageData['fields'] = $compiler->getFields();
-				$pageData['options'] = $compiler->getOptions();
+				$pageData['options'] = $this->mergeCustomCSS($compiler->getOptions(), $customCSS);
+				if ($pageData['options'] === null) return;
 				$pageData['parsed'] = $compiler->getParsed();
 				$pageData['scripts'] = $compiler->getScripts();
 				$pageData['blocks'] = $compiler->getBlocks();
 			}
 			$newMetaData = $compiler->getMetadata();
-			if ($pageData['metadata'] !== null && $pageData['metadata'] !== '') {
-				$pageData['metadata'] = json_decode($pageData['metadata']);
-				if (json_last_error() !== JSON_ERROR_NONE) {
-					$this->returnData['error'] = "Error decoding metadata: " . json_last_error_msg();
-					return;
-				}
-				// Merge new metadata with existing metadata
-				foreach ($newMetaData as $key => $value) {
-					$pageData['metadata']->$key = $value;
-				}
-			} else {
-				$pageData['metadata'] = new stdClass();
+			// Merge new metadata with existing metadata
+			foreach ($newMetaData as $key => $value) {
+				$pageData['metadata']->$key = $value;
 			}
 			// Convert metadata back to JSON
 			$pageData['metadata'] = json_encode($pageData['metadata'], JSON_UNESCAPED_UNICODE);
@@ -551,6 +561,17 @@ class pageClass
 			} else {
 				$newData['metadata'] = new stdClass();
 			}
+			$customCSS = null;
+			if (property_exists($newData['metadata'], 'customCSS')) {
+				try {
+					$customCSS = $this->sanitizeCustomCSS($newData['metadata']->customCSS);
+				} catch (InvalidArgumentException $e) {
+					$this->returnData['error'] = $e->getMessage();
+					return;
+				}
+			}
+			$newData['options'] = $this->mergeCustomCSS($newData['options'], $customCSS);
+			if ($newData['options'] === null) return;
 			// Convert metadata back to JSON
 			$newData['metadata'] = json_encode($newData['metadata'], JSON_UNESCAPED_UNICODE);
 			if ($newData['fields'] !== $pageData['fields'] || $newData['options'] !== $pageData['options'] || $newData['parsed'] !== $pageData['parsed'] || $newData['scripts'] !== $pageData['scripts'] || $newData['blocks'] !== $pageData['blocks'] || $newData['metadata'] !== $pageData['metadata']) {

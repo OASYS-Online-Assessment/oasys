@@ -201,8 +201,15 @@ function initialize() {
 	});
 	gui.dlStimuli.hide();
 	insertSpacer(gui.pageProperties);
-	gui.pageComment = insertStaticText(gui.pageProperties, 'pageComment', `<b>${UILANG.m('comments:')}</b>`, {}, {twoRows: true});
+	gui.pageCustomCSS = insertStaticText(gui.pageProperties, 'pageCustomCSS', `<b>${UILANG.m('custom CSS:')}</b>`, {}, {twoRows: true});
+	gui.cssButtonStrip = insertButtons(gui.pageProperties, 'cssButtonStrip', '', {
+		'cssButton': {
+			callback: () => customCSSDialog(),
+			label: UILANG.m('edit CSS')
+		}
+	}, {noLabel: true});
 	insertSpacer(gui.pageProperties);
+	gui.pageComment = insertStaticText(gui.pageProperties, 'pageComment', `<b>${UILANG.m('comments:')}</b>`, {}, {twoRows: true});
 	gui.buttonStrip = insertButtons(gui.pageProperties, 'buttonStrip', '', {
 		'commentButton': {
 			callback: () => commentsDialog(),
@@ -216,6 +223,7 @@ function initialize() {
 	controller.registerView(gui.pageName.getPropertyField().setText, 'name');
 	controller.registerView(gui.pageCode.getPropertyField().setText, 'itemCode');
 	controller.registerView(gui.useAsStimulus.reset, 'metadata', 'useAsStimulus');
+	controller.registerView(updateCustomCSSSummary, 'metadata', 'customCSS');
 	controller.registerView(gui.pageComment.setText, 'metadata', 'comments');
 	controller.registerView(stimulusRoleObserver, 'metadata', 'useAsStimulus');
 	controller.registerView(updateStimulusLink, 'link');
@@ -1483,6 +1491,98 @@ function commentsDialog() {
 	);
 }
 
+function updateCustomCSSSummary(cssRules) {
+	const ruleCount = Array.isArray(cssRules) ? cssRules.length : 0;
+	let summary = UILANG.m('No page-specific CSS');
+	if (ruleCount === 1) {
+		summary = UILANG.m('1 CSS rule defined');
+	} else if (ruleCount > 1) {
+		summary = sf(UILANG.m('%@ CSS rules defined'), ruleCount);
+	}
+	gui.pageCustomCSS.setText(summary);
+}
+
+function customCSSDialog(cssText = null) {
+	if (cssText === null) {
+		cssText = serializeCustomCSS(controller.getData('metadata', 'customCSS'));
+	}
+	const escapedCSS = $('<div>').text(cssText).html();
+	const scopeGuidance = UILANG.m(
+		'Use ${page} as the general page-content scope. Use ${stimulus} for stimulus pages or ${question} for question pages when the styles need to differ. Limit selectors to descendants of these containers so page CSS does not affect the surrounding skin.',
+		{
+			page: '<code>.oasys-page-content</code>',
+			stimulus: '<code>.oasys-stimulus-content</code>',
+			question: '<code>.oasys-question-content</code>'
+		}
+	);
+	const dialogData = {
+		buttons: [
+			{label: UILANG.m('cancel'), 'cancel': true, value: 'cancel'},
+			{label: UILANG.m('save'), 'default': true, value: 'ok'}
+		],
+		contents: '<div class="pageCSSEditor">' +
+			'<p>' + UILANG.m('Enter CSS that will be applied to this page in every language.') + '</p>' +
+			'<p class="pageCSSEditorRecommendation"><strong>' + UILANG.m('Recommended:') + '</strong> ' + scopeGuidance + '</p>' +
+			'<textarea id="pageCustomCSSArea" spellcheck="false" aria-label="' + UILANG.m('Custom CSS') + '">' + escapedCSS + '</textarea>' +
+			'</div>',
+		datafields: ['pageCustomCSSArea'],
+		dataFormat: 'object',
+		doNotStripHTML: true,
+		focus: 'pageCustomCSSArea',
+		returnPromise: true,
+		title: UILANG.m('Page custom CSS'),
+		width: 900
+	};
+
+	showDialog('pageCustomCSSDialog', dialogData).then((res) => {
+		if (res.button !== 'ok') return;
+		const enteredCSS = res.data.pageCustomCSSArea ?? '';
+		try {
+			controller.setData(parseCustomCSS(enteredCSS), 'metadata', 'customCSS');
+		} catch (error) {
+			showMessage(error.message, () => customCSSDialog(enteredCSS));
+		}
+	});
+}
+
+function serializeCustomCSS(cssRules) {
+	if (!Array.isArray(cssRules)) return '';
+	return cssRules.map((cssRule) => {
+		if (!cssRule || typeof cssRule.selector !== 'string' || typeof cssRule.rules !== 'string') return '';
+		return `${cssRule.selector} {\n\t${cssRule.rules}\n}`;
+	}).filter(Boolean).join('\n\n');
+}
+
+function parseCustomCSS(cssText) {
+	if (typeof cssText !== 'string' || cssText.trim() === '') return [];
+
+	// Parse in a detached document so page selectors cannot affect the editor while the dialog is being saved.
+	const cssDocument = document.implementation.createHTMLDocument('');
+	const style = cssDocument.createElement('style');
+	style.textContent = cssText;
+	cssDocument.head.appendChild(style);
+	try {
+		const parsedRules = Array.from(style.sheet?.cssRules ?? []);
+		if (parsedRules.length === 0) {
+			throw new Error(UILANG.m('No valid CSS rules were found. Please check the CSS syntax.'));
+		}
+		return parsedRules.map((cssRule) => {
+			const normalizedRule = cssRule.cssText;
+			const openingBrace = normalizedRule.indexOf('{');
+			const closingBrace = normalizedRule.lastIndexOf('}');
+			if (openingBrace < 1 || closingBrace <= openingBrace) {
+				throw new Error(UILANG.m('Only CSS rules with a declaration block are supported.'));
+			}
+			return {
+				selector: normalizedRule.slice(0, openingBrace).trim(),
+				rules: normalizedRule.slice(openingBrace + 1, closingBrace).trim()
+			};
+		});
+	} finally {
+		style.remove();
+	}
+}
+
 /***** view onchange callbacks *****/
 
 function onStimulusSelect(sender, value, dirty, key) {
@@ -1826,6 +1926,7 @@ function ajaxSuccess(res) {
 				pageData.languages.push(settings.defaultLanguage);
 			}
 			controller.setData(pageData);
+			updateCustomCSSSummary(pageData.metadata.customCSS);
 			controller.resetChangedFlag();
 			serverData.group.id = controller.getData('groupId'); //hold groupId for jsMedia Plugin to function
 			serverData.group.items = res.data.group; //hold item list of group needed to sanitize stimulus role and links

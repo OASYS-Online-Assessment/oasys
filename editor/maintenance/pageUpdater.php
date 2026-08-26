@@ -185,7 +185,8 @@
 				$pageData['scripts'] = null;
 			} else {
 				$pageData['fields'] = $compiler->getFields();
-				$pageData['options'] = $compiler->getOptions();
+				$pageData['options'] = $this->mergeCustomCSS($compiler->getOptions(), $pageData['metadata']->customCSS ?? null);
+				if ($pageData['options'] === null) return;
 				$pageData['parsed'] = $compiler->getParsed();
 				$pageData['scripts'] = $compiler->getScripts();
 				$pageData['blocks'] = $compiler->getBlocks();
@@ -249,6 +250,28 @@
 				//revert back to default value if value from database could not be json decoded
 				$this->data[$key] = $default;
 			}
+		}
+
+		/** Preserve CSS entered in the page editor when maintenance recompiles compiler-owned columns. */
+		private function mergeCustomCSS(string $compiledOptions, mixed $customCSS): ?string
+		{
+			if ($customCSS === null) return $compiledOptions;
+			if (!is_array($customCSS)) {
+				$this->returnData['error'] = "Stored page custom CSS is not a list of rules.";
+				return null;
+			}
+			$options = json_decode($compiledOptions);
+			if (!$options instanceof stdClass) {
+				$this->returnData['error'] = "The interaction compiler returned invalid options while preserving custom CSS.";
+				return null;
+			}
+			$keywordCSS = $options->customCSS ?? [];
+			if (!is_array($keywordCSS)) {
+				$this->returnData['error'] = "The interaction compiler returned invalid custom CSS options.";
+				return null;
+			}
+			$options->customCSS = array_merge($keywordCSS, $customCSS);
+			return json_encode($options, JSON_UNESCAPED_UNICODE);
 		}
 
 		private function checkBlock(stdClass $block, int $index): void
