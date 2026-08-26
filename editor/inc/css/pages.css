@@ -53,6 +53,18 @@ div#scoringEditorSwitch {}
 	overflow-y: clip;
 }
 
+#interactionBlocksToolbar {
+	background-color: #FFFFFF;
+	display: none;
+	flex: 0 0 auto;
+	justify-content: flex-end;
+	padding: 6px 8px 0;
+}
+
+#interactionBlocksToolbar.visible {
+	display: flex;
+}
+
 #interactionBlocks {
     background-color: #FFFFFF;
     flex: 1;
@@ -175,6 +187,10 @@ div.interactionBlock {
 	background-color: #FFFFFF;
 	margin: 10px 0;
 	border-radius: 4px;
+}
+
+#interactionBlocks.hasBlocksToolbar > div.interactionBlock:first-child {
+	margin-top: 0;
 }
 
 div.interactionBlock.dragging {

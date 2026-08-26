@@ -138,9 +138,19 @@ function initialize() {
 	$('#UI').append("<div id='editorPane'></div>");
 	gui.languageTabs = new jsTabs($("#editorPane"), "languageTabs");
 
-	$('#editorPane').append("<div id='interactionBlocks'></div><div id='blockEditor'></div>");
+	$('#editorPane').append("<div id='interactionBlocksToolbar'></div><div id='interactionBlocks'></div><div id='blockEditor'></div>");
+	gui.interactionBlocksToolbar = $('#interactionBlocksToolbar');
 	gui.interactionBlocks = $('#interactionBlocks');
 	gui.blockEditor = $('#blockEditor').hide();
+	buttons.expandAllBlocks = new nxButton(gui.interactionBlocksToolbar, 'bExpandAllBlocks', {
+		label: UILANG.m('expand all'),
+		callback: () => setAllBlockPreviews(true)
+	});
+	buttons.collapseAllBlocks = new nxButton(gui.interactionBlocksToolbar, 'bCollapseAllBlocks', {
+		label: UILANG.m('collapse all'),
+		callback: () => setAllBlockPreviews(false)
+	});
+	updateInteractionBlocksToolbar(0);
 	let sections = {order: blockManifest.sections.order, labels: {}};
 	for (let i in blockManifest.sections.labels) {
 		sections.labels[i] = UILANG.m(blockManifest.sections.labels[i]); //*** skip langcheck ***
@@ -799,14 +809,35 @@ function unsavedChangesWarning() {
 
 }
 
-function toggleBlockPreview(data) {
+function toggleBlockPreview(data, event) {
 	rixToolsDebug(1, `toggleBlockPreview(data)`);
+	if (event?.shiftKey) {
+		setAllBlockPreviews(data.visible, data.block);
+		return;
+	}
 	blockStates[data.block] = data.visible;
 	if (data.visible) {
 		$(`.interactionBlock[data-position="${data.block}"]`).addClass("expanded");
 	} else {
 		$(`.interactionBlock[data-position="${data.block}"]`).removeClass("expanded");
 	}
+}
+
+function setAllBlockPreviews(visible, sourceBlock = null) {
+	rixToolsDebug(1, `setAllBlockPreviews(${visible ? 'true' : 'false'})`);
+	for (let i = 0; i < blockStates.length; i++) {
+		blockStates[i] = visible;
+		$(`.interactionBlock[data-position="${i}"]`).toggleClass('expanded', visible);
+		if (String(i) !== String(sourceBlock)) {
+			buttons.blocks[i]?.expandButton?.setState(!visible);
+		}
+	}
+}
+
+function updateInteractionBlocksToolbar(blockCount = blockStates.length) {
+	let visible = mode === 'page' && blockCount > 1;
+	gui.interactionBlocksToolbar.toggleClass('visible', visible);
+	gui.interactionBlocks.toggleClass('hasBlocksToolbar', visible);
 }
 
 function editBlock(id) {
@@ -827,6 +858,7 @@ function editBlock(id) {
 	controller.disableUndo();
 	buttons.abortEditing.switchMode(mode);
 	gui.blockEditor.show();
+	updateInteractionBlocksToolbar();
 	gui.interactionBlocks.hide();
 	gui.lPanel.hide();
 	gui.rPanel.disableSection("page");
@@ -861,6 +893,7 @@ function abortEditingBlock() {
 	}
 	editor = null;
 	gui.blockEditor.hide();
+	updateInteractionBlocksToolbar();
 	gui.interactionBlocks.show();
 	gui.lPanel.show();
 	gui.rPanel.enableSection("page");
@@ -1338,6 +1371,7 @@ function updateStimulusLink(link) {
 
 function updateInteractionBlocks(blocks) {
 	rixToolsDebug(1, `updateInteractionBlocks(blocks)`);
+	updateInteractionBlocksToolbar(blocks.length);
 	if (blockStates.length !== blocks.length) {
 		//if block states are not up-to-date, expand all blocks by default -> happens on loading new page
 		blockStates = [];
@@ -1361,18 +1395,20 @@ function updateInteractionBlocks(blocks) {
 		view.append(html);
 		let buttonData = {
 			iconHeight: 24,
-			callback: toggleBlockPreview,
+			callback: (visible, event) => toggleBlockPreview({block: i, visible: visible}, event),
+			passEvent: true,
 			states: [{
 				icon: svgIcons.eyeDown,
-				value: {block: i, visible: true}
+				value: true
 			}, {
 				icon: svgIcons.eyeUp,
-				value: {block: i, visible: false}
+				value: false
 			}],
-			state: blockStates[i] === true ? 1 : 0,
+			state: blockStates[i] === true ? false : true,
 			toggle: true
 		};
 		buttons['blocks'][i]['expandButton'] = new nxButton($(`#block_${i}_buttons > .interactionBlockPreviewButton`), `block_${i}_expandButton`, buttonData);
+		buttons['blocks'][i]['expandButton'].element.attr('title', `Shift: ${UILANG.m('expand all')} / ${UILANG.m('collapse all')}`);
 		if (blockStates[i] === true) {
 			$(`#block_${i}`).addClass('expanded');
 		}
