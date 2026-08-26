@@ -815,25 +815,7 @@ Thus if you see the attribute \kw{FUNCTION="endTest()"}, that is identical to \k
 
 \subsection{css rule}\label{subsec:css-rule}
 
-Syntax:\hspace{0.5cm}\kw{[@CSS ... @]}
-
-\begin{properties}
-\hline
-SELECTOR & a CSS selector as standardized by w3.org\\
-RULES & standard CSS rules separated with semicolons \\
-\hline
-\end{properties}
-\vspace{0.1cm}
-
-\begin{exampleBox}{Example}
-	Defining the padding of all table cells on page:\\
-	\kw{[@CSS SELECTOR="table tr > td" RULES="padding: 10px 5px;"@]}
-\end{exampleBox}
-
-\begin{advancedBox}{Notes}
-This keyword must be put into a paragraph by its own.
-The paragraph will be removed completely when rendering the page.
-\end{advancedBox}
+This keyword has been retired as of OASYS 3.6.0 and is no longer supported. Please use the new \kw{custom CSS} feature in the page editor instead. All CSS rules that were previously defined with this keyword were automatically migrated to the new feature and will be applied to the page as before. \\
 
 \subsection{drag and drop}\label{subsec:drag-and-drop}
 
