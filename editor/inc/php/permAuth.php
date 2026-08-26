@@ -88,7 +88,7 @@ class permAuth
 		# ------------------------------------------------------------------------------------------ #
 		# Determine referring page and set vars based on it, or exit with error code on bad referral #
 		# ------------------------------------------------------------------------------------------ #
-		$allowedSources = ['dashboard', 'backup', 'upgrader', 'systemSettings', 'l10n', 'users', 'content', 'tests', 'items', 'testTakers', 'results', 'accountProp', 'activityTracker'];
+		$allowedSources = ['dashboard', 'backup', 'upgrader', 'systemSettings', 'l10n', 'users', 'content', 'tests', 'items', 'pages', 'testTakers', 'results', 'accountProp', 'activityTracker'];
 
 		switch ($action) {
 			case 'previewItem':
@@ -120,6 +120,9 @@ class permAuth
 			$this->returnData['error'] = $this->uiLang->translate("Could not determine section referral source.");
 			return;
 		}
+		// The attached page editor is part of the Content Manager and uses the
+		// same item-folder permission tables as items.php.
+		if ($this->srcRef === 'pages') $this->srcRef = 'items';
 
 		# --------------------------------- #
 		# Load JSON permission schema files #
@@ -224,7 +227,7 @@ class permAuth
 		# --------------------------------------------------------------------------------------------------------------------------------------------- #
 		# Item editing (file) handling - we are not using 'location' value of item # because that value can be spoofed and not locked to actual item id #
 		# --------------------------------------------------------------------------------------------------------------------------------------------- #
-		elseif (in_array($action, ['checkItem', 'fetchStimulus', 'deleteItem', 'renameItem', 'saveItem', 'duplicateItem', 'lockItem'])) {
+		elseif (in_array($action, ['checkItem', 'fetchStimulus', 'deleteItem', 'renameItem', 'saveItem', 'duplicateItem', 'lockItem', 'fetchPage', 'savePage'])) {
 			$this->folder_id['files'] = [];
 			array_push($this->folder_id['files'], $data['item'] ?? $data['link'] ?? $data['id']);
 		}
@@ -684,7 +687,7 @@ class permAuth
 						$parentFolderId = $this->db->fetchValue("SELECT `parent` FROM `tests` WHERE `id` = ?", [$fileItemId])['data']; // special condition to switch to an it_var value not currently in the varset definintion list
 						$it_vars['i_rootFldTblName'] = $it_vars['i_xrefFldLink'];
 					} elseif (
-						in_array($this->action, ['checkItem', 'fetchStimulus', 'deleteItem', 'renameItem', 'saveItem', 'duplicateItem', 'lockItem']) || ($this->action === 'preview' && $data['previewMode'] === 'item')
+						in_array($this->action, ['checkItem', 'fetchStimulus', 'deleteItem', 'renameItem', 'saveItem', 'duplicateItem', 'lockItem', 'fetchPage', 'savePage']) || ($this->action === 'preview' && $data['previewMode'] === 'item')
 					) {
 						if ($this->action === 'fetchStimulus' && $fileItemId === -1) continue; // special condition where stimulus is being unselected, and thus does not have a linked parent folder ID to compare action against
 						$parentFolderId = $this->db->fetchValue("SELECT `parent` FROM {$it_vars['i_rootObjTblName']} WHERE id = (SELECT `groupId` FROM `items` WHERE `id` = ?)", [$fileItemId])['data'];

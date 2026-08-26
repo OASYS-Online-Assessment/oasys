@@ -27,7 +27,7 @@ class pageClass
 
 		public function execute($action): void
 		{
-			$allowedActions = ['fetchPage', 'fetchPageBlocks', 'savePage', 'removeLinks', 'getAllPageIds'];
+			$allowedActions = ['fetchPage', 'fetchPageBlocks', 'savePage', 'removeLinks'];
 			if (is_string($action) && in_array($action, $allowedActions, true)) {
 				call_user_func([$this, $action]);
 			} else {
@@ -461,14 +461,20 @@ class pageClass
 			 * This is used when a page is defined not to be used as a stimulus anymore
 			 * P.S.: On deletion of a page, the links to it are set to NULL automatically by foreign key constraints
 			 */
-			$this->checkParams('id', 'groupId');
+			$this->checkParams('id');
 			if ($this->pageIsUsedInPublishedTest((int)$this->data['id'])) {
 				$this->returnData['error'] = $this->uiLang->translate('This page is used in at least one published (locked) test and cannot be edited to secure test results. Please use the preview to view its content.');
 				die();
 			}
+			$page = $this->db->fetchRow('SELECT groupId FROM items WHERE id=? LIMIT 1', [(int)$this->data['id']]);
+			if (($page['rows'] ?? 0) !== 1) {
+				$this->returnData['error'] = $this->uiLang->translate('Page not found in database');
+				return;
+			}
+			$groupId = (int)$page['data']['groupId'];
 			$this->db->update("items", ['link' => null], "link = ?", [$this->data['id']]);
 
-			$res = $this->db->fetchTable("SELECT name, itemCode, id, CAST(IFNULL(JSON_VALUE(metadata, '$.useAsStimulus'), 0) AS UNSIGNED) as stimulus, link FROM items WHERE groupId = ? AND ID <> ?", [$this->data['groupId'], $this->data['id']]);
+			$res = $this->db->fetchTable("SELECT name, itemCode, id, CAST(IFNULL(JSON_VALUE(metadata, '$.useAsStimulus'), 0) AS UNSIGNED) as stimulus, link FROM items WHERE groupId = ? AND ID <> ?", [$groupId, $this->data['id']]);
 			$this->returnData['data']['group'] = $res['data'];
 		}
 
@@ -557,12 +563,6 @@ class pageClass
 				compareObjects($pageData['blocks'], $newData['blocks'], $this->returnData['debug'], 'old', 'new', 'blocks');
 				compareObjects($pageData['metadata'], $newData['metadata'], $this->returnData['debug'], 'old', 'new', 'metadata');
 			}
-		}
-
-		private function getAllPageIds(): void
-		{
-			$res = $this->db->fetchColumn("SELECT id FROM items WHERE NOT ISNULL(blocks)");
-			$this->returnData['data'] = $res['data'];
 		}
 
 		private function currentLockOwnerIds(): array
