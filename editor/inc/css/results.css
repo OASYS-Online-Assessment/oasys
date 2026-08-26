@@ -56,7 +56,7 @@ td.resultTd {
     padding: 8px 12px;
     background: #227DAA;
     color: #fff;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
     line-height: 1.2;
     text-align: left;
@@ -67,7 +67,7 @@ td.resultTd {
 #resTaView td {
     padding: 7px 12px;
     border-bottom: 1px solid #edf2f6;
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.25;
 }
 
@@ -124,7 +124,7 @@ td.resultTd {
 .resProgressBarPct {
     flex: 0 0 86px;
     color: #33485d;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     text-align: right;
     font-variant-numeric: tabular-nums;
@@ -676,22 +676,22 @@ td.resultTd {
     display: flex;
     align-items: flex-end;
     gap: 3px;
-    height: 38px;
+    height: 34px;
     padding: 0 0 0 16px;
     border-bottom: 0;
     box-sizing: border-box;
 }
 
 #mainManScore #msTabs .jsTab {
-    height: 38px;
-    padding: 0 18px;
+    height: 34px;
+    padding: 0 15px;
     border: 1px solid #c4cbd2;
     border-bottom: 0;
     border-radius: 8px 8px 0 0;
     background-color: #d5dce2;
     color: #203548;
-    font-size: 18px;
-    line-height: 38px;
+    font-size: 16px;
+    line-height: 34px;
 }
 
 #mainManScore #msTabs .jsTab.jstHovered {
