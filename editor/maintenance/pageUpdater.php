@@ -88,6 +88,10 @@
 			//iterate through all blocks and check each one if a repair/upgrade is necessary
 			$this->currentPage = $id;
 			$this->loadPageData($id);
+			if (!$this->migrateLegacyAdvancedCSS()) {
+				$this->currentPage = null;
+				return;
+			}
 			if (count($this->data['languages']) === 0) {
 				if (count($this->data['blocks']) > 0) {
 					$this->data['blocks'] = [];
@@ -272,6 +276,171 @@
 			}
 			$options->customCSS = array_merge($keywordCSS, $customCSS);
 			return json_encode($options, JSON_UNESCAPED_UNICODE);
+		}
+
+		/**
+		 * Move standalone [@CSS ...@] keywords out of advanced editor HTML and into the
+		 * page editor's custom CSS source. The CSS keyword parser used to remove these
+		 * wrappers only from compiled HTML; this migration also cleans the editor source.
+		 */
+		private function migrateLegacyAdvancedCSS(): bool
+		{
+			$cssPlugin = OasysParserPlugin::getPlugin('oasysCSSRule');
+			if (!$cssPlugin instanceof OasysParserPlugin) {
+				$this->returnData['error'] = 'Could not load the legacy CSS keyword parser.';
+				return false;
+			}
+
+			$migratedRules = [];
+			$updatedBlocks = [];
+			$removedBlockCount = 0;
+			$this->currentFix = ['field' => 'source', 'action' => 'migrateLegacyCSS'];
+
+			foreach ($this->data['blocks'] as $index => $block) {
+				if (!$block instanceof stdClass || ($block->type ?? null) !== 'advanced') {
+					$updatedBlocks[] = $block;
+					continue;
+				}
+
+				$this->currentBlock = $index;
+				$sourceData = $block->source ?? null;
+				if (!$sourceData instanceof stdClass && !is_array($sourceData)) {
+					$updatedBlocks[] = $block;
+					continue;
+				}
+
+				$sourceValues = $sourceData instanceof stdClass ? get_object_vars($sourceData) : $sourceData;
+				// Preserve the same language/rule order used by InteractionCompiler::compileAdvancedEditor().
+				$sourceLanguages = array_keys($sourceValues);
+				$blockChanged = false;
+				foreach ($sourceLanguages as $language) {
+					$source = $sourceValues[$language] ?? null;
+					if (!is_string($source) || stripos($source, '[@CSS') === false) continue;
+
+					$result = $this->extractLegacyCSSRules($source, (string)$language, $cssPlugin);
+					if ($result['error']) {
+						$this->currentBlock = null;
+						$this->currentFix = null;
+						return false;
+					}
+					if ($result['source'] !== $source) {
+						$blockChanged = true;
+						if ($block->source instanceof stdClass) {
+							$block->source->{$language} = $result['source'];
+						} else {
+							$block->source[$language] = $result['source'];
+						}
+					}
+					foreach ($result['rules'] as $rule) {
+						$migratedRules[] = $rule;
+					}
+				}
+
+				if ($blockChanged && $this->advancedSourceIsEmpty($block->source)) {
+					$removedBlockCount++;
+					$this->log('advanced block removed after migrating its legacy CSS');
+					continue;
+				}
+				if ($blockChanged) {
+					$this->log('legacy CSS removed from advanced block source');
+				}
+				$updatedBlocks[] = $block;
+			}
+
+			if (count($migratedRules) > 0) {
+				if (!$this->data['metadata'] instanceof stdClass) {
+					$this->returnData['error'] = 'Stored page metadata is invalid; legacy CSS was not migrated.';
+					$this->currentBlock = null;
+					$this->currentFix = null;
+					return false;
+				}
+				$existingRules = $this->data['metadata']->customCSS ?? [];
+				if (!is_array($existingRules) || !array_is_list($existingRules)) {
+					$this->returnData['error'] = 'Stored page custom CSS is invalid; legacy CSS was not migrated.';
+					$this->currentBlock = null;
+					$this->currentFix = null;
+					return false;
+				}
+
+				$combinedRules = $migratedRules;
+				foreach ($existingRules as $rule) {
+					if ($rule instanceof stdClass) $rule = get_object_vars($rule);
+					if (
+						!is_array($rule)
+						|| !is_string($rule['selector'] ?? null)
+						|| trim($rule['selector']) === ''
+						|| !is_string($rule['rules'] ?? null)
+					) {
+						$this->returnData['error'] = 'Stored page custom CSS contains an invalid rule; legacy CSS was not migrated.';
+						$this->currentBlock = null;
+						$this->currentFix = null;
+						return false;
+					}
+					$normalizedRule = ['selector' => $rule['selector'], 'rules' => $rule['rules']];
+					$combinedRules[] = $normalizedRule;
+				}
+				$this->data['metadata']->customCSS = $combinedRules;
+				$this->data['blocks'] = array_values($updatedBlocks);
+				$ruleLabel = count($migratedRules) === 1 ? 'rule' : 'rules';
+				$this->currentBlock = null;
+				$this->log(count($migratedRules) . " legacy CSS $ruleLabel moved to page custom CSS");
+				if ($removedBlockCount > 0) {
+					$blockLabel = $removedBlockCount === 1 ? 'block' : 'blocks';
+					$this->log("$removedBlockCount empty advanced $blockLabel removed");
+				}
+			}
+
+			$this->currentBlock = null;
+			$this->currentFix = null;
+			return true;
+		}
+
+		private function extractLegacyCSSRules(string $source, string $language, OasysParserPlugin $cssPlugin): array
+		{
+			// Prefer the paragraph/div wrapper, including the common TinyMCE shape where
+			// the keyword itself has one additional span wrapper. Standalone spans remain
+			// supported for compatibility with the original CSS keyword parser.
+			$wrapperPattern = '~<(?P<wrapper>p|div|span)\b[^>]*>\s*(?:<span\b[^>]*>\s*)?\[@CSS\b(?P<attributes>.*?)@\]\s*(?:</span>\s*)?</\k<wrapper>\s*>~is';
+			$matchCount = preg_match_all($wrapperPattern, $source, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+			if ($matchCount === false) {
+				$this->returnData['error'] = 'Could not scan an advanced block for legacy CSS: ' . preg_last_error_msg();
+				return ['source' => $source, 'rules' => [], 'error' => true];
+			}
+
+			$rules = [];
+			$removals = [];
+			foreach ($matches as $match) {
+				$plainMatch = [$match[0][0], $match['wrapper'][0], $match['attributes'][0]];
+				$settings = $cssPlugin->parseSettings($match['attributes'][0], $language, $plainMatch, $this->currentPage);
+				$selector = $settings['selector'] ?? null;
+				$declarations = $settings['rules'] ?? null;
+				if (!is_string($selector) || trim($selector) === '' || !is_string($declarations)) {
+					$this->log('invalid legacy CSS keyword left unchanged');
+					continue;
+				}
+				$rules[] = ['selector' => $selector, 'rules' => $declarations];
+				$removals[] = ['offset' => $match[0][1], 'length' => strlen($match[0][0])];
+			}
+
+			for ($index = count($removals) - 1; $index >= 0; $index--) {
+				$source = substr_replace($source, '', $removals[$index]['offset'], $removals[$index]['length']);
+			}
+			return ['source' => $source, 'rules' => $rules, 'error' => false];
+		}
+
+		private function advancedSourceIsEmpty(mixed $sourceData): bool
+		{
+			if ($sourceData instanceof stdClass) $sourceData = get_object_vars($sourceData);
+			if (!is_array($sourceData)) return false;
+			foreach ($sourceData as $source) {
+				if (!is_string($source)) return false;
+				$source = preg_replace('/<!--.*?-->/s', '', $source);
+				$source = preg_replace('~</?(?:p|div|span|br)\b[^>]*>~i', '', $source);
+				$source = html_entity_decode($source, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+				$source = preg_replace('/[\s\x{00A0}\x{200B}\x{FEFF}]+/u', '', $source);
+				if ($source === null || $source !== '') return false;
+			}
+			return true;
 		}
 
 		private function checkBlock(stdClass $block, int $index): void
