@@ -135,9 +135,9 @@ function onReady() {
   gui.boxes.varSettings.getPanel().append(/* html */`
     <div id="settingsListHeader">
       <div id="settTbText"></div>
-      <div id="settingsListMode" class="settingsListMode" role="group" aria-label="${UILANG.m('Settings display')}">
-        <button type="button" class="isActive" data-mode="all" aria-pressed="true">${UILANG.m('ALL')}</button>
-        <button type="button" data-mode="modified" aria-pressed="false">${UILANG.m('Modified')}</button>
+      <div id="settingsListMode" class="settingsListMode" role="group" aria-label="Settings display">
+        <button type="button" class="isActive" data-mode="all" aria-pressed="true">ALL</button>
+        <button type="button" data-mode="modified" aria-pressed="false">Modified</button>
       </div>
     </div>
   `);
@@ -170,7 +170,7 @@ function onReady() {
     actionFieldModifiedText: "modified",
     actionFieldInactiveText: "immutable",
     filter: {
-      startText: UILANG.m("Filter system settings...")
+      startText: "Filter system settings..."
     },
     cssStylesAFdefault: { 'text-align': 'left', 'color': '#22AA41', 'font-size': '12px' },
     cssStylesAFmodified: {
@@ -259,8 +259,8 @@ async function refreshEncryptionRotationStatus() {
   if (res.data.fullMaintenance) buttons.rotateEncryptionKey.enable();
   else buttons.rotateEncryptionKey.disable();
   $('#rotateEncryptionKey').attr('title', res.data.fullMaintenance
-    ? UILANG.m('Rotate the OASYS database encryption key.')
-    : UILANG.m('Enable frontend and backend maintenance mode before rotating the encryption key.'));
+    ? 'Rotate the OASYS database encryption key.'
+    : 'Enable frontend and backend maintenance mode before rotating the encryption key.');
 }
 
 async function openEncryptionRotation() {
@@ -268,7 +268,7 @@ async function openEncryptionRotation() {
   if (res.error || !res.data) return;
   encryptionRotationStatus = res.data;
   if (!res.data.fullMaintenance) {
-    showEncryptionMessage('Encryption key rotation', UILANG.m('Frontend and backend maintenance mode must both be enabled.'));
+    showEncryptionMessage('Encryption key rotation', 'Frontend and backend maintenance mode must both be enabled.');
     return;
   }
   if (res.data.source === 'environment') openEnvironmentRotationDialog(res.data);
@@ -277,24 +277,24 @@ async function openEncryptionRotation() {
 
 function encryptionSourceCard(status) {
   const sourceText = status.source === 'environment'
-    ? UILANG.m('Environment variables')
-    : UILANG.m('OASYS-managed crypt.ini file');
-  return `<div class="ekrSource"><strong>${UILANG.m('Active key source:')}</strong> ${escapeHtml(sourceText)}</div>`;
+    ? 'Environment variables'
+    : 'OASYS-managed crypt.ini file';
+  return `<div class="ekrSource"><strong>Active key source:</strong> ${escapeHtml(sourceText)}</div>`;
 }
 
 function openManagedRotationDialog(status) {
   const dialog = new nxDialog('encryptionRotationManaged', {
     width: 700,
-    title: UILANG.m('Rotate encryption key'),
+    title: 'Rotate encryption key',
     buttons: [
-      { label: UILANG.m('Cancel'), value: 'cancel', cancel: true },
-      { label: UILANG.m('Use new secure key'), value: 'rotate', 'default': true, disabled: true }
+      { label: 'Cancel', value: 'cancel', cancel: true },
+      { label: 'Use new secure key', value: 'rotate', 'default': true, disabled: true }
     ],
     contents: `<div class="ekrDialog">
       ${encryptionSourceCard(status)}
-      <div class="ekrWarning"><strong>${UILANG.m('This operation re-encrypts all test-taker passwords and encrypted system settings.')}</strong>
-        ${UILANG.m('Do not leave maintenance mode or close this dialog while the rotation is running.')}</div>
-      <label class="ekrConfirm"><input type="checkbox" id="ekrBackupConfirmed"> <span>${UILANG.m('I confirm that a current database backup and a protected backup of crypt.ini exist.')}</span></label>
+      <div class="ekrWarning"><strong>This operation re-encrypts all test-taker passwords and encrypted system settings.</strong>
+        Do not leave maintenance mode or close this dialog while the rotation is running.</div>
+      <label class="ekrConfirm"><input type="checkbox" id="ekrBackupConfirmed"> <span>I confirm that a current database backup and a protected backup of crypt.ini exist.</span></label>
     </div>`,
     callback: async function(value) {
       if (value !== 'rotate') return;
@@ -312,32 +312,32 @@ function openEnvironmentRotationDialog(status) {
   const stage = status.rotation?.stage || '';
   let body = encryptionSourceCard(status) + environmentWorkflowSteps(stage);
   let action = 'prepare';
-  let actionLabel = UILANG.m('Generate new key');
+  let actionLabel = 'Generate new key';
 
   if (!stage) {
-    body += `<p>${UILANG.m('OASYS will generate a new key and IV. They are displayed only once and must be installed as pending server environment variables before database values can be updated.')}</p>`;
+    body += '<p>OASYS will generate a new key and IV. They are displayed only once and must be installed as pending server environment variables before database values can be updated.</p>';
   } else if (stage === 'awaiting_pending_environment') {
-    action = 'verify'; actionLabel = UILANG.m('Verify environment variables');
-    body += environmentInstructions(status, UILANG.m('Install the previously generated values, reload PHP, and then verify them.'));
+    action = 'verify'; actionLabel = 'Verify environment variables';
+    body += environmentInstructions(status, 'Install the previously generated values, reload PHP, and then verify them.');
   } else if (stage === 'environment_verified') {
-    action = 'rotateData'; actionLabel = UILANG.m('Re-encrypt database');
-    body += environmentInstructions(status, UILANG.m('The pending variables were verified. They will be checked again immediately before the database is changed.'));
+    action = 'rotateData'; actionLabel = 'Re-encrypt database';
+    body += environmentInstructions(status, 'The pending variables were verified. They will be checked again immediately before the database is changed.');
   } else if (stage === 'awaiting_environment_promotion') {
-    action = 'finalize'; actionLabel = UILANG.m('Verify active variables and finish');
-    body += environmentInstructions(status, UILANG.m('Promote the pending values to the active key and IV variables, reload PHP, and then complete verification.'));
+    action = 'finalize'; actionLabel = 'Verify active variables and finish';
+    body += environmentInstructions(status, 'Promote the pending values to the active key and IV variables, reload PHP, and then complete verification.');
   } else if (stage === 'rotating') {
-    action = 'rotateData'; actionLabel = UILANG.m('Resume database rotation');
-    body += `<p>${UILANG.m('An interrupted database rotation was detected. Keep both active and pending environment variables available and resume the operation.')}</p>`;
+    action = 'rotateData'; actionLabel = 'Resume database rotation';
+    body += '<p>An interrupted database rotation was detected. Keep both active and pending environment variables available and resume the operation.</p>';
   }
 
-  const dialogButtons = [{ label: UILANG.m('Close'), value: 'cancel', cancel: true }];
+  const dialogButtons = [{ label: 'Close', value: 'cancel', cancel: true }];
   if (stage === 'awaiting_pending_environment') {
-    dialogButtons.push({ label: UILANG.m('Keys lost? Restart process...'), value: 'restart' });
+    dialogButtons.push({ label: 'Keys lost? Restart process...', value: 'restart' });
   }
   dialogButtons.push({ label: actionLabel, value: action, 'default': true });
   new nxDialog('encryptionRotationEnvironment', {
     width: 760,
-    title: UILANG.m('Rotate encryption key'),
+    title: 'Rotate encryption key',
     buttons: dialogButtons,
     contents: `<div class="ekrDialog">${body}</div>`,
     callback: async function(value) {
@@ -366,14 +366,14 @@ function openEnvironmentRotationDialog(status) {
 function confirmEnvironmentRotationRestart() {
   new nxDialog('confirmEncryptionRotationRestart', {
     width: 650,
-    title: UILANG.m('Restart encryption-key rotation?'),
+    title: 'Restart encryption-key rotation?',
     buttons: [
-      { label: UILANG.m('Cancel'), value: 'cancel', cancel: true },
-      { label: UILANG.m('Restart and generate new key'), value: 'restart', 'default': true }
+      { label: 'Cancel', value: 'cancel', cancel: true },
+      { label: 'Restart and generate new key', value: 'restart', 'default': true }
     ],
     contents: `<div class="ekrDialog"><div class="ekrWarning">
-      <strong>${UILANG.m('The previously generated pending key and IV will become invalid for this rotation.')}</strong>
-      ${UILANG.m('Continue only if those values were lost or cannot be installed. Any pending values already configured on the server must then be replaced with the newly generated values.')}
+      <strong>The previously generated pending key and IV will become invalid for this rotation.</strong>
+      Continue only if those values were lost or cannot be installed. Any pending values already configured on the server must then be replaced with the newly generated values.
     </div></div>`,
     callback: async function(value) {
       if (value !== 'restart') return;
@@ -393,10 +393,10 @@ function environmentWorkflowSteps(stage) {
     awaiting_environment_promotion: 4
   }[stage] || 1;
   const labels = [
-    UILANG.m('Generate and save the new key'),
-    UILANG.m('Install and verify pending variables'),
-    UILANG.m('Re-encrypt and verify the database'),
-    UILANG.m('Promote and verify active variables')
+    'Generate and save the new key',
+    'Install and verify pending variables',
+    'Re-encrypt and verify the database',
+    'Promote and verify active variables'
   ];
   return `<ol class="ekrSteps">${labels.map((label, index) => {
     const number = index + 1;
@@ -409,23 +409,23 @@ function environmentWorkflowSteps(stage) {
 function environmentInstructions(status, lead) {
   const names = status.pendingNames || {};
   return `<p>${escapeHtml(lead)}</p><div class="ekrEnvNames">
-    <div><span>${UILANG.m('Pending key variable')}</span><code>${escapeHtml(names.key || 'OASYS_AES_PENDING_KEY')}</code></div>
-    <div><span>${UILANG.m('Pending IV variable')}</span><code>${escapeHtml(names.iv || 'OASYS_AES_PENDING_IV')}</code></div>
-  </div>${status.rotation?.fingerprint ? `<p>${UILANG.m('Expected fingerprint:')} <code>${escapeHtml(status.rotation.fingerprint)}</code></p>` : ''}`;
+    <div><span>Pending key variable</span><code>${escapeHtml(names.key || 'OASYS_AES_PENDING_KEY')}</code></div>
+    <div><span>Pending IV variable</span><code>${escapeHtml(names.iv || 'OASYS_AES_PENDING_IV')}</code></div>
+  </div>${status.rotation?.fingerprint ? `<p>Expected fingerprint: <code>${escapeHtml(status.rotation.fingerprint)}</code></p>` : ''}`;
 }
 
 function showGeneratedEnvironmentKey(data) {
   const names = data.pendingNames || {};
   new nxDialog('generatedEncryptionKey', {
     width: 820,
-    title: UILANG.m('New environment key generated'),
-    buttons: [{ label: UILANG.m('I have saved these values'), value: 'ok', 'default': true }],
+    title: 'New environment key generated',
+    buttons: [{ label: 'I have saved these values', value: 'ok', 'default': true }],
     contents: `<div class="ekrDialog">${environmentWorkflowSteps('')}
-      <div class="ekrWarning">${UILANG.m('These values are displayed only once. Store them securely before closing this dialog.')}</div>
+      <div class="ekrWarning">These values are displayed only once. Store them securely before closing this dialog.</div>
       ${secretValueRow(names.key || 'OASYS_AES_PENDING_KEY', data.key, 'ekrGeneratedKey')}
       ${secretValueRow(names.iv || 'OASYS_AES_PENDING_IV', data.iv, 'ekrGeneratedIv')}
-      <p>${UILANG.m('Fingerprint:')} <code>${escapeHtml(data.fingerprint || '-')}</code></p>
-      <p>${UILANG.m('After installing the pending variables, reload PHP and open this feature again to verify them.')}</p></div>`
+      <p>Fingerprint: <code>${escapeHtml(data.fingerprint || '-')}</code></p>
+      <p>After installing the pending variables, reload PHP and open this feature again to verify them.</p></div>`
   });
   $('.ekrCopy').on('click', async function() {
     const input = document.getElementById($(this).data('target'));
@@ -446,41 +446,41 @@ function showGeneratedEnvironmentKey(data) {
       copied = false;
     }
     window.clearTimeout(button.data('feedbackTimer'));
-    button.toggleClass('isCopied', copied).text(UILANG.m(copied ? 'Copied' : 'Copy failed'));
-    status.toggleClass('isError', !copied).text(UILANG.m(copied ? 'Saved to clipboard' : 'Could not access the clipboard'));
+    button.toggleClass('isCopied', copied).text(copied ? 'Copied' : 'Copy failed');
+    status.toggleClass('isError', !copied).text(copied ? 'Saved to clipboard' : 'Could not access the clipboard');
     button.data('feedbackTimer', window.setTimeout(() => {
-      button.removeClass('isCopied').text(UILANG.m('Copy'));
+      button.removeClass('isCopied').text('Copy');
       status.removeClass('isError').text('');
     }, 2200));
   });
 }
 
 function secretValueRow(name, value, id) {
-  return `<label class="ekrSecret"><span>${escapeHtml(name)}</span><div><input id="${id}" type="text" readonly value="${escapeHtml(value)}"><button type="button" class="ekrCopy" data-target="${id}">${UILANG.m('Copy')}</button></div><span class="ekrCopyStatus" role="status" aria-live="polite"></span></label>`;
+  return `<label class="ekrSecret"><span>${escapeHtml(name)}</span><div><input id="${id}" type="text" readonly value="${escapeHtml(value)}"><button type="button" class="ekrCopy" data-target="${id}">Copy</button></div><span class="ekrCopyStatus" role="status" aria-live="polite"></span></label>`;
 }
 
 function showEncryptionCompletion(data) {
   const counts = data.counts || {};
-  showEncryptionMessage(UILANG.m('Encryption key rotation complete'),
+  showEncryptionMessage('Encryption key rotation complete',
     `<div class="ekrCompletion">
        <div class="ekrCompletionLead">
          <span class="ekrCompletionIcon" aria-hidden="true">&#10003;</span>
-         <div><strong>${UILANG.m('Rotation completed successfully')}</strong>
-         <span>${UILANG.m('All encrypted database values were updated and verified.')}</span></div>
+         <div><strong>Rotation completed successfully</strong>
+         <span>All encrypted database values were updated and verified.</span></div>
        </div>
        <div class="ekrCompletionStats">
-         <div><strong>${Number(counts.logins || 0)}</strong><span>${UILANG.m('Test-taker logins')}</span></div>
-         <div><strong>${Number(counts.passwords || 0)}</strong><span>${UILANG.m('Passwords and labels')}</span></div>
-         <div><strong>${Number(counts.settings || 0)}</strong><span>${UILANG.m('Encrypted system settings')}</span></div>
+         <div><strong>${Number(counts.logins || 0)}</strong><span>Test-taker logins</span></div>
+         <div><strong>${Number(counts.passwords || 0)}</strong><span>Passwords and labels</span></div>
+         <div><strong>${Number(counts.settings || 0)}</strong><span>Encrypted system settings</span></div>
        </div>
-       <div class="ekrCompletionFingerprint"><span>${UILANG.m('Active fingerprint')}</span><code>${escapeHtml(data.fingerprint || '-')}</code></div>
+       <div class="ekrCompletionFingerprint"><span>Active fingerprint</span><code>${escapeHtml(data.fingerprint || '-')}</code></div>
      </div>`);
 }
 
 function showEncryptionMessage(title, contents) {
   new nxDialog('encryptionRotationMessage', {
     width: 650, title, contents: `<div class="ekrDialog">${contents}</div>`,
-    buttons: [{ label: UILANG.m('OK'), value: 'ok', 'default': true }]
+    buttons: [{ label: 'OK', value: 'ok', 'default': true }]
   });
 }
 
