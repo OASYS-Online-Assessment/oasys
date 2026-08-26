@@ -86,14 +86,21 @@
         //main tests script
         includeJS("inc/js/tests.js");
 
-        //settings
-        include_once 'inc/php/settings2JS.php';
-    ?>
+		//settings
+		include_once 'inc/php/settings2JS.php';
 
-    <script type="text/javascript">
-        window.preSelect = '<?=$_GET['id'] ?? null ?>';
-        window.preType = '<?=$_GET['ta'] ?? null ?>';
-    </script>
+		$preSelect = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+		if ($preSelect === false) $preSelect = null;
+		$preType = filter_input(INPUT_GET, 'ta', FILTER_VALIDATE_INT);
+		if ($preType === false || !in_array($preType, [3, 4], true)) $preType = null;
+		$preSelectJs = json_encode($preSelect, JSON_THROW_ON_ERROR);
+		$preTypeJs = json_encode($preType, JSON_THROW_ON_ERROR);
+	?>
+
+	<script type="text/javascript">
+		window.preSelect = <?=$preSelectJs?>;
+		window.preType = <?=$preTypeJs?>;
+	</script>
 </head>
 
 <body data-managerid="tests">

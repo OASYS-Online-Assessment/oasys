@@ -96,15 +96,19 @@
         /* main script for the manager */
         includeJS("inc/js/items.js");
 
-        $preSelect = $_GET['id'] ?? null;
-        $preType = $_GET['ta'] ?? null;
-        $pageGroupPackageAdmin = $myAuth->checkSA() || $myAuth->checkAdmin() || $myAuth->checkElevatedAdmin();
-        $pageGroupPackageAdminJs = $pageGroupPackageAdmin ? 'true' : 'false';
+		$preSelect = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+		if ($preSelect === false) $preSelect = null;
+		$preType = filter_input(INPUT_GET, 'ta', FILTER_VALIDATE_INT);
+		if ($preType === false || !in_array($preType, [1, 2], true)) $preType = null;
+		$pageGroupPackageAdmin = $myAuth->checkSA() || $myAuth->checkAdmin() || $myAuth->checkElevatedAdmin();
+		$preSelectJs = json_encode($preSelect, JSON_THROW_ON_ERROR);
+		$preTypeJs = json_encode($preType, JSON_THROW_ON_ERROR);
+		$pageGroupPackageAdminJs = json_encode($pageGroupPackageAdmin, JSON_THROW_ON_ERROR);
 
         echo <<<HTML
 	<script type="text/javascript">
-		window.preSelect = '$preSelect';
-		window.preType = '$preType';
+		window.preSelect = $preSelectJs;
+		window.preType = $preTypeJs;
 		window.pageGroupPackageAdmin = $pageGroupPackageAdminJs;
 	</script>
 	HTML;

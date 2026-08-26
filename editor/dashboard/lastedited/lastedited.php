@@ -209,7 +209,7 @@
 						$parentFolderId = (int)$meta['parent'];
 						try {
 							$hasAccess =
-								$permAuth->getAccessVal("pagegroups", "fetchLibrary", "itemObject", $id)
+								$permAuth->getAccessVal("items", "fetchLibrary", "itemObject", $parentFolderId)
 								|| ownsFolder('itemFolders', $parentFolderId, $db, $myAuth); // owner override
 						} catch (\Throwable $ex) {
 							// if perm check fails unexpectedly, still allow owner override
