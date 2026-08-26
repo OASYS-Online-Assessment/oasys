@@ -221,19 +221,6 @@ export default class LastEdited {
                 ? UILANG.m('User has been deleted')
                 : String(o?.name || UILANG.m('someone'));
 
-        // Neutral (no newer edits)
-        const badgeNeutralBtn = (idx) => `
-      <button type="button"
-              class="le-badge le-badge-neutral le-othersBtn"
-              data-idx="${idx}"
-              aria-label="${UILANG.m('No newer edits by others')}"
-              title="${UILANG.m('No newer edits by others')}">
-        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-          <path d="M12 12a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 12 12Zm0 2c-3.33 0-6 1.67-6 3.5V19h12v-1.5C18 15.67 15.33 14 12 14Z"
-                fill="none" stroke="currentColor" stroke-width="1.5"/>
-        </svg>
-      </button>`;
-
         // Warn (has newer edits)
         const badgeWarnBtn = (idx, count, editorsList) => `
       <button type="button"
@@ -241,28 +228,18 @@ export default class LastEdited {
               data-idx="${idx}"
               aria-label="${this.escapeHtml(UILANG.m('Edited later by'))}: ${this.escapeHtml(editorsList)}"
               title="${this.escapeHtml(UILANG.m('Edited later by'))}: ${this.escapeHtml(editorsList)}">
-        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-          <path d="M12 12a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 12 12Zm-6 7v-1.5C6 15.67 8.67 14 12 14s6 1.67 6 3.5V19Z"
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 11a3.25 3.25 0 1 0-3.25-3.25A3.25 3.25 0 0 0 9 11Zm6.25.25a2.75 2.75 0 1 0-2.75-2.75 2.75 2.75 0 0 0 2.75 2.75ZM3.5 18.5v-1.25C3.5 14.9 5.94 13 9 13s5.5 1.9 5.5 4.25v1.25Zm11.75-5.25c2.92 0 5.25 1.67 5.25 3.75v1.5h-4.25v-1.25a5 5 0 0 0-1.83-3.74 6.77 6.77 0 0 1 .83-.26Z"
                 fill="currentColor"/>
         </svg>
         <span class="le-badge-count">${count}</span>
       </button>`;
 
-        // Disabled (no click when no access)
-        const badgeNeutralDisabled = `
-      <span class="le-badge le-badge-neutral le-badge-disabled"
-            title="${UILANG.m('No access')}">
-        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-          <path d="M12 12a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 12 12Zm0 2c-3.33 0-6 1.67-6 3.5V19h12v-1.5C18 15.67 15.33 14 12 14Z"
-                fill="none" stroke="currentColor" stroke-width="1.5" />
-        </svg>
-      </span>`;
-
         const badgeWarnDisabled = (count, editorsList) => `
       <span class="le-badge le-badge-warn le-badge-disabled"
             title="${this.escapeHtml(UILANG.m('No access'))}: ${this.escapeHtml(editorsList)}">
-        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-          <path d="M12 12a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 12 12Zm-6 7v-1.5C6 15.67 8.67 14 12 14s6 1.67 6 3.5V19Z"
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 11a3.25 3.25 0 1 0-3.25-3.25A3.25 3.25 0 0 0 9 11Zm6.25.25a2.75 2.75 0 1 0-2.75-2.75 2.75 2.75 0 0 0 2.75 2.75ZM3.5 18.5v-1.25C3.5 14.9 5.94 13 9 13s5.5 1.9 5.5 4.25v1.25Zm11.75-5.25c2.92 0 5.25 1.67 5.25 3.75v1.5h-4.25v-1.25a5 5 0 0 0-1.83-3.74 6.77 6.77 0 0 1 .83-.26Z"
                 fill="currentColor"/>
         </svg>
         <span class="le-badge-count">${count}</span>
@@ -313,11 +290,11 @@ export default class LastEdited {
 
             const othersBadgeClickable = r.edited_by_others
                 ? badgeWarnBtn(idxInState, r.others_count || 1, editorsList)
-                : badgeNeutralBtn(idxInState);
+                : '';
 
             const othersBadgeDisabled = r.edited_by_others
                 ? badgeWarnDisabled(r.others_count || 1, editorsList)
-                : badgeNeutralDisabled;
+                : '';
 
             const othersCell = (!r.access || isDeletedItem) ? '' : (r.access ? othersBadgeClickable : othersBadgeDisabled);
 

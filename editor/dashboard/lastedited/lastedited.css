@@ -179,27 +179,27 @@
     display:inline-flex;
     align-items:center;
     justify-content:center;
-    width:22px;
-    min-width:22px;
+    gap:3px;
+    min-width:30px;
     height:22px;
     border-radius:999px;
     border:1px solid #cfd8e3;
     background:#f5f8fc;
     color:#4a6fb3;
     cursor:pointer;
-    position:relative;
-    padding:0;
+    padding:0 6px 0 5px;
     line-height:22px;
     vertical-align:middle;
 }
-.lastedited .le-badge:hover{ background:#eef4ff; }
+.lastedited .le-badge:hover{ background:#ffdada; border-color:#e98f8f; color:#8f1818; }
 .lastedited .le-badge svg{ width:14px; height:14px; display:block; }
-.lastedited .le-badge-neutral{ color:#6b7ea8; }
 .lastedited .le-badge-warn{ background:#ffe9e9; border-color:#f2b2b2; color:#a52424; }
 .lastedited .le-badge-count{
-    position:absolute; top:2px; right:-22px; min-width:16px; height:16px;
-    border-radius:999px; background:#a52424; color:#fff; font-size:10px;
-    display:inline-flex; align-items:center; justify-content:center; padding:0 4px; line-height:16px;
+    min-width:10px;
+    color:currentColor;
+    font-size:11px;
+    font-weight:700;
+    line-height:1;
 }
 .lastedited .le-badge-disabled{ pointer-events:none; opacity:.7; }
 
