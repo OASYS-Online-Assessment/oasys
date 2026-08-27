@@ -158,19 +158,20 @@ if (!function_exists('oasys_syscheck')) {
 
         // ---------- PHP extensions ----------
         $reqExts = [
-            'XMLReader'            => ['xmlreader', true],
-            'XMLWriter'            => ['xmlwriter', true],
-            'XML'                  => ['xml',       true],
-            'BCMath'               => ['bcmath',    true],
-            'Php Zlib Module'      => ['zlib',      true],
-            'Php ZIP Module'       => ['zip',       true],
-            'Php MBSTRING Module'  => ['mbstring',  true],
-            'php PDO Module'       => ['PDO',       true],
-            'Php PDO MYSQL Module' => ['pdo_mysql', true],
+            'XMLReader'            => ['xmlreader',   true],
+            'XMLWriter'            => ['xmlwriter',   true],
+            'XML'                  => ['xml',         true],
+            'BCMath'               => ['bcmath',      true],
+            'Php Zlib Module'      => ['zlib',        true],
+            'Php ZIP Module'       => ['zip',         true],
+            'Php MBSTRING Module'  => ['mbstring',    true],
+            'php PDO Module'       => ['PDO',         true],
+            'Php PDO MYSQL Module' => ['pdo_mysql',   true],
             'Php PDO SQLITE Module' => ['pdo_sqlite', true],
-            'Php CURL Module'      => ['curl',      true],
-            'Php FILEINFO Module'  => ['fileinfo',  true],
-            'Php LDAP Module'      => ['ldap',      false], // optional -> warn if missing
+            'Php CURL Module'      => ['curl',        true],
+            'Php FILEINFO Module'  => ['fileinfo',    true],
+            'Php openSSL Module'   => ['openssl',     false], // optional -> warn if missing
+            'Php LDAP Module'      => ['ldap',        false], // optional -> warn if missing
         ];
         foreach ($reqExts as $label => [$ext, $required]) {
             $loaded = extension_loaded($ext);
