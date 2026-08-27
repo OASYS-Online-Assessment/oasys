@@ -243,11 +243,14 @@
         ORDER BY u.id
     ", $ids)['data'] ?? [];
 
-		// Optional: enrich with lastSeen from sessions
+		// Enrich with the latest activity recorded by the backend state.
 		foreach ($rows as &$r) {
 			$id = (int)$r['id'];
-			$like = "%userid|i:$id;%";
-			$r['lastSeen'] = $db->fetchValue("SELECT MAX(modified) FROM sessions WHERE `data` LIKE ?", [$like])['data'] ?? null;
+			$r['lastSeen'] = $db->fetchValue(
+				"SELECT MAX(active) FROM stateBackend " .
+				"WHERE JSON_UNQUOTE(JSON_EXTRACT(data, '$.userid.value')) = ?",
+				[$id]
+			)['data'] ?? null;
 		}
 		unset($r);
 		return $rows;

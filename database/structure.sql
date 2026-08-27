@@ -538,21 +538,6 @@ CREATE TABLE IF NOT EXISTS `scoring` (
 SET character_set_client = @saved_cs_client ;
 
 --
--- Table structure for table `sessions`
---
-SET @saved_cs_client     = @@character_set_client ;
-SET character_set_client = utf8mb4 ;
-CREATE TABLE IF NOT EXISTS `sessions` (
-  `id` varchar(255) NOT NULL COMMENT 'session id',
-  `data` text NOT NULL DEFAULT '' COMMENT 'session contents',
-  `modified` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp() COMMENT 'modification timestamp',
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE KEY `id` (`id`) USING BTREE,
-  KEY `date` (`modified`) USING BTREE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci ROW_FORMAT=DYNAMIC;
-SET character_set_client = @saved_cs_client ;
-
---
 -- Table structure for table `settings`
 --
 SET @saved_cs_client     = @@character_set_client ;
@@ -563,7 +548,7 @@ CREATE TABLE IF NOT EXISTS `settings` (
   `encryption` tinyint(1) DEFAULT 0,
   PRIMARY KEY (`option`) USING BTREE,
   UNIQUE KEY `option` (`option`) USING BTREE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci ROW_FORMAT=DYNAMIC COMMENT='v052';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci ROW_FORMAT=DYNAMIC COMMENT='v053';
 SET character_set_client = @saved_cs_client ;
 
 --

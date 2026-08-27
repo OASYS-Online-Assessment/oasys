@@ -2982,14 +2982,6 @@ function resetResults($data, &$db, &$returnData)
 		return tmIncludeLinkedStimuliForPages($pageIds, $db);
 	}
 
-	function tmDecodeSessionUserId(?string $sessionData): ?int
-	{
-		if (!$sessionData) return null;
-		if (preg_match('/userid\|i:(\d+);/', $sessionData, $match)) return (int)$match[1];
-		if (preg_match('/userid\|s:\d+:"(\d+)";/', $sessionData, $match)) return (int)$match[1];
-		return null;
-	}
-
 	function tmCurrentPageLockOwnerIds(): array
 	{
 		global $backendState;
@@ -3038,12 +3030,6 @@ function resetResults($data, &$db, &$returnData)
 					$name = $db->fetchValue("SELECT name FROM users WHERE id=? LIMIT 1", [(int)$userId])['data'] ?? null;
 					if ($name) return (string)$name;
 				}
-			}
-			$sessionRow = $db->fetchRow("SELECT data FROM sessions WHERE id=? LIMIT 1", [$ownerId]);
-			$userId = (($sessionRow['rows'] ?? 0) > 0) ? tmDecodeSessionUserId($sessionRow['data']['data'] ?? null) : null;
-			if ($userId !== null) {
-				$name = $db->fetchValue("SELECT name FROM users WHERE id=? LIMIT 1", [$userId])['data'] ?? null;
-				if ($name) return (string)$name;
 			}
 		}
 		return 'another user';

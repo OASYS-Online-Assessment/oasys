@@ -22,9 +22,6 @@
 
 		$includeSelf = !empty($data['includeSelf']);
 
-		// FIX: update to use backendStates
-		//	$rows = $db->fetchTable("SELECT `data`,`modified` FROM `sessions`", [])['data'];
-
 		$be_count = 0; //count of back end users who are active
 		$fe_count = 0; //count of active front end users
 		$be_users = []; //list of active back end users (name, userid, time since activity)
