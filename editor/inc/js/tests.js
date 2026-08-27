@@ -7539,7 +7539,7 @@ function legalText() {
                 '<div style="margin-bottom:6px;">' +
                 UILANG.m('Enter custom CSS that will be applied to all languages of the privacy policy editor.') +
                 '</div>' +
-                '<textarea id="legalCustomCssArea" ' +
+                '<textarea id="legalCustomCssArea" data-tabindent ' +
                 'style="width:100%;height:360px;resize:vertical;' +
                 'font-family:monospace;font-size:12px;' +
                 'border:1px solid #ccc;border-radius:4px;padding:6px;">' +
@@ -8213,7 +8213,7 @@ function scoreScreen() {
                 '<div style="margin-bottom:6px;">' +
                 UILANG.m('Enter custom CSS that will be applied to all languages of the score screen editor.') +
                 '</div>' +
-                '<textarea id="scoreCustomCssArea" ' +
+                '<textarea id="scoreCustomCssArea" data-tabindent ' +
                 'style="width:100%;height:360px;resize:vertical;' +
                 'font-family:monospace;font-size:12px;' +
                 'border:1px solid #ccc;border-radius:4px;padding:6px;">' +
@@ -9597,7 +9597,7 @@ function landingPage() {
                 '<div style="margin-bottom:6px;">' +
                 UILANG.m('Enter custom CSS that will be applied to all languages of the landing page editor.') +
                 '</div>' +
-                '<textarea id="landingCustomCssArea" ' +
+                '<textarea id="landingCustomCssArea" data-tabindent ' +
                 'style="width:100%;height:360px;resize:vertical;' +
                 'font-family:monospace;font-size:12px;' +
                 'border:1px solid #ccc;border-radius:4px;padding:6px;">' +
@@ -10608,7 +10608,7 @@ function finishScreen() {
                 '<div style="margin-bottom:6px;">' +
                 UILANG.m('Enter custom CSS that will be applied to all languages of the finish screen editor.') +
                 '</div>' +
-                '<textarea id="finishCustomCssArea" ' +
+                '<textarea id="finishCustomCssArea" data-tabindent ' +
                 'style="width:100%;height:360px;resize:vertical;' +
                 'font-family:monospace;font-size:12px;' +
                 'border:1px solid #ccc;border-radius:4px;padding:6px;">' +

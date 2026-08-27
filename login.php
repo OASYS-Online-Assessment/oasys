@@ -514,7 +514,7 @@
 		];
 	}
 
-	function checkLDAPLogin(string $username, string $password, &$db): string
+	function checkLDAPLogin(string $username, #[\SensitiveParameter] string $password, &$db): string
 	{
 		global $settings;
 		return OasysLdapAuthenticator::authenticate(

@@ -9,8 +9,17 @@
 	# ------------------------------------------------------------ #
 	# Validation and redirection of account password reset request #
 	# ------------------------------------------------------------ #
-    require_once __DIR__ . '/inc/php/initBackend.php';
-    require_once("inc/php/authkeygen.php");
+	$forceLang = $_GET['forceLang'] ?? $_POST['lang'] ?? 'EN';
+	$forceLang = is_string($forceLang) ? strtoupper($forceLang) : 'EN';
+	if (!in_array($forceLang, ['EN', 'FR', 'DE'], true)) {
+		$forceLang = 'EN';
+	}
+
+	require_once __DIR__ . '/inc/php/initBackend.php';
+	if (!isset($backendState->userid)) {
+		$settings['interfaceLanguage'] = $forceLang;
+	}
+	require_once("inc/php/authkeygen.php");
 	?>
 
 	<meta http-equiv="Content-Type" content="text/html;charset=utf-8">
@@ -41,13 +50,7 @@
 	<script id='forceLang'>
 		"use strict";
 		<?php
-		$forceLang = $_GET['forceLang'] ?? null;
-		if (!is_string($forceLang) || !preg_match('/^[A-Z]{2}$/', $forceLang)) {
-			$forceLang = 'EN';
-		}
-		// escape for safe single-quoted JS string interpolation
-		$forceLang = addslashes($forceLang);
-		echo "sessionStorage.setItem('forceLang','$forceLang');";
+		echo 'sessionStorage.setItem("forceLang", ' . json_encode($forceLang) . ');';
 		?>
 	</script>
 

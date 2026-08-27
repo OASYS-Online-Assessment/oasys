@@ -1028,31 +1028,15 @@ class editorList {
 			setup: (ed) => {
 				this.inlineEditor = ed; //save instance of editor as property of editorList instance
 				ed.on('keydown', (e) => {
-					if (e.key === 'Tab') {
+					if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
 						e.preventDefault();
-						let parent = $(ed.targetElm).closest('.editorListItem');
-						let groupId = parent.data('groupid');
-						let itemId = parent.data('itemid');
-						let nextItem = $(`#editorList_${groupId} .editorListItem[data-itemid="${++itemId}"]`);
-						if (nextItem.length === 0) {
-							//if we are at the last item of the group, move to the next group
-							while (groupId < editorList.counter && nextItem.length === 0) {
-								//if group does not exist, skip and move to next group until we find an item or reach the last group
-								nextItem = $(`#editorList_${++groupId} .editorListItem[data-itemid="0"]`);
-							}
-							//if we are at the last group, move to the first group
-							if (groupId === editorList.counter && nextItem.length === 0) {
-								groupId = 0;
-								//repeat from the beginning and skip any missing groups
-								while (groupId < editorList.counter && nextItem.length === 0) {
-									nextItem = $(`#editorList_${++groupId} .editorListItem[data-itemid="0"]`);
-								}
-							}
-							//when we arrive here we are bound to have found a new item … in the worst case it is the one we started from
-						}
-						let nextEditor = nextItem.find('.editorListLabelText');
-						nextEditor.trigger('focus');
-						tinyMCE.activeEditor.execCommand('SelectAll');
+						e.stopImmediatePropagation();
+						const valueField = $(ed.targetElm)
+							.closest('.editorListItem')
+							.find('input.editorListValue')
+							.get(0);
+						valueField?.focus();
+						valueField?.select();
 					}
 				});
 				ed.on('ExecCommand', (e) => {

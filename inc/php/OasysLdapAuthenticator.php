@@ -25,7 +25,7 @@
 		/**
 		 * @param callable(string, array): void|null $logger
 		 */
-		public static function authenticate(string $login, string $password, array $settings, ?callable $logger = null): string
+		public static function authenticate(string $login, #[\SensitiveParameter] string $password, array $settings, ?callable $logger = null): string
 		{
 			if (trim($login) === '' || $password === '') {
 				self::log($logger, 'LDAP authentication rejected empty credentials.');

@@ -191,7 +191,7 @@ class userAuth
 	 * @param string|null $password Submitted password
 	 * @return void
 	 */
-	private function outerLogin(?string $username, ?string $password): void
+	private function outerLogin(?string $username, #[\SensitiveParameter] ?string $password): void
 	{
 
 		// get the uid of the logging in user
@@ -900,7 +900,7 @@ class userAuth
 	 * @param string $data JSON formatted user/pass data.
 	 * @return array|bool The return value will either be 'false' on error or bad data, or an arrayified version of the JSON input data.
 	 */
-	public function handleInput(string $data): array|bool
+	public function handleInput(#[\SensitiveParameter] string $data): array|bool
 	{
 		# --------------------------------------------------- #
 		# Input array JSON validation and conversion to array #
@@ -939,7 +939,7 @@ class userAuth
 	 * @param string $password
 	 * @return string One of the OasysLdapAuthenticator status constants.
 	 */
-	private function bindLDAP(string $login, string $password): string
+	private function bindLDAP(string $login, #[\SensitiveParameter] string $password): string
 	{
 		return OasysLdapAuthenticator::authenticate(
 			$login,
@@ -959,7 +959,7 @@ class userAuth
 	 * @param string $password
 	 * @return string|bool
 	 */
-	private function loginAuthValidation(string $username, string $password): string|bool
+	private function loginAuthValidation(string $username, #[\SensitiveParameter] string $password): string|bool
 	{
 		# ------------------------ #
 		# Username existence check #
