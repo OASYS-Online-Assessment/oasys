@@ -1,5 +1,5 @@
 /*
-	Controller class v2.13
+	Controller class v2.14
 
 	controller and model for an MVC
 	(c) 2021-2026 Eric J. FRANCOIS
@@ -25,6 +25,11 @@
 		example:
 			controller.setData( [4, 8, 15, 16, 23, 42], 'lottery', 'numbers' );
 			this will write the given array into data['lottery']['numbers']
+
+	setDataBatch(updates)
+		atomically applies multiple updates;
+		updates parameter is an array of arrays, where each uses the same argument order as setData: [data, ...path]
+		listeners affected by more than one updated path are only called once
 
 	getData(...path)
 		returns the data found at the path
@@ -171,14 +176,22 @@ class Controller {
 
 	dispatchUpdates(...path) {
 		this.db(1, `dispatchUpdates`, path);
+		this.dispatchUpdatePaths([path]);
+	}
+
+	dispatchUpdatePaths(paths) {
+		this.db(1, `dispatchUpdatePaths`, paths);
 		//if updates are paused, we don't dispatch any updates
 		if (this.skipUpdates) {
 			return;
 		}
-		this.dispatcherRecursion(path, [], this.callbacks);
+		let dispatchedCallbacks = [];
+		for (let path of paths) {
+			this.dispatcherRecursion(path, [], this.callbacks, 0, dispatchedCallbacks);
+		}
 	}
 
-	dispatcherRecursion(dtPath, cbPath, cbSubtree, depth = 0) {
+	dispatcherRecursion(dtPath, cbPath, cbSubtree, depth = 0, dispatchedCallbacks = []) {
 		if ((this.pathIsSubset(cbPath, dtPath) || this.pathIsSubset(dtPath, cbPath))) {
 			this.db(2, `dispatcherRecursion`, dtPath, cbPath, cbSubtree, depth);
 			//if the callback path is a subset of the data path, we need to dispatch branch level updates
@@ -186,6 +199,10 @@ class Controller {
 				//only dispatch update if data has actually changed
 				if (!this.compareData(this.#getDataInternal(...cbPath), this.#getDataToOverwrite(...cbPath))) {
 					for (let cb of cbSubtree.__callbacks) {
+						if (this.callbackWasDispatched(dispatchedCallbacks, cb, cbPath)) {
+							continue;
+						}
+						dispatchedCallbacks.push({callback: cb, path: this.clone(cbPath)});
 						cb.call(this, this.#getDataInternal(...cbPath));
 					}
 				}
@@ -193,13 +210,22 @@ class Controller {
 			for (let i in cbSubtree) {
 				if (i !== '__callbacks') {
 					if (dtPath.length > cbPath.length) {
-						this.dispatcherRecursion([...dtPath], [...cbPath, i], cbSubtree[i], depth + 1);
+						this.dispatcherRecursion([...dtPath], [...cbPath, i], cbSubtree[i], depth + 1, dispatchedCallbacks);
 					} else {
-						this.dispatcherRecursion([...dtPath, i], [...cbPath, i], cbSubtree[i], depth + 1);
+						this.dispatcherRecursion([...dtPath, i], [...cbPath, i], cbSubtree[i], depth + 1, dispatchedCallbacks);
 					}
 				}
 			}
 		}
+	}
+
+	callbackWasDispatched(dispatchedCallbacks, callback, path) {
+		for (let dispatched of dispatchedCallbacks) {
+			if (dispatched.callback === callback && this.comparePaths(dispatched.path, path)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/* remove a specific callback from the registered views */
@@ -257,6 +283,100 @@ class Controller {
 		this.init = false;
 	}
 
+	/* atomically set multiple values; each update has the form [data, ...path] */
+	setDataBatch(updates) {
+		this.db(1, `setDataBatch`, updates);
+		if (!Array.isArray(updates) || updates.length === 0) {
+			console.error('Controller "setDataBatch" error: updates must be a non-empty array');
+			return false;
+		}
+
+		let normalizedUpdates = [];
+		for (let i = 0; i < updates.length; i++) {
+			let update = updates[i];
+			if (!Array.isArray(update) || update.length === 0 || !(0 in update)) {
+				console.error(`Controller "setDataBatch" error: update ${i} must be an array containing data as its first element`);
+				return false;
+			}
+
+			let [data, ...path] = update;
+			if (!this.checkPathValidity(...path)) {
+				return false;
+			}
+			for (let existing of normalizedUpdates) {
+				if (this.pathIsSubset(path, existing.path) || this.pathIsSubset(existing.path, path)) {
+					console.error(`Controller "setDataBatch" error: overlapping paths ${JSON.stringify(existing.path)} and ${JSON.stringify(path)}`);
+					return false;
+				}
+			}
+			normalizedUpdates.push({data: data, path: path});
+		}
+
+		let changedUpdates = normalizedUpdates.filter((update) => {
+			return !this.compareData(this.#getDataInternal(...update.path), update.data);
+		});
+		if (changedUpdates.length === 0) {
+			return false;
+		}
+
+		let previousData = this.clone(this.data);
+		let stagedData = this.clone(this.data);
+		for (let update of changedUpdates) {
+			let result = this.setDataInTree(stagedData, update.data, update.path);
+			if (!result.success) {
+				return false;
+			}
+			stagedData = result.data;
+		}
+
+		if (this.getContext) {
+			this.context = this.getContext();
+		}
+		let trackedUpdates = changedUpdates.filter((update) => !this.findUndoIgnorePath(update.path));
+		if (trackedUpdates.length > 0) {
+			let undoPath = this.findCommonAncestor(trackedUpdates.map((update) => update.path));
+			this.createUndoStep(undoPath, this.getSubTree(stagedData, ...undoPath));
+		}
+
+		this.data = stagedData;
+		this.runConsistencyChecks();
+		let comparisonData = this.dataToOverwrite;
+		this.dataToOverwrite = previousData;
+		try {
+			this.dispatchUpdatePaths(changedUpdates.map((update) => update.path));
+		} finally {
+			this.dataToOverwrite = comparisonData;
+		}
+		this.changedFlag = true;
+		this.sendOnChangeNotification();
+		this.init = false;
+		return true;
+	}
+
+	setDataInTree(tree, data, path) {
+		if (path.length === 0) {
+			return {success: true, data: this.clone(data)};
+		}
+
+		let target = tree;
+		if (target === null || typeof (target) !== 'object') {
+			console.error(`Controller "setDataBatch" error: cannot traverse path ${JSON.stringify(path)}`);
+			return {success: false, data: tree};
+		}
+		for (let i = 0; i < path.length - 1; i++) {
+			let key = path[i];
+			if (typeof (target[key]) === 'undefined') {
+				target[key] = {};
+			} else if (target[key] === null || typeof (target[key]) !== 'object') {
+				console.error(`Controller "setDataBatch" error: cannot traverse path ${JSON.stringify(path)}`);
+				return {success: false, data: tree};
+			}
+			target = target[key];
+		}
+		target[path[path.length - 1]] = this.clone(data);
+		return {success: true, data: tree};
+	}
+
 	/* return data from a subkey of the data store */
 	getData(...path) {
 		this.db(1, `getData`, path);
@@ -296,7 +416,7 @@ class Controller {
 	getSubTree(tree, ...path) {
 		this.db(2, `getSubTree`, path);
 		for (let i of path) {
-			if (typeof (tree[i]) === 'undefined') {
+			if (tree === null || typeof (tree) !== 'object' || typeof (tree[i]) === 'undefined') {
 				return null;
 			}
 			tree = tree[i];
@@ -871,5 +991,7 @@ class Controller {
 		- added a method to check if a path exists in the data
 	v2.12
 		- fixed a problem with the dispatcher
+	v2.14
+		- added atomic batch updates with targeted, deduplicated listener dispatch
 
  */

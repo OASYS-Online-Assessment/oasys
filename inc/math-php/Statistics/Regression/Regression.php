@@ -9,19 +9,19 @@ abstract class Regression
 {
     /**
      * Array of x and y points: [ [x, y], [x, y], ... ]
-     * @var array
+     * @var array<array{float, float}>
      */
     protected $points;
 
     /**
      * X values of the original points
-     * @var array
+     * @var array<float>
      */
     protected $xs;
 
     /**
      * Y values of the original points
-     * @var array
+     * @var array<float>
      */
     protected $ys;
 
@@ -30,24 +30,24 @@ abstract class Regression
      * @var int
      */
     protected $n;
-    
+
     /**
      * Constructor - Prepares the data arrays for regression analysis
      *
-     * @param array $points [ [x, y], [x, y], ... ]
+     * @param array<array{float, float}> $points [ [x, y], [x, y], ... ]
      */
     public function __construct(array $points)
     {
         $this->points = $points;
-        $this->n      = count($points);
+        $this->n      = \count($points);
 
         // Get list of x points and y points.
         // This will be fine for linear or polynomial regression, where there is only one x,
         // but if expanding to multiple linear, the format will have to change.
-        $this->xs = array_map(function ($point) {
+        $this->xs = \array_map(function ($point) {
             return $point[0];
         }, $points);
-        $this->ys = array_map(function ($point) {
+        $this->ys = \array_map(function ($point) {
             return $point[1];
         }, $points);
     }
@@ -64,7 +64,7 @@ abstract class Regression
     /**
      * Get points
      *
-     * @return array
+     * @return array<array{float, float}>
      */
     public function getPoints(): array
     {
@@ -74,7 +74,7 @@ abstract class Regression
     /**
      * Get Xs (x values of each point)
      *
-     * @return array of x values
+     * @return array<float> of x values
      */
     public function getXs(): array
     {
@@ -84,7 +84,7 @@ abstract class Regression
     /**
      * Get Ys (y values of each point)
      *
-     * @return array of y values
+     * @return array<float> of y values
      */
     public function getYs(): array
     {
@@ -100,15 +100,15 @@ abstract class Regression
     {
         return $this->n;
     }
-    
+
     /**
      * Ŷ (yhat)
      * A list of the predicted values of Y given the regression.
      *
-     * @return array
+     * @return array<float>
      */
     public function yHat(): array
     {
-        return array_map([$this, 'evaluate'], $this->xs);
+        return \array_map([$this, 'evaluate'], $this->xs);
     }
 }

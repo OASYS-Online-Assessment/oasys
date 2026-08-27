@@ -15,9 +15,9 @@ class Gamma extends Continuous
      * Distribution parameter bounds limits
      * k ∈ (0,∞)
      * θ ∈ (0,∞)
-     * @var array
+     * @var array{"k": string, "θ": string}
      */
-    const PARAMETER_LIMITS = [
+    public const PARAMETER_LIMITS = [
         'k' => '(0,∞)',
         'θ' => '(0,∞)',
     ];
@@ -25,9 +25,9 @@ class Gamma extends Continuous
     /**
      * Distribution suport bounds limits
      * x ∈ (0,∞)
-     * @var array
+     * @var array{x: string}
      */
-    const SUPPORT_LIMITS = [
+    public const SUPPORT_LIMITS = [
         'x' => '(0,∞)',
     ];
 

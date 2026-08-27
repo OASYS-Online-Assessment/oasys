@@ -2,7 +2,7 @@
  * jsDragAndDrop.js
  * dependencies: jQuery
  *
- * version 1.1.7
+ * version 1.1.8
  */
 
 "use strict";
@@ -304,7 +304,7 @@
 		if (type !== 'remove') {
 			type = 'default';
 		}
-		let acceptClones = settings.acceptClones ?? false;
+		let acceptClones = (settings.acceptClones ?? false) || (type === 'remove');
 		let onFull = settings.onFull;
 		let onDrop = settings.onDrop;
 		let orderBy = settings.orderBy || false;
@@ -1437,4 +1437,6 @@
 		- preventing onChange to be triggered when window is resized
 	v1.1.7:
 		- added convenience methods for finding and moving draggables
+	v1.1.8:
+		- type="remove" now implies acceptClones
  */

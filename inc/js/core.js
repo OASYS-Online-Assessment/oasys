@@ -52,6 +52,7 @@ function core_init() {
 		core_initLanguage();
 		core_prepareLabels();
 		core_createItemButtons();
+		core_copyDebugData();
 		butler_init();
 		core_prepareFieldList();
 		timer.settings.tsLogin = core_getTimestamp();
@@ -73,6 +74,17 @@ function core_init() {
 		loader_cacheMediaFiles(); //background task to cache media files up front
 	} catch (e) {
 		global_handleException(e);
+	}
+}
+
+function core_copyDebugData() {
+	if (typeof debug !== 'undefined') {
+		//iterate through debug to copy any data over to real variables
+		for (let mainKey in debug) {
+			for (let key in debug[mainKey]) {
+				window[mainKey][key] = debug[mainKey][key];
+			}
+		}
 	}
 }
 
@@ -586,9 +598,12 @@ function core_parseItem(fields, location) {
 			if (typeof (tmpAnswer) === 'undefined') continue;
 			answers[state[location].id][fields[i].id] = tmpAnswer;
 
-			if (typeof (state.requiredFields[i]) !== 'undefined') {
+			const requiredFields = test.requiredFields[state[location].id];
+			if (typeof (requiredFields[i]) !== 'undefined') {
 				//update field requirements state
-				state.requiredFields[i] = plugins[type].validResponse(tmpAnswer, state.question.fields[i]);
+				const validResponse = plugins[type].validResponse(tmpAnswer, fields[i]);
+				requiredFields[i] = validResponse;
+				state.requiredFields[i] = validResponse;
 			}
 		}
 	}
@@ -610,20 +625,88 @@ function core_parseItem(fields, location) {
 	if (firstField.length > 0 && (firstField.hasClass('oasysTextfield') || firstField.hasClass('oasysTextarea') || firstField.hasClass('oasysInlineText'))) {
 		firstField.find('input, textarea').first().focus();
 	}
-
+	core_replaceVariablePlaceholders();
 	core_launchItemTimer();
 }
 
-function core_checkValidResponses() {
-	//checks all fields of current item to find out if the requirements are met
-	let fields = test.items[state.currentItemId].fields;
+function core_replaceVariablePlaceholders() {
+	const contentWrapper = document.getElementById('contentWrapper');
+	if (!contentWrapper) return;
+
+	const placeholderPattern = /{{(.*?)}}/g;
+	const resolvePlaceholder = (match, variableName) => {
+		const details = test.variables?.[variableName];
+		if (details?.global === true) {
+			const i = getKey(details?.text, 0);
+			return details?.text[i] ?? '';
+		}
+		if (typeof (details?.text?.[state.language]) !== 'undefined') {
+			return details.text[state.language];
+		}
+		return match;
+	};
+
+	/*
+		Only replace the text nodes that contain placeholders. Reassigning an element's innerHTML recreates all of its
+		descendants, which disconnects initialized plugins such as MediaElementPlayer from the DOM. A Range preserves
+		the previous behaviour of allowing variable values to contain HTML without rebuilding surrounding elements.
+	*/
+	const textNodes = [];
+	const walker = document.createTreeWalker(contentWrapper, NodeFilter.SHOW_TEXT);
+	while (walker.nextNode()) {
+		if (walker.currentNode.nodeValue.includes('{{')) textNodes.push(walker.currentNode);
+	}
+
+	for (const textNode of textNodes) {
+		const text = textNode.nodeValue;
+		const fragment = document.createDocumentFragment();
+		const range = document.createRange();
+		range.selectNode(textNode);
+		let lastIndex = 0;
+		let changed = false;
+		let placeholder;
+		placeholderPattern.lastIndex = 0;
+
+		while ((placeholder = placeholderPattern.exec(text)) !== null) {
+			const replacement = String(resolvePlaceholder(placeholder[0], placeholder[1]));
+			fragment.appendChild(document.createTextNode(text.substring(lastIndex, placeholder.index)));
+			if (replacement === placeholder[0]) {
+				fragment.appendChild(document.createTextNode(replacement));
+			} else {
+				fragment.appendChild(range.createContextualFragment(replacement));
+				changed = true;
+			}
+			lastIndex = placeholderPattern.lastIndex;
+		}
+
+		if (changed) {
+			fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
+			textNode.parentNode.replaceChild(fragment, textNode);
+		}
+	}
+
+	//Replace placeholders in attributes without recreating their elements.
+	contentWrapper.querySelectorAll('*').forEach((element) => {
+		Array.from(element.attributes).forEach((attribute) => {
+			if (!attribute.value.includes('{{')) return;
+			const replacement = attribute.value.replace(placeholderPattern, resolvePlaceholder);
+			if (replacement !== attribute.value) element.setAttribute(attribute.name, replacement);
+		});
+	});
+}
+
+function core_checkValidResponses(itemId = state.currentItemId) {
+	//checks all fields of the item that produced the response to find out if the requirements are met
+	let fields = test.items[itemId]?.fields;
 	if (fields) {
 		for (let f in fields) {
 			const type = fields[f].type;
 			if (plugins[type] && plugins[type].category === 'fields') {
 				if (fields[f].required) {
-					test.requiredFields[state.currentItemId][f] = plugins[type].validResponse(answers[state.currentItemId][f], test.items[state.currentItemId].fields[f]);
-					test.itemRequirements[state.currentItemId] = test.itemRequirements[state.currentItemId] && plugins[type].validResponse(answers[state.currentItemId][f], test.items[state.currentItemId].fields[f]);
+					const validResponse = plugins[type].validResponse(answers[itemId][f], fields[f]);
+					test.requiredFields[itemId][f] = validResponse;
+					state.requiredFields[f] = validResponse;
+					test.itemRequirements[itemId] = test.itemRequirements[itemId] && validResponse;
 				}
 			}
 		}
@@ -749,6 +832,7 @@ function core_gotoItem(n, force = false) {
 	*  prepared for it, just as a safety measure
 	*/
 	if (force === true && n >= test.structure.items.length) {
+		core_sendBehaviour('navigatedPastEnd');
 		core_endTest();
 		return;
 	}
@@ -781,6 +865,9 @@ function core_gotoItem(n, force = false) {
 	}
 	butler_updateItemOptions();
 	core_getItemContents();
+	if (state.stimulus) {
+		Object.assign(state.requiredFields, test.requiredFields[state.stimulus.id]);
+	}
 	core_setItemContent();
 	butler_updateNavigation();
 	script = fetchFromObjPath(test, ['items', state.currentItemId, 'scripts', 'visibility']);
@@ -916,9 +1003,10 @@ function core_onQueueMessage(e) {
 				was triggered by the server, we must no longer save any unsent data, so we set the queueFlushed flag and
 				terminate the queue worker
 			 */
+			debugger
 			state.queueFlushed = true;
 			workers.queue.terminate();
-			core_forceLogoff();
+			core_forceLogoff(res.reason, res.restrictionType);
 			break;
 
 		case 'timeLeftAtLogin':
@@ -954,6 +1042,9 @@ function core_executeInstruction(instruction) {
 			//stop both workers and show a dialog to the user
 			workers.queue.terminate();
 			workers.timer.terminate();
+			/*	no behaviour or beacon is sent in this case:
+				this happens only when superadmin decided to roll back the database to a previous backup
+				hence no data that we would write into the database would persist anyway */
 			global_errorDialog('maintenanceStarted', null, global_returnToLogin);
 			break;
 		case 'inquisition':
@@ -987,9 +1078,9 @@ function core_userEvent(event) {
 
 		answers[event.itemId][event.fieldId] = event.value;
 
-		if (typeof (state.requiredFields[event.fieldId]) !== 'undefined') {
-			//update field requirements state of all fields in this page
-			core_checkValidResponses();
+		if (typeof (test.requiredFields[event.itemId]?.[event.fieldId]) !== 'undefined') {
+			//update field requirements state of all fields belonging to the item that produced the response
+			core_checkValidResponses(event.itemId);
 
 			//update item button status
 			event.fieldsFilled = core_updateItemRequirements(event.itemId);
@@ -1007,19 +1098,20 @@ function core_userEvent(event) {
 			globalVariables[exportName] = event.value;
 		}
 
-		//optimise data sent to server by removing redundant data
-		for (let id in events) {
-			let ev = events[id];
-			if (ev.itemId === event.itemId && ev.fieldId === event.fieldId) {
-				delete events[ev.eventId];
-				let message = {
-					type: 'deleteEvent',
-					eventId: ev.eventId
-				};
-				workers.queue.postMessage(message);
+		if (settings.optimiseDataTransfer === true) {
+			//optimise data sent to server by removing redundant data
+			for (let id in events) {
+				let ev = events[id];
+				if (ev.itemId === event.itemId && ev.fieldId === event.fieldId) {
+					delete events[ev.eventId];
+					let message = {
+						type: 'deleteEvent',
+						eventId: ev.eventId
+					};
+					workers.queue.postMessage(message);
+				}
 			}
 		}
-
 
 		//if edit is still in progress event is treated locally, but not sent to queue
 		if (!event.editInProgress) {
@@ -1191,21 +1283,25 @@ function core_onCloseWindow() {
 		global_cleanState();
 		return;
 	}
-	core_sendBeacon();
+	core_sendBeacon('closeWindow');
 }
 
-function core_sendBeacon() {
+function core_sendBeacon(reason = '', data = {}) {
 	if ("sendBeacon" in navigator) {
-		const event = {
-			itemId: state.currentItemId,
-			type: 'behaviour',
-			language: state.language,
-			timestamp: core_getTimestamp(),
-			timeLeft: core_getTimeLeft(),
-			subType: 'closeWindow'
-		};
-		event.eventId = ++state.eventCounter;
-		events[event.eventId] = event;
+		if (reason !== '') {
+			//if a reason is sent, we add a behaviour event, otherwise we skip this
+			const event = {
+				itemId: state.currentItemId,
+				type: 'behaviour',
+				language: state.language,
+				timestamp: core_getTimestamp(),
+				timeLeft: core_getTimeLeft(),
+				subType: reason,
+				data: JSON.stringify(data)
+			};
+			event.eventId = ++state.eventCounter;
+			events[event.eventId] = event;
+		}
 		const beaconData = {
 			payloadId: ++state.payloadId,
 			metadata: {mediaProgress: state.mediaProgress},
@@ -1245,7 +1341,7 @@ function core_timeUp_phase2(message = null) {
 	if (!dialogs.timeUp) {
 		if (test.lastTestForLogin) {
 			if (test.options.hideTimeoutMsg === true) {
-				core_closeTest();
+				core_finishTest();
 			} else {
 				let dialogData = {
 					buttons: [
@@ -1253,7 +1349,7 @@ function core_timeUp_phase2(message = null) {
 					],
 					contents: message !== null ? global_getText('test', message) : global_getText('test', 'timeOverReturn'),
 					title: global_getText('test', 'timeOverTitle'),
-					callback: core_closeTest,
+					callback: core_finishTest,
 					icon: 'images/img_timeUp.png',
 					iconWidth: 100,
 					iconHeight: 100,
@@ -1292,14 +1388,14 @@ function core_endTest() {
 	if (!dialogs.endTest) {
 		if (test.lastTestForLogin) {
 			if (test.options.hideTimeoutMsg === true) {
-				core_closeTest();
+				core_finishTest();
 			} else {
 				let dialogData = {
 					buttons: [
 						{label: global_getText('test', 'returnButton'), 'default': true, value: 'ok'}
 					],
 					contents: global_getText('test', 'endReturn'),
-					callback: core_closeTest,
+					callback: core_finishTest,
 					icon: 'images/finishFlag.svg',
 					iconWidth: 100,
 					iconHeight: 150,
@@ -1328,7 +1424,7 @@ function core_endTest() {
 	}
 }
 
-function core_forceLogoff() {
+function core_forceLogoff(reason, restrictionType) {
 	//can no longer send "forceLogoff" behaviour to server, as we already terminated the queue worker
 	closeExternalEditor();
 	if (!dialogs.forceLogoff) {
@@ -1345,9 +1441,18 @@ function core_forceLogoff() {
 		};
 		dialogs.forceLogoff = new nxDialog('forceLogoff', dialogData);
 	}
+	core_sendBeacon('forceLogoff', {reason: reason, restrictionType: restrictionType});
+}
+
+function core_finishTest() {
+	core_leaveTest(true);
 }
 
 function core_closeTest() {
+	core_leaveTest(false);
+}
+
+function core_leaveTest(finished) {
 	/*
 		if the queue has already been flushed successfully at this point we can proceed to the loginScreen, if not we
 		just keep the callback to this function in the state.onQueueFlushed field and wait for it to be called as soon
@@ -1357,11 +1462,15 @@ function core_closeTest() {
 	if (state.queueFlushed) {
 		if (butler.showScore === true) {
 			loader_switchMode('score');
+		} else if (finished) {
+			global_finishTest();
 		} else {
 			global_returnToLogin();
 		}
 	} else {
-		state.onQueueFlushed = core_closeTest;
+		state.onQueueFlushed = function () {
+			core_leaveTest(finished);
+		};
 		loader.waitDialog.show('core');
 	}
 }
@@ -1394,7 +1503,7 @@ function core_buttonAction(action, data = {}) {
 			core_sendBehaviour("endTest");
 			workers.queue.postMessage({type: 'flushQueue', options: {leaveAccessible: false}});
 			if (test.lastTestForLogin) {
-				core_closeTest();
+				core_finishTest();
 			} else {
 				if (!butler.saveResults) {
 					state.skipTest = test.id;
@@ -1403,6 +1512,7 @@ function core_buttonAction(action, data = {}) {
 			}
 			break;
 		case 'gotoLogin':
+			core_sendBehaviour("leaveTest", {destination: 'login'});
 			workers.queue.postMessage({type: 'flushQueue', options: {leaveAccessible: true}});
 			core_closeTest();
 			break;
@@ -1628,13 +1738,19 @@ function core_getMetaData(key, localized = false) {
 }
 
 function core_privacyPolicyExists() {
-	return test.skin.skinOptions?.privacyPolicy?.value === true;
+	return test.skin.skinOptions?.privacyPolicy === true;
 }
 
 function core_showPrivacyPolicy() {
 	let message = core_getMetaData('privacy_policy', true);
 	if (message === null || message === '') {
 		message = global_getText('test', 'noPrivacyPolicy');
+	}
+	message = message.replace(/\[@\s*OASYSROOT\s*@\]/g, settings.rootURL);
+	let customCSS = core_getMetaData('privacy_policy')?.customCSS;
+	if (typeof (customCSS) === 'string' && customCSS.trim() !== '') {
+		customCSS = customCSS.replace(/\bbody\b/g, '#privacyPolicyContent');
+		message = `<style>${customCSS}</style><div id="privacyPolicyContent">${message}</div>`;
 	}
 	core_popupMessage('privacyPolicy', message, global_getText('test', 'privacyPolicyTitle'));
 }

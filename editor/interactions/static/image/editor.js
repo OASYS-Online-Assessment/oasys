@@ -60,11 +60,13 @@ class imageEditor extends InteractionEditor {
 			mediaTypes: 'image',
 			hideOptions: true,
 			onClose: (sender, data) => {
-				this.controller.setData(data.mediaFileName, 'filename', selectedLanguage);
-				this.controller.setData(data.fileId, 'fileid', selectedLanguage);
-				this.controller.setData(data.checksum, 'filechecksum', selectedLanguage);
-				this.controller.setData(data.width, 'width', selectedLanguage);
-				this.controller.setData(data.width / data.height, 'ratio', selectedLanguage);
+				this.controller.setDataBatch([
+					[data.mediaFileName, 'filename', selectedLanguage],
+					[data.fileId, 'fileid', selectedLanguage],
+					[data.checksum, 'filechecksum', selectedLanguage],
+					[data.width, 'width', selectedLanguage],
+					[data.width / data.height, 'ratio', selectedLanguage]
+				]);
 			}
 		});
 	}
@@ -114,8 +116,7 @@ class imageEditor extends InteractionEditor {
 	}
 
 	static moveLanguageData(data, oldLang, newLang) {
-		let keys = ['filename', 'fileid', 'filechecksum', 'width'];
+		let keys = ['filename', 'fileid', 'filechecksum', 'width', 'ratio'];
 		super.moveLanguageData(data, oldLang, newLang, keys);
 	}
-
 }

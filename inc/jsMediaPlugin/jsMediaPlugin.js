@@ -1,7 +1,7 @@
 /*
 
- jsMediaPlugin v1.16
- (c) 2014 - 2025 by Willibrord Koch
+ jsMediaPlugin v1.19
+ (c) 2014 - 2026 by Willibrord Koch
 
  DESCRIPTION:
  This plugin opens up a popup to manage to the media files of the OASYS system.
@@ -26,6 +26,10 @@
  v1.14          Option globalManager added / sending mode/mediaTypes on upload
  v1.15          Online help added
  v1.15          AVIF format added
+ v1.16          Improved error handling on ajax calls
+ v1.17          Always allow multi-upload now, upload errors aggregated into one dialog
+ v1.18          Added support for image browser in testmanager
+ v1.19          Prevented repeated help initialization from adding stray question marks to upload errors
  --------------------------------------------------------------------------------------------------------------
  USAGE:
  instantiate with:
@@ -45,6 +49,8 @@
 
 (function ($) {
 
+    let mediaHelpInstanceCounter = 0;
+
     function jsMediaPlugin(id, options) {
 
         let origImageWidthQuo, origImageHeightQuo, fileType, fileWidth, fileHeight, fileSrc, presetw, preseth,
@@ -55,12 +61,29 @@
             videoPlaybacks = 0, videoPholder,
             videoUserControl, videoStart, videoForce, videoNavigate, imgVerticalAlign;
 
+        const editorPath = window.location.pathname;
+        const oasysRootURL = window.location.origin +
+            editorPath.substring(0, editorPath.indexOf('/editor/'));
+
         if (!options)
             options = {};
 
         const closeCallback = options.onClose || null;
         const mediaTypes = options.mediaTypes || 'all';
         const globalManager = options.globalManager || false;
+
+        // mode / actions for different backends (CMS vs TestManager)
+        const mode = options.mode || 'cms';           // 'cms' (content manangement) or 'testmanager'
+        const testId = options.testId || null;        // required for mode === 'testmanager'
+
+        // Allow overriding action names if needed
+        const actionFetchLibrary     = options.actionFetchLibrary     || (mode === 'testmanager' ? 'fetchLibraryTm'     : 'fetchLibrary');
+        const actionUpload           = options.actionUpload           || (mode === 'testmanager' ? 'uploadTm'           : 'upload');
+        const actionDeleteSelection  = options.actionDeleteSelection  || (mode === 'testmanager' ? 'deleteSelectionTm'  : 'deleteSelection');
+        const actionDeleteAll        = options.actionDeleteAll        || (mode === 'testmanager' ? 'deleteAllTm'        : 'deleteAll');
+        const actionRenameMedia      = options.actionRenameMedia      || (mode === 'testmanager' ? 'renameMediaTm'      : 'renameMedia');
+        const actionPreview          = options.actionPreview          || (mode === 'testmanager' ? 'previewTm'          : 'preview');
+
         const parameters = options.parameters || []; //custom parameters that the calling function wants to be transferred to closeCallback
         presetw = options.preSelectWidth || '';
         preseth = options.preSelectHeight || '';
@@ -70,37 +93,53 @@
         let waitDialog;
         waitDialog = new jsModalWait(UILANG.m('please wait'));
         let mediaFileName;
-        let medPat;
+        let medPat, acceptAttr;
         let tTitle;
         let audioControlDiv;
         let audioHiddenDiv;
         let videoControlDiv;
         let videoPlaceHolder;
         let mediaHelpHtml;
-        //nxUploader configured to accept all possible media formats, further filtering is done in mediaActions.php
-        medPat = /(\.mp4$|\.m4v$|\.mp3$|\.m4a$|\.aac$|\.wav$|\.webm$|\.avif$|\.jpg$|\.jpeg$|\.png$|\.gif$|\.svg$|\.webp$)/i;
+        const invalidFilesHelpId = `invalidFiles_${++mediaHelpInstanceCounter}`;
+        let batchUploading = false;
+        let uploadErrors = [];
+
         switch (mediaTypes) {
             case 'image':
-                tTitle = UILANG.m('Image Library<span id=mediaHelp></span>');
-                mediaHelpHtml=UILANG.m('<p><strong>Image Upload Help</strong><br>You are in the media uploader for image interactions. Only single uploads are possible. You can still upload an audio or video file, but it will not be shown in the file manager for images.</p><table><tr><th><strong>Supported Image Formats</strong></th></tr><tr><td>- JPEG (.jpg, .jpeg)<br>- PNG (.png)<br>- GIF (.gif)<br>- SVG (.svg)<br>- WEBP (.webp)<br>- AVIF (.avif)</td></tr></table>');
-                break;
-            case 'audio':
-                tTitle = UILANG.m('Audio Library<span id=mediaHelp></span>');
-                mediaHelpHtml=UILANG.m('<p><strong>Audio Upload Help</strong><br>You are in the media uploader for audio interactions. Only single uploads are possible. You can still upload an image or video file, but it will not be shown in the file manager for audio files.</p><table><tr><th><strong>Supported Audio Formats</strong></th></tr><tr><td>- MP3 (.mp3)<br>- WAV (.wav)<br>- AAC (.aac)<br>- M4A (.m4a)<br>- WEBM (.webm)</td></tr></table>');
-                break;
-            case 'video':
-                tTitle = UILANG.m('Video Library<span id=mediaHelp></span>');
-                mediaHelpHtml=UILANG.m('<p><strong>Video Upload Help</strong><br>You are in the media uploader for video interactions. Only single uploads are possible. You can still upload an image or audio file, but it will not be shown in the file manager for video files.</p><table><tr><th><strong>Supported Video Formats</strong></th></tr><tr><td>- MP4 (.mp4)<br>- M4V (.m4v)<br>- WEBM (.webm)</td></tr></table>');
-                break;
-            case 'all':
-                tTitle = UILANG.m('Media Library<span id=mediaHelp></span>');
-                if(globalManager === true) {
-                    mediaHelpHtml = UILANG.m('<p><strong>Media Upload Help</strong><br>This guide provides information on supported media formats. Please ensure your files match the following formats. You can upload multiple files at once in the main media manager. However, when using the media manager in interactions, only single file uploads are possible.</p><table><tr><th><strong>Images</strong></th><th><strong>Audio</strong></th><th><strong>Video</strong></th></tr><tr><td>- JPEG (.jpg, .jpeg)<br>- PNG (.png)<br>- GIF (.gif)<br>- SVG (.svg)<br>- WEBP (.webp)<br>- AVIF (.avif)</td><td>- MP3 (.mp3)<br>- WAV (.wav)<br>- AAC (.aac)<br>- M4A (.m4a)<br>- WEBM (.webm)</td><td>- MP4 (.mp4)<br>- M4V (.m4v)<br>- WEBM (.webm)</td></tr></table><p>If your file is not in one of these formats, please convert it before uploading.</p>');
+                medPat = /\.(avif|webp|svg|gif|png|jpe?g)$/i;
+                acceptAttr = 'image/*,.avif,.webp,.svg,.gif,.png,.jpg,.jpeg';
+
+                if (mode === 'testmanager') {
+                    tTitle = UILANG.m('Test image library<span id=mediaHelp></span>');
+                    mediaHelpHtml = UILANG.m('<p><strong>Image upload for meta pages</strong><br>You are in the image uploader for the Test Manager. All images you upload here are stored with this test and can be used on the privacy policy, score screen, landing page and finish page of this test.</p><p>Only image formats are allowed in this view. If you want to manage other media types (audio, video, mixed media), please use the main Media Manager in OASYS.</p><table><tr><th><strong>Supported image formats</strong></th></tr><tr><td>- JPEG (.jpg, .jpeg)<br>- PNG (.png)<br>- GIF (.gif)<br>- SVG (.svg)<br>- WEBP (.webp)<br>- AVIF (.avif)</td></tr></table>');
                 } else {
-                    mediaHelpHtml = UILANG.m('<p><strong>Media Upload Help</strong><br>This guide provides information on supported media formats. Please ensure your files match the following formats. </p><table><tr><th><strong>Images</strong></th><th><strong>Audio</strong></th><th><strong>Video</strong></th></tr><tr><td>- JPEG (.jpg, .jpeg)<br>- PNG (.png)<br>- GIF (.gif)<br>- SVG (.svg)<br>- WEBP (.webp)<br>- AVIF (.avif)</td><td>- MP3 (.mp3)<br>- WAV (.wav)<br>- AAC (.aac)<br>- M4A (.m4a)<br>- WEBM (.webm)</td><td>- MP4 (.mp4)<br>- M4V (.m4v)<br>- WEBM (.webm)</td></tr></table><p>If your file is not in one of these formats, please convert it before uploading.</p>');
+                    tTitle = UILANG.m('Image Library<span id=mediaHelp></span>');
+                    mediaHelpHtml = UILANG.m('<p><strong>Image Upload Help</strong><br>You are in the media uploader for image interactions. You can upload multiple image files at once, but only the image formats listed below are accepted in this view. In this image view you can only upload and download image files; audio or video files are not available here.</p><p>If you want to upload several different media types (for example images and audio or video files together), please use the main Media Manager in OASYS. There you can manage all media types in one place.</p><table><tr><th><strong>Supported Image Formats</strong></th></tr><tr><td>- JPEG (.jpg, .jpeg)<br>- PNG (.png)<br>- GIF (.gif)<br>- SVG (.svg)<br>- WEBP (.webp)<br>- AVIF (.avif)</td></tr></table>');
                 }
                 break;
+
+            case 'audio':
+                medPat = /\.(mp3|m4a|aac|wav|weba|webm)$/i; // webm audio = .weba/.webm
+                acceptAttr = 'audio/*,.mp3,.m4a,.aac,.wav,.weba,.webm';
+                tTitle = UILANG.m('Audio Library<span id=mediaHelp></span>');
+                mediaHelpHtml = UILANG.m('<p><strong>Audio Upload Help</strong><br>You are in the media uploader for audio interactions. You can upload multiple audio files at once, but only the audio formats listed below are accepted in this view. In this audio view you can only upload and download audio files; image or video files are not available here.</p><p>If you want to upload several different media types (for example audio together with images or video files), please use the main Media Manager in OASYS. It allows you to handle all media types in one place.</p><table><tr><th><strong>Supported Audio Formats</strong></th></tr><tr><td>- MP3 (.mp3)<br>- WAV (.wav)<br>- AAC (.aac)<br>- M4A (.m4a)<br>- WEBM (.webm/.weba)</td></tr></table>');
+                break;
+
+            case 'video':
+                medPat = /\.(mp4|m4v|webm)$/i;
+                acceptAttr = 'video/*,.mp4,.m4v,.webm';
+                tTitle = UILANG.m('Video Library<span id=mediaHelp></span>');
+                mediaHelpHtml = UILANG.m('<p><strong>Video Upload Help</strong><br>You are in the media uploader for video interactions. You can upload multiple video files at once, but only the video formats listed below are accepted in this view. In this video view you can only upload and download video files; image or audio files are not available here.</p><p>If you want to upload several different media types (for example video together with images or audio files), please use the main Media Manager in OASYS. It is designed for managing mixed media collections.</p><table><tr><th><strong>Supported Video Formats</strong></th></tr><tr><td>- MP4 (.mp4)<br>- M4V (.m4v)<br>- WEBM (.webm)</td></tr></table>');
+                break;
+
+            case 'all':
+                medPat = /\.(mp4|m4v|mp3|m4a|aac|wav|webm|weba|avif|jpe?g|png|gif|svg|webp)$/i;
+                acceptAttr = '.mp4,.m4v,.mp3,.m4a,.aac,.wav,.webm,.weba,.avif,.jpg,.jpeg,.png,.gif,.svg,.webp';
+                tTitle = UILANG.m('Media Library<span id=mediaHelp></span>');
+                mediaHelpHtml = UILANG.m('<p><strong>Media Upload Help</strong><br>You are in the media uploader for all media types. Multiple file uploads are supported. In this view you can upload and download all supported media files (images, audio and video). Files that do not match the formats below cannot be used here.</p><p>For mixed uploads (for example images, audio and video in one step), this “all media” view or the main Media Manager are the recommended places. In the type-specific views (Image, Audio, Video) you are limited to the corresponding media type.</p><table><tr><th><strong>Images</strong></th><th><strong>Audio</strong></th><th><strong>Video</strong></th></tr><tr><td>- JPEG (.jpg, .jpeg)<br>- PNG (.png)<br>- GIF (.gif)<br>- SVG (.svg)<br>- WEBP (.webp)<br>- AVIF (.avif)</td><td>- MP3 (.mp3)<br>- WAV (.wav)<br>- AAC (.aac)<br>- M4A (.m4a)<br>- WEBM (.webm/.weba)</td><td>- MP4 (.mp4)<br>- M4V (.m4v)<br>- WEBM (.webm)</td></tr></table>');
+                break;
         }
+
 
         let buttonsObj;
 
@@ -124,46 +163,53 @@
                 }];
             }
         } else {
-            buttonsObj=[{
-                label: UILANG.m('cancel'),
-                'cancel': true,
-                value: 'close'
-            }, {
-                label: UILANG.m('Insert URL'),
-                value: 'insertURL',
-                disabled: true
-            }, {
-                label: UILANG.m('Insert'),
-                value: 'insert2editor',
-                'default': true,
-                disabled: true
-            }];
-
+            if (mode === 'testmanager') {
+                buttonsObj = [{
+                    label: UILANG.m('cancel'),
+                    'cancel': true,
+                    value: 'close'
+                }, {
+                    label: UILANG.m('Insert'),
+                    value: 'insert2editor',
+                    'default': true,
+                    disabled: true
+                }];
+            } else {
+                // CMS: full set including "Insert URL"
+                buttonsObj = [{
+                    label: UILANG.m('cancel'),
+                    'cancel': true,
+                    value: 'close'
+                }, {
+                    label: UILANG.m('Insert URL'),
+                    value: 'insertURL',
+                    disabled: true
+                }, {
+                    label: UILANG.m('Insert'),
+                    value: 'insert2editor',
+                    'default': true,
+                    disabled: true
+                }];
+            }
         }
 
+        const mediaDialogTitle = tTitle.replace(/<span[^>]*id=["']?mediaHelp["']?[^>]*><\/span>/i, '');
         const dialogMediaBrowser = {
             buttons: buttonsObj,
-            contents: "<div style='height:640px;' id='mediaBrowser'></div>",
-            title: UILANG.m('Media Browser'),
+            contents: "<div class='mediaBrowserDialog' id='mediaBrowser'></div>",
+            title: mediaDialogTitle,
             width: 950,
             callback: mBrowserCb
         };
         const mediaBrowser = new nxDialog('DialogMB', dialogMediaBrowser);
-        gui.extraMedia = createFlexSection('mediaBrowser', 'extraMedia', 905, 905);
+        gui.extraMedia = createFlexSection('mediaBrowser', 'extraMedia', 905, 905, 0, 'mediaBrowserSection');
         gui.boxes.tests = createFlexBox(gui.extraMedia, 'mediaChooser', {
-            title: tTitle,
             minHeight: 590,
             flex: 1,
             noPadding: true
         });
 
-        //show online help
-        new OasysHelp('mediaHelp', {
-            htmlContent: mediaHelpHtml,
-            title: UILANG.m('Supported media types'),
-        });
-
-        $('#mediaChooser').append("<div id='plgToolBar'></div><table id='assetslistTable'><tr><td class='filerContainer'><div id='assetListPlugin' ></div></td><td style='background:#FFFFFF;'><div id='previewZonePlugin'></div><div style='' id='userPanel'></div></td></tr></table>");
+        $('#mediaChooser').append("<div id='plgToolBar'></div><table id='assetslistTable' class='mediaBrowserLayout'><tr><td class='filerContainer'><div id='assetListPlugin'></div></td><td class='mediaDetailsColumn'><div id='previewZonePlugin'></div><div id='userPanel'></div></td></tr></table>");
         $('#extraMedia').css('padding', '0');
         $('#extraMedia>.jsFlexBox').css('box-shadow', 'none');
         $('#mediaChooser').css('overflow', 'hidden');
@@ -178,15 +224,17 @@
             callback: clickUpload,
             disabled: false
         });
-        plgButtons.renameSelection = new jsButton2($('#plgToolBar'), 'plgRename', {
-            label: UILANG.m('Rename'),
-            icon: '../images/dialogToolbar/ic_dl_tb_rename.png',
-            iconWidth: 28,
-            width: 60,
-            height: 55,
-            callback: clickRename,
-            disabled: true
-        });
+        if (mode !== 'testmanager') {
+            plgButtons.renameSelection = new jsButton2($('#plgToolBar'), 'plgRename', {
+                label: UILANG.m('Rename'),
+                icon: '../images/dialogToolbar/ic_dl_tb_rename.png',
+                iconWidth: 28,
+                width: 60,
+                height: 55,
+                callback: clickRename,
+                disabled: true
+            });
+        }
         plgButtons.deleteSelection = new jsButton2($('#plgToolBar'), 'plgDelete', {
             label: UILANG.m('Delete'),
             icon: '../images/dialogToolbar/ic_dl_tb_delete.png',
@@ -205,36 +253,53 @@
             callback: clickDeleteAll,
             disabled: true
         });
+
+        $('#plgToolBar').append('<span id="mediaHelp" class="mediaToolbarHelp"></span>');
+        //show online help
+        new OasysHelp('mediaHelp', {
+            htmlContent: mediaHelpHtml,
+            maxHeight: '620px',
+            maxWidth: '780px',
+            title: UILANG.m('Supported media types'),
+        });
+
         //Setup uploader
-        $("body").append("<input type='file' multiple id='mediaUpload'><\/input>");
+        $("body").append("<input type='file' multiple id='mediaUpload'>");
+        $("#mediaUpload").attr('accept', acceptAttr);
 
-        let singleUpload = true;
-        if (globalManager === true)singleUpload = false;
-
+        // Always allow multi-upload now
         const nxUploaderSettings = {
-            filebrowser: 'mediaUpload', //html id of input element
+            filebrowser: 'mediaUpload',
             action: 'upload',
             ajaxTimeout: 300000,
-            ajaxURL: '../editor/mediaActions.php', //which file is going to handle the uploaded files
+            ajaxURL: '../editor/mediaActions.php',
             sendType: "POST",
             dataType: "json",
-            dropMessage: UILANG.m('Drop media-file here to upload!'),
+            dropMessage: UILANG.m('Drop media file(s) here to upload!'),
             formatPattern: medPat,
             showFolderDropMessage: true,
-            singleUpload: singleUpload,
-            singleUploadMsg: UILANG.m('You are in an interaction that only allows uploading one media file at a time. Please go to the main media manager to bulk upload files.'),
-            invalidFiletypeMessage: UILANG.m('The following file(s) could not be uploaded, as they do not match one of the accepted file formats. <span id="invalidFiles">What formats are accepted</span>'),
-            successCallback: ajaxSuccessPLG, //callback after handling each uploaded file
+            singleUpload: false,
+            invalidFiletypeMessage: UILANG.m('<strong>Upload aborted!</strong><br /> These file(s) do not match the accepted formats for this view. <span id="invalidFiles">See accepted formats</span>')
+                .replace('id="invalidFiles"', `id="${invalidFilesHelpId}"`),
+            successCallback: ajaxSuccessPLG,
             ajaxParams: onUploadFiles,
-            afterUploadCallback: onAfterUpload
+            beforeUploadCallback: function () {
+                batchUploading = true;
+                uploadErrors = [];
+            },
+            afterUploadCallback: onAfterUpload,
+            abortOnInvalidFiletype: true
         };
         const uploader = new nxUploader(nxUploaderSettings);
 
         window.addEventListener('nxDialog', function (event) {
-            if (event.detail.action==='show' && $('#invalidFiles').length) {
+            if (event.detail.action === 'show' && event.detail.id === 'Message' && document.getElementById(invalidFilesHelpId)) {
                 //show online help
-                new OasysHelp('invalidFiles', {
+                new OasysHelp(invalidFilesHelpId, {
                     htmlContent: mediaHelpHtml,
+                    linkMarginLeft: '-5px',
+                    maxHeight: '620px',
+                    maxWidth: '780px',
                     title: UILANG.m('Supported media types'),
                 });
             }
@@ -249,8 +314,13 @@
             let txtStr, headerStr;
             switch (mediaTypes) {
                 case 'image':
-                    headerStr = UILANG.m('Delete all images?');
-                    txtStr = UILANG.m('Are you sure you want to delete all images of this page group? This action is irreversible!');
+                    if (mode === 'testmanager') {
+                        headerStr = UILANG.m('Delete all images?');
+                        txtStr = UILANG.m('Are you sure you want to delete all images uploaded for this test? This action is irreversible and the images will no longer be available in the image selection for any meta page editor of this test (privacy policy, score screen, landing page and finish page).');
+                    } else {
+                        headerStr = UILANG.m('Delete all images?');
+                        txtStr = UILANG.m('Are you sure you want to delete all images of this page group? This action is irreversible!');
+                    }
                     break;
                 case 'audio':
                     headerStr = UILANG.m('Delete all audio files?');
@@ -281,7 +351,7 @@
                         label: UILANG.m('Delete'),
                         value: 'ok'
                     }],
-                    contents: txtStr,
+                    contents: '<div class="deleteConfirm"><div class="deleteConfirmText"><p>' + txtStr + '</p></div></div>',
                     width: 640,
                     callback: clickDeleteAll,
                     title: headerStr,
@@ -291,9 +361,10 @@
                 new nxDialog('delItemsDialog', dialogDataDel, arguments);
             }
             if (button === 'ok') {
-                startAjaxPLG('deleteAll', {
-                    location: serverData.group.id,
-                    mediaType: mediaTypes
+                startAjaxPLG(actionDeleteAll, {
+                    location: (mode === 'testmanager' ? testId : serverData.group.id),
+                    mediaType: mediaTypes,
+                    ...(mode === 'testmanager' ? { testId } : {})
                 });
             }
         }
@@ -303,19 +374,48 @@
         }
 
         function onUploadFiles() {
-            return {
-                action: 'upload',
-                location: serverData.group.id,
+            // For CMS we use serverData.group.id; for TM we use the testId
+            const location = (mode === 'testmanager' ? testId : serverData.group.id);
+
+            const params = {
+                action: actionUpload,
+                location: location,
                 mediaTypes: mediaTypes,
                 globalManager: globalManager
             };
+
+            // pass testId explicitly for clarity on the PHP side
+            if (mode === 'testmanager') {
+                params.testId = testId;
+            }
+
+            return params;
         }
 
-        function onAfterUpload() {
-            startAjaxPLG('fetchLibrary', {
-                location: serverData.group.id
+        function onAfterUpload(totalProcessed) {
+            // refresh view regardless
+            startAjaxPLG(actionFetchLibrary, {
+                location: (mode === 'testmanager' ? testId : serverData.group.id),
+                ...(mode === 'testmanager' ? { testId } : {})
             });
+
+            if (uploadErrors.length > 0) {
+                const MAX = 10;
+                const list = uploadErrors.slice(0, MAX).map(e => `<li>${UILANG.e ? UILANG.e(e) : e}</li>`).join('');
+                let html = '<div><strong>' + UILANG.m('Upload finished with issues.') + '</strong><br><br>';
+                html += '<strong>' + UILANG.m('Errors') + ` (${uploadErrors.length}):</strong><ul>${list}</ul>`;
+                if (uploadErrors.length > MAX) {
+                    html += UILANG.m('… and more errors not shown.');
+                }
+                html += '<br>' + UILANG.m('Please check the files you tried to upload and try again if needed.') + '</div>';
+                showMessage(html); // one dialog only
+            }
+
+            // reset state for next time
+            uploadErrors = [];
+            batchUploading = false;
         }
+
 
         const fileOpPermissions = {
             copyFolders: false,
@@ -331,12 +431,13 @@
             name: "Home"
         }];
 
-        let mediaManagerPlugin = new fileMgr("#assetListPlugin", "_mediaPlugin", [], breadcrumbs, fileOpPermissions, false, mlibraryEvent, mediaTypes);
+        let mediaManagerPlugin = new FileManager("#assetListPlugin", "_mediaPlugin", [], breadcrumbs, fileOpPermissions, false, mlibraryEvent, mediaTypes);
 
         $("#breadcrumbs_mediaPlugin").css('display', 'none');
         //get library contents
-        startAjaxPLG('fetchLibrary', {
-            location: serverData.group.id
+        startAjaxPLG(actionFetchLibrary, {
+            location: (mode === 'testmanager' ? testId : serverData.group.id),
+            ...(mode === 'testmanager' ? { testId } : {})
         });
 
         //function libraryEvent(type, data){}
@@ -360,7 +461,9 @@
                         }
                         singleSelect = data[0];
                         plgButtons.deleteSelection.enable();
-                        plgButtons.renameSelection.enable();
+                        if (mode !== 'testmanager' && plgButtons.renameSelection) {
+                            plgButtons.renameSelection.enable();
+                        }
                     } else if (data.length === 1 && data[0].type === 'folder') {
                         $('#previewZonePlugin').empty();
                         $('#userPanel').empty();
@@ -373,7 +476,9 @@
                         $('#previewZonePlugin').empty();
                         $('#userPanel').empty();
                         plgButtons.deleteSelection.disable();
-                        plgButtons.renameSelection.disable();
+                        if (mode !== 'testmanager' && plgButtons.renameSelection) {
+                            plgButtons.renameSelection.disable();
+                        }
                         if (mediaBrowser) {
                             mediaBrowser.disableButton('insert2editor');
                             mediaBrowser.disableButton('insertURL');
@@ -413,47 +518,52 @@
         function ajaxErrorPLG(xhr, textStatus) {
             if (waitDialog.busy()) waitDialog.hide();
             alert(stringf('Server connection failed with status: %@', textStatus));
-            startAjaxPLG('fetchLibrary', {
-                location: serverData.group.id
+            startAjaxPLG(actionFetchLibrary, {
+                location: (mode === 'testmanager' ? testId : serverData.group.id),
+                ...(mode === 'testmanager' ? { testId } : {})
             });
         }
 
         function ajaxSuccessPLG(res, uploaderCallback) {
             if (waitDialog.busy()) waitDialog.hide();
+
             if (res.error) {
+                // Aggregate ONLY for upload errors during a batch
+                if (batchUploading && res.action === 'upload' && res.error) {
+                    const label = res.fileName
+                        ? `<strong>${UILANG.e ? UILANG.e(res.fileName) : res.fileName}</strong>: ${UILANG.e ? UILANG.e(res.error) : res.error}`
+                        : UILANG.e ? UILANG.e(res.error) : res.error;
+                    uploadErrors.push(label);
+                    if (uploaderCallback) uploaderCallback.call(this, false);
+                    return;
+                }
+
+
+                // For all other actions or when not uploading: show the usual dialog
                 const dialogData = {
-                    buttons: [{
-                        label: UILANG.m('OK'),
-                        'default': true,
-                        cancel: true,
-                        value: 'ok'
-                    }],
-                    contents: '<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br />' + res.error,
+                    buttons: [{ label: UILANG.m('OK'), 'default': true, cancel: true, value: 'ok' }],
+                    contents: formatActionErrorMessage('<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br />' + res.error),
                     title: UILANG.m("Error"),
                     icon: "../images/error.png",
                     iconWidth: 64,
                     width: 500
                 };
                 setTimeout(function () {
-                    if ($("#error").length === 0) {
-                        if (!$('#veil_error').length) new nxDialog('error', dialogData);
-                    }
+                    if (!$('#veil_error').length && !$('#error').length) new nxDialog('error', dialogData);
                 }, 200);
-                if (res.action === 'upload') {
-                    uploader.hideVeil();
-                    if (uploaderCallback) uploaderCallback.call(this, true);
-                }
+
+                if (res.action === 'upload' && uploaderCallback) uploaderCallback.call(this, false);
                 return;
             }
             switch (res.action) {
-                case 'upload':
+                case actionUpload:
                     if (uploaderCallback) uploaderCallback.call(this, true);
                     if(res.viewNote)showMessage(res.viewNote);
                     break;
-                case 'deleteSelection':
-                case 'deleteAll':
-                case 'renameMedia':
-                case 'fetchLibrary':
+                case actionDeleteSelection:
+                case actionDeleteAll:
+                case actionRenameMedia:
+                case actionFetchLibrary:
                     if(res.filesInUse){
                         if(res.action==='deleteSelection'){
                             showMessagePLG(UILANG.m('The selected media file could not be deleted because it is still in use.'));
@@ -465,9 +575,12 @@
                     if (res.data.select) {
                         mediaManagerPlugin.setSelection([{id: res.data.select}]);
                     }
+					if (res.action === actionRenameMedia && res.renamedMedia) {
+						$(document).trigger('oasys:mediaRenamed', [res.renamedMedia]);
+					}
                     const pathString = '';
                     break;
-                case 'preview':
+                case actionPreview:
                     mediaFileName=res.name+'.'+res.fileExt;
                     if (hideOptions) {
                         $('#userPanel').css('visibility', 'hidden');
@@ -491,7 +604,19 @@
                             $('#previewZonePlugin').append('<table class="mediaTable"><tr><th>' + UILANG.m('Name:') + '</th><td>' + res.name + '</td></tr><tr><th>' + UILANG.m('File-Type:') + '</th><td>' + res.filetype + '</td></tr><tr><th>' + UILANG.m('Size / Uploaded:') + '</th><td>' + res.size + '  bytes / ' + res.created + ' </td></tr><tr><th>' + UILANG.m('Original size:') + '</th><td id="orgSiz"></td></tr></table>');
                             mediaBrowser.enableButton('insert2editor');
                             mediaBrowser.enableButton('insertURL');
-                            $('#previewZonePlugin').append("<img alt='' id='prevImg' style='max-width:80%;margin:auto;' src='fetchMediaFile.php?fileid=" + mediaFileId + "&checksum=" + mediaChecksum + "'>");
+
+                            let previewSrc;
+
+                            if (mode === 'testmanager') {
+                                previewSrc = oasysRootURL + "/customContent/" + testId + "/" + mediaFileId;
+                            } else {
+                                previewSrc = "fetchMediaFile.php?fileid=" + mediaFileId + "&checksum=" + mediaChecksum;
+                            }
+
+                            $('#previewZonePlugin').append(
+                                "<img alt='' id='prevImg' style='max-width:80%;margin:auto;display:block;' src='" + previewSrc + "'>"
+                            );
+
                             const file2add = $('#prevImg');
 
                             //adjust image size
@@ -552,6 +677,7 @@
                                         label: UILANG.m('bottom')
                                     }],
                                     dataId: 'valignment',
+                                    theme: 'backend',
                                     width: 210,
                                     readOnly: false,
                                     cssCollapsed: {
@@ -884,16 +1010,26 @@
         }
 
         function assetPreview(selection) {
-            let mediaFileId = $(selection[0]).attr('id');
-            if (mediaFileId.charAt(0) === 't' || mediaFileId.charAt(0) === 'f') {
-                mediaFileId = mediaFileId.substring(1, mediaFileId.length)
-            }
+            if (mode === 'testmanager') {
+                const mediaFileId = selection[0].dbId;
 
-            startAjaxPLG('preview', {
-                mediaFileId: mediaFileId,
-                location: serverData.group.id
-            });
+                startAjaxPLG(actionPreview, {
+                    mediaFileId: mediaFileId,
+                    location: testId
+                });
+            } else {
+                let mediaFileId = $(selection[0]).attr('id');
+                if (mediaFileId.charAt(0) === 't' || mediaFileId.charAt(0) === 'f') {
+                    mediaFileId = mediaFileId.substring(1);
+                }
+
+                startAjaxPLG(actionPreview, {
+                    mediaFileId: mediaFileId,
+                    location: serverData.group.id
+                });
+            }
         }
+
 
         //Creating main dialog
         function mBrowserCb(button) {
@@ -993,12 +1129,13 @@
         //delete functionality
         function showDeleteMessage(data) {
 
-            let delHtml="<div id='del-form' title='Delete'><p>" + UILANG.m('really_delete') + "</p><div id='scroll_area2'><ul id='delres'></ul></div><p id='delmsg'></p></div>";
+            let delHtml="<div id='del-form' class='deleteConfirm' title='Delete'><div class='deleteConfirmText'><p>" + UILANG.m('Are you sure you want to delete the following media files? This action is irreversible!') + "</p></div><div id='scroll_area2'><ul id='delres'></ul></div><p id='delmsg' class='deleteConfirmWarning'></p></div>";
             function buttonClickedDel(button) {
                 if (button === 'ok') {
-                    startAjaxPLG('deleteSelection', {
-                        location: serverData.group.id,
-                        selection: data
+                    startAjaxPLG(actionDeleteSelection, {
+                        location: (mode === 'testmanager' ? testId : serverData.group.id),
+                        selection: data,
+                        ...(mode === 'testmanager' ? { testId } : {})
                     });
                 }
             }
@@ -1026,7 +1163,7 @@
                 if (v.type === 'folder') {
                     $("#res" + v.id + "").addClass('folder');
                     if ($("#delmsg").html() === '') {
-                        $("#delmsg").append("<span style='color:red;'>" + UILANG.m('warning_recursive') + "</span>");
+                        $("#delmsg").text(UILANG.m('warning_recursive'));
                     }
                 } else if (v.type === 'image') {
                     $("#res" + v.id + "").addClass('typepicture');
@@ -1078,12 +1215,14 @@
                 });
             }
             if (button === 'ok' && !name.match(/^\s*$/) && name !== data) {
-                startAjaxPLG('renameMedia', {
+                startAjaxPLG(actionRenameMedia, {
                     name: name,
                     type: dataTmp['type'],
                     id: dataTmp['dbId'],
-                    location: serverData.group.id
+                    location: (mode === 'testmanager' ? testId : serverData.group.id),
+                    ...(mode === 'testmanager' ? { testId } : {})
                 });
+
             }
         }
     }
@@ -1093,7 +1232,7 @@
             buttons: [
                 {label: UILANG.m('OK'), 'default': true, cancel: true, value: 'ok'}
             ],
-            contents: msg,
+            contents: formatActionErrorMessage(msg),
             width: 500,
             title: UILANG.m("Error"),
             icon: "../images/error.png",
@@ -1108,7 +1247,7 @@
                 {label: UILANG.m('OK'), 'default': true, cancel: true, value: 'ok'}
             ],
             contents: msg,
-            width: 500,
+            width: 800,
             title: UILANG.m("Warning"),
             icon: "../images/warning.png",
             iconWidth: 64

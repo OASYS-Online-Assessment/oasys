@@ -1,8 +1,6 @@
 <?php
 
-require_once __DIR__ . '/inc/php/database.php';
-require_once __DIR__ . '/../inc/php/settings.php';
-require_once __DIR__ . '/../inc/php/dbSessionHandler.php';
+require_once __DIR__ . "/inc/php/initBackend.php";
 require_once __DIR__ . "/inc/php/userAuth.php";
 require_once __DIR__ . "/inc/php/permAuth.php";
 require_once __DIR__ . "/../inc/php/Crypt.php";

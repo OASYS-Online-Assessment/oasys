@@ -1,13 +1,11 @@
 <?php
 
 	register_shutdown_function('outputJSON');
-	require_once '../../inc/php/database.php'; //contains the database connection credentials
-	require_once '../../inc/php/rixPDO.php'; //wrapper around PDO functions (c.f. docs folder for manual)
-	require_once '../../inc/php/rixTools.php';
-	require_once '../../inc/php/helperRoutines.php';
-	require_once '../../inc/php/settings.php';
-	require_once '../../inc/php/Crypt.php';
-	require_once '../../inc/php/apiRoutines.php';
+	require_once __DIR__ . '/../../editor/inc/php/initBackend.php';
+	require_once __DIR__ . '/../../inc/php/rixTools.php';
+	require_once __DIR__ . '/../../inc/php/helperRoutines.php';
+	require_once __DIR__ . '/../../inc/php/Crypt.php';
+	require_once __DIR__ . '/../../inc/php/apiRoutines.php';
 
 	$apiName = 'createTestTaker';
 	$returnData = ['error' => false];
@@ -19,13 +17,7 @@
 		die();
 	}
 
-	$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/../../logs/API_createTestTaker.txt', 1, $returnData, 'error');
-	$results = $db->results();
-	if ($results['error']) {
-		$returnData['error'] = 'mySQL connection error';
-		die();
-	}
-
+	$db = $config->getDatabaseInstance();
 	clearApiRequests($db);
 
 	if ($action === 'request') {
@@ -113,11 +105,11 @@
 					if ($password !== false) {
 						/* if a password with the matching tag was found we check if the testIds match */
 						$testTakers[$k]['password'] = $password;
-						if (!compareTestStructure($loginId, $tag, $testIds, $db)) {
+						$passwordId = getPasswordIdByTag($loginId, $tag, $db);
+						if (!compareTestStructure($passwordId, $testIds, $db)) {
 							/* if the structure does not match we send back the password but we issue an error */
 							$testTakers[$k]['error'] = 'credentials already exist, but structure does not match';
 						} else {
-							$passwordId = getPasswordIdByTag($loginId, $tag, $db);
 							$testTakers[$k]['state'] = getState($passwordId, $db);
 						}
 					} else {
@@ -168,8 +160,20 @@
 					$passwordId = getPasswordIdByName($loginId, $password, $db);
 
 					if ($passwordId !== false) {
-						/* password already exists, so we check the state of the credentials (open/closed) */
-						$testTakers[$k]['state'] = getState($passwordId, $db);
+						/* if a tag is given, we also check if the password we found with the supplied name matches the tag,
+						otherwise we return an error */
+						if (isset($tag) && !checkPasswordIdTag($passwordId, $tag, $db)) {
+							$testTakers[$k]['error'] = 'credentials already exist with the supplied password but the tag does not match';
+							continue;
+						}
+						/* next compare the test structure */
+						if (!compareTestStructure($passwordId, $testIds, $db)) {
+							/* if the structure does not match we send back the password but we issue an error */
+							$testTakers[$k]['error'] = 'credentials already exist, but structure does not match';
+						} else {
+							/* structure matches, we check the state of the credentials (open/closed) */
+							$testTakers[$k]['state'] = getState($passwordId, $db);
+						}
 					} else {
 						/* if password does not exist we need to create it */
 						$testTakers[$k]['error'] = createPassword($loginId, $password, $testIds, $db, $tag);
@@ -194,7 +198,8 @@
 		$returnData['testTakers'] = $testTakers;
 	}
 
-	function createLogin(string $login, array $metaData, int $folderId, rixPDO &$db) {
+	function createLogin(string $login, array $metaData, int $folderId, rixPDO &$db)
+	{
 		if (!checkFolderId($folderId, $db)) {
 			return "invalid folder id";
 		}
@@ -204,7 +209,8 @@
 
 	}
 
-	function createPassword(int $loginId, string $password, array $testIds, rixPDO &$db, ?string $tag = ''): bool|string {
+	function createPassword(int $loginId, string $password, array $testIds, rixPDO &$db, ?string $tag = ''): bool|string
+	{
 		$password = Crypt::encryptString($password);
 		$structure = [];
 		if ($tag === null) $tag = '';
@@ -224,7 +230,8 @@
 		return false;
 	}
 
-	function getLoginId(string $login, rixPDO &$db) {
+	function getLoginId(string $login, rixPDO &$db)
+	{
 		$res = $db->fetchValue("SELECT id FROM logins WHERE name = ?", [$login]);
 		if ($res['rows'] === 0) {
 			return false;
@@ -232,7 +239,8 @@
 		return $res['data'];
 	}
 
-	function getPasswordByTag(int $loginId, string $tag, rixPDO &$db): bool|string {
+	function getPasswordByTag(int $loginId, string $tag, rixPDO &$db): bool|string
+	{
 		$res = $db->fetchValue("SELECT name FROM passwords WHERE loginId = ? AND tag = ? LIMIT 1", [$loginId, $tag]);
 		if ($res['rows'] === 0) {
 			return false;
@@ -240,7 +248,8 @@
 		return Crypt::decryptString($res['data']);
 	}
 
-	function getPasswordIdByTag(int $loginId, string $tag, rixPDO &$db) {
+	function getPasswordIdByTag(int $loginId, string $tag, rixPDO &$db)
+	{
 		$res = $db->fetchValue("SELECT id FROM passwords WHERE loginId = ? AND tag = ? LIMIT 1", [$loginId, $tag]);
 		if ($res['rows'] === 0) {
 			return false;
@@ -248,7 +257,8 @@
 		return $res['data'];
 	}
 
-	function getPasswordIdByName(int $loginId, string $password, rixPDO &$db) {
+	function getPasswordIdByName(int $loginId, string $password, rixPDO &$db)
+	{
 		$password = Crypt::encryptString($password);
 		$res = $db->fetchValue("SELECT id FROM passwords WHERE loginId = ? AND `name` = ? LIMIT 1", [$loginId, $password]);
 		if ($res['rows'] === 0) {
@@ -257,8 +267,9 @@
 		return $res['data'];
 	}
 
-	function compareTestStructure(int $loginId, string $tag, array $testIds, rixPDO &$db): bool {
-		$res = $db->fetchValue("SELECT structure FROM passwords WHERE loginId = ? AND tag = ? LIMIT 1", [$loginId, $tag]);
+	function compareTestStructure(int $passwordId, array $testIds, rixPDO &$db): bool
+	{
+		$res = $db->fetchValue("SELECT structure FROM passwords WHERE id = ?", [$passwordId]);
 		$structure = json_decode($res['data'] ?? '', true);
 		if (json_last_error() != JSON_ERROR_NONE) {
 			return false;
@@ -276,7 +287,8 @@
 		return true;
 	}
 
-	function getState(int $passwordId, rixPDO &$db): bool {
+	function getState(int $passwordId, rixPDO &$db): bool
+	{
 		$res = $db->fetchValue("SELECT structure FROM passwords WHERE id = ? LIMIT 1", [$passwordId]);
 		$structure = json_decode($res['data'] ?? '', true);
 		if (json_last_error() != JSON_ERROR_NONE) {
@@ -303,17 +315,26 @@
 		return false;
 	}
 
-	function checkTestId(int $id, rixPDO &$db): bool {
+	function checkTestId(int $id, rixPDO &$db): bool
+	{
 		$res = $db->fetchValue("SELECT COUNT(*) FROM tests WHERE id = ?", [$id]);
 		return $res['data'] === 1;
 	}
 
-	function checkFolderId(int $id, rixPDO &$db): bool {
+	function checkFolderId(int $id, rixPDO &$db): bool
+	{
 		$res = $db->fetchValue("SELECT COUNT(*) FROM loginsFolders WHERE id = ?", [$id]);
 		return $res['data'] === 1;
 	}
 
-	function outputJSON(): void {
+	function checkPasswordIdTag(int $id, string $tag, rixPDO &$db): bool
+	{
+		$res = $db->fetchValue("SELECT COUNT(*) FROM passwords WHERE id = ? AND tag = ?", [$id, $tag]);
+		return $res['data'] === 1;
+	}
+
+	function outputJSON(): void
+	{
 		global $returnData, $action, $settings, $handledExceptions;
 		$error = error_get_last();
 		$returnData['action'] = $action;

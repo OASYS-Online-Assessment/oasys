@@ -60,7 +60,7 @@ function onReady() {
     });
 
     gui.s1 = createFlexSection('UI', 'sect001', 140, 140); //context choice
-    gui.s2 = createFlexSection('UI', 'sect002', 600, 600); //localization strings
+    gui.s2 = createFlexSection('UI', 'sect002', 650, 650); //localization strings
     gui.s3 = createFlexSection('UI', 'sect003', 390, 390); //Oasys languages
 
     // section 1 (Context choice)
@@ -144,7 +144,7 @@ function onReady() {
         actionField: false,
         fixedOrder: true
     };
-    gui.languageView = new jsSortableTable('langList', 'languagesList_table', langOptions);
+    gui.languageView = new JsSortableTable('langList', 'languagesList_table', langOptions);
 
     gui.boxes.languages.getPanel().append('<div><div id="langsTbText"></div><div id="langsTbButton"></div></div>');
     window.langTbButtons = {};
@@ -165,8 +165,8 @@ function onReady() {
         onClick: propertiesClick,
         elements: [],
         tdSizes: {
-            name: '150px',
-            text: '430px'
+            name: '180px',
+            text: '410px'
         },
         tableHead: {
             name: 'Variable',
@@ -199,12 +199,11 @@ function onReady() {
         actionField: false,
         fixedOrder: true
     };
-    gui.locStringsView = new jsSortableTable('stringsPanelList', 'stringsPanelList_table', locOptions);
+    gui.locStringsView = new JsSortableTable('stringsPanelList', 'stringsPanelList_table', locOptions);
     $('#stringsPanelList').hide();
 }
 
 function selectionChanged(sel) {
-
     currSel = sel;
     $('#inactiveMsg').hide();
     $('#stringsPanelList').show();
@@ -216,17 +215,37 @@ function selectionChanged(sel) {
 
 function updateStructureData(data, context) {
     gui.locStringsView.clearElements(true);
+
+    const langCodes = Object.keys(languages);
+
     $.each(data, function (k, v) {
         const hdIns = {context: context, variable: k, text: v};
         const objInsert = {
             name: k,
             text: {data: v.EN, id: k, hiddenData: hdIns},
-            hiddenID: k,
+            hiddenID: k
         };
 
         gui.locStringsView.addElement(objInsert, hdIns);
+
+        const missing = [];
+        $.each(langCodes, function (_, code) {
+            const val = v[code];
+            if (typeof val !== 'string' || val.trim() === '') {
+                missing.push(code);
+            }
+        });
+
+        if (missing.length) {
+            gui.locStringsView.setWarningMessage(
+                'Translation missing for: ' + missing.join(', '),
+                'warning',
+                k
+            );
+        }
     });
 }
+
 
 function propertiesClick(clickedId, parentId, fieldDesc, hiddenData) {
     editLocStrings(hiddenData);
@@ -260,7 +279,11 @@ function languageClick(clickedId) {
         },
         focus: 'tfShortcut',
         dataFormat: 'object',
-        contents: '<p>Language shortcut:<h3>'+clickedId+'</h3></p><p>Language name in the respective language (e.g. English, Deutsch, Français, Luxembourgish):<br /><input type="text" id="tfName" maxlength="60" style="width: 100%; margin-top: 10px;"></p><p>Fallback language:<br><div id="ddFallback"</div></p>',
+        contents: '<div class="tmDialogForm">' +
+            '<div class="tmActionConfirmMeta"><span>Language shortcut</span><strong>' + clickedId + '</strong></div>' +
+            '<div class="tmDialogFormField"><label for="tfName">Language name in the respective language (e.g. English, Deutsch, Français, Luxembourgish)</label><input type="text" id="tfName" maxlength="60"></div>' +
+            '<div class="tmDialogFormField"><label>Fallback language</label><div id="ddFallback"></div></div>' +
+        '</div>',
         title: 'Edit content language',
         returnPromise: true,
         width: 400
@@ -302,6 +325,7 @@ function languageClick(clickedId) {
             label: 'Lëtzebuergesch'
         }],
         dataId: 'ddF1',
+        theme: 'backend',
         readOnly: false,
         width: '100%'
     };
@@ -318,7 +342,7 @@ function languageChange(clickedId) {
             {label: 'Cancel', 'default': true, 'cancel': true, value: 'cancel'},
             {label: 'Delete language', value: 'ok'}
         ],
-        contents: '<p>Are you sure you want to delete the content language "'+clickedId+'"? Existing content and front end translations might be deleted. This action is not reversible!</p>',
+        contents: '<div class="deleteConfirm"><div class="deleteConfirmText"><p>Are you sure you want to delete the content language "'+clickedId+'"? Existing content and front end translations might be deleted. This action is not reversible!</p></div></div>',
         title: 'Delete content language',
         returnPromise: true,
         icon: "../images/warning.png",
@@ -375,14 +399,19 @@ function editLocStrings(data) {
     const srcVariable = data.variable;
     const srcContext = data.context;
 
-    let editlocHTML = '<div class="localizationDialogContainer" ><p>Localization strings for variable: <Strong>' + srcVariable + '</Strong><br></p><table style="width:97%;border:0;border-spacing:0;">';
+    let editlocHTML = '<div class="localizationDialogContainer tmVariableDialog l10nEditStringsDialog">' +
+        '<div class="tmVariableIntro"><span>Localization strings for variable:</span><strong>' + l10nEscapeHtml(srcVariable) + '</strong></div>' +
+        '<div class="variablesEditContainer tmVariableFields l10nEditStringsFields"><div class="tmVariableFieldList">';
     const dataFields = [];
     $.each(languages, function (k, v) {
-        editlocHTML += '<tr><td class="localizationLanguageTitle">' + v + '</td></tr>';
-        editlocHTML += '<tr><td><input type="text" class="lblClick" id="' + k + '_textLoc"></td></tr>';
-        dataFields.push(k + '_textLoc');
+        const fieldId = k + '_textLoc';
+        editlocHTML += '<label class="tmVariableField" for="' + l10nEscapeHtml(fieldId) + '">' +
+            '<span>' + l10nEscapeHtml(v) + '</span>' +
+            '<input type="text" class="lblClick" id="' + l10nEscapeHtml(fieldId) + '">' +
+            '</label>';
+        dataFields.push(fieldId);
     });
-    editlocHTML += '</table><br /></div>';
+    editlocHTML += '</div></div></div>';
 
     const editLocDialogData = {
         buttons: [{
@@ -411,17 +440,17 @@ function editLocStrings(data) {
     $.each(data.text, function (k, v) {
         $('#' + k + '_textLoc').val(v);
         if ($('#' + k + '_textLoc').val().length < 1) {
-            $('#' + k + '_textLoc').css('background-color', '#fedede');
+            $('#' + k + '_textLoc').addClass('textField-alert');
         } else {
-            $('#' + k + '_textLoc').css('background-color', '#ffffff');
+            $('#' + k + '_textLoc').removeClass('textField-alert');
         }
     });
 
     $('.lblClick').on('keyup', function () {
         if ($(this).val().length < 1) {
-            $(this).css('background-color', '#fedede');
+            $(this).addClass('textField-alert');
         } else {
-            $(this).css('background-color', '#ffffff');
+            $(this).removeClass('textField-alert');
         }
     });
 
@@ -437,6 +466,19 @@ function editLocStrings(data) {
         }
     }
 }
+
+function l10nEscapeHtml(str) {
+    if (str && isNaN(str)) {
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+    return str;
+}
+
 function triggerReset(srcVariable,srcContext,button){
     if (!button) {
         const dialogData = {
@@ -485,7 +527,11 @@ function addLanguage(){
         ],
         focus: 'tfShortcut',
         dataFormat: 'object',
-        contents: '<p>Please enter language shortcut (e.g. EN, DE, FR, LU):<br /><input type="text" id="tfShortcut" maxlength="3" style="width: 15%; margin-top: 10px; text-transform:uppercase;" pattern="[A-Za-z]"></p><p>Please enter language name in the respective language (e.g. English, Deutsch, Français, Luxembourgish):<br /><input type="text" id="tfName" maxlength="60" style="width: 100%; margin-top: 10px;"></p><p>Fallback language:<br><div id="ddFallback"></div></p>',
+        contents: '<div class="tmDialogForm">' +
+            '<div class="tmDialogFormField"><label for="tfShortcut">Language shortcut (e.g. EN, DE, FR, LU)</label><input type="text" id="tfShortcut" maxlength="3" style="text-transform:uppercase;" pattern="[A-Za-z]"></div>' +
+            '<div class="tmDialogFormField"><label for="tfName">Language name in the respective language (e.g. English, Deutsch, Français, Luxembourgish)</label><input type="text" id="tfName" maxlength="60"></div>' +
+            '<div class="tmDialogFormField"><label>Fallback language</label><div id="ddFallback"></div></div>' +
+        '</div>',
         title: 'Add content language',
         returnPromise: true,
         width: 400
@@ -509,9 +555,6 @@ function addLanguage(){
     $("#tfShortcut").inputFilter(function (value) {
         return /^[a-zA-Z]*$/g.test(value);
     });
-    $("#tfName").inputFilter(function (value) {
-        return /^[A-Za-zÀ-ž \u0370-\u03FF\u0400-\u04FF]*$/g.test(value);
-    });
     let ddFallback = {
         onChange: fallbackChg,
         initialValue: "EN",
@@ -529,6 +572,7 @@ function addLanguage(){
             label: 'Lëtzebuergesch'
         }],
         dataId: 'ddF1',
+        theme: 'backend',
         readOnly: false,
         width: '100%'
     };
@@ -652,7 +696,7 @@ function ajaxSuccess(res) {
                 cancel: true,
                 value: 'ok'
             }],
-            contents: '<strong>Sorry! The action cannot be completed.</strong><br />' + res.fatalError,
+            contents: formatActionErrorMessage('<strong>Sorry! The action cannot be completed.</strong><br />' + res.fatalError),
             title: "Error",
             icon: "../images/error.png",
             iconWidth: 64,
@@ -670,7 +714,7 @@ function ajaxSuccess(res) {
                 cancel: true,
                 value: 'ok'
             }],
-            contents: '<strong>Sorry! The action cannot be completed.</strong><br />' + res.error,
+            contents: formatActionErrorMessage('<strong>Sorry! The action cannot be completed.</strong><br />' + res.error),
             title: "Error",
             icon: "../images/error.png",
             iconWidth: 64,
@@ -729,6 +773,11 @@ function ajaxSuccess(res) {
             location.reload();
             break;
         case 'fetchLocStrings':
+            // Ignore a response for a context that the user has since left.
+            // AJAX responses can arrive in a different order than the requests.
+            if (!currSel || currSel.context !== res.context) {
+                break;
+            }
             if (res.data.length === 1) {
                 $('#locStringsTbText').html(Object.keys(res.data).length + ' variable found for ' + currSel.context);
             } else {
@@ -765,27 +814,49 @@ function ajaxSuccess(res) {
                 } else {
                     $('#locStringsTbText').html(srcMatches + ' matches for your search: ' + showSrchStr);
                 }
+
                 usedSrchstring = res.searchstring;
-                res.contextAreas[0] = {
+
+                res.contextAreas.unshift({
                     context: '*search matches*',
                     locked: true
-                };
+                });
                 gui.contextAreas.setItems(res.contextAreas);
                 gui.contextAreas.setSelection(["*search matches*"]);
                 currSel = gui.contextAreas.getSelection();
                 $('#inactiveMsg').hide();
                 $('#stringsPanelList').show();
 
+                gui.locStringsView.clearWarnings();
                 gui.locStringsView.clearElements(true);
+
+                const langCodes = Object.keys(languages);
+
                 $.each(res.data, function (key, value) {
                     const hdIns = {context: value.context, variable: key, text: value.content};
                     const objInsert = {
                         name: key,
                         text: {data: value.content.EN, id: key, hiddenData: hdIns},
-                        hiddenID: key,
+                        hiddenID: key
                     };
                     gui.locStringsView.addElement(objInsert, hdIns);
-                })
+
+                    const missing = [];
+                    $.each(langCodes, function (_, code) {
+                        const val = value.content[code];
+                        if (typeof val !== 'string' || val.trim() === '') {
+                            missing.push(code);
+                        }
+                    });
+
+                    if (missing.length) {
+                        gui.locStringsView.setWarningMessage(
+                            'Translation missing for: ' + missing.join(', '),
+                            'warning',
+                            key
+                        );
+                    }
+                });
             } else {
                 if (currSel && currSel.context === '*search matches*') resetView();
                 launchNoResultsSearchMessage(res);

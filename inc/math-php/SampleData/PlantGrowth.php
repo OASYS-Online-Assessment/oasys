@@ -15,9 +15,9 @@ namespace MathPHP\SampleData;
  */
 class PlantGrowth
 {
-    const LABELS = ['weight', 'group'];
+    private const LABELS = ['weight', 'group'];
 
-    const DATA = [
+    private const DATA = [
         [4.17, 'ctrl'],
         [5.58, 'ctrl'],
         [5.18, 'ctrl'],
@@ -58,20 +58,21 @@ class PlantGrowth
      */
     public function getData(): array
     {
-        return array_values(self::DATA);
+        return \array_values(self::DATA);
     }
 
     /**
      * Raw data with each observation labeled
      * [['weight' => 4.17, 'group' => 'ctrl'], ['weight' => 5.58, 'group' => 'ctrl'], ... ]
      *
-     * @return number[]
+     * @return array<int, array<string, float>>
      */
     public function getLabeledData(): array
     {
-        return array_map(
+        /** @var array<int, array<string, float>> */
+        return \array_map(
             function (array $data) {
-                return array_combine(self::LABELS, $data);
+                return \array_combine(self::LABELS, $data);
             },
             self::DATA
         );
@@ -80,11 +81,11 @@ class PlantGrowth
     /**
      * Weight observations
      *
-     * @return number[]
+     * @return float[]
      */
     public function getWeight(): array
     {
-        return array_column(self::DATA, 0);
+        return \array_column(self::DATA, 0);
     }
 
     /**
@@ -94,6 +95,6 @@ class PlantGrowth
      */
     public function getGroup(): array
     {
-        return array_column(self::DATA, 0);
+        return \array_column(self::DATA, 1);
     }
 }

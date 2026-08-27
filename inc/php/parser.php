@@ -3,7 +3,6 @@
 	require_once __DIR__ . "/OasysParserPlugin.php";
 	require_once __DIR__ . "/OasysParserPreProcessor.php";
 	require_once __DIR__ . "/OasysIdGenerator.php";
-//	require_once __DIR__ . "/settings.php";
 	foreach (glob(__DIR__ . "/../../pluginPreProcessors/*.php") as $file) {
 		include_once $file;
 	}

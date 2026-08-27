@@ -14,13 +14,13 @@ use MathPHP\Exception;
  */
 class Categorical extends Discrete
 {
-    const PARAMETER_LIMITS = [];
+    public const PARAMETER_LIMITS = [];
 
     /** @var int number of categories */
     private $k;
 
     /**
-     * @var array
+     * @var array<int|string, int|float>
      * Probability of each category
      * If associative array, category names are keys.
      * Otherwise, category names are array indexes.
@@ -30,8 +30,8 @@ class Categorical extends Discrete
     /**
      * Distribution constructor
      *
-     * @param  int   $k             number of categories
-     * @param  array $probabilities of each category - If associative array, category names are keys.
+     * @param  int                       $k             number of categories
+     * @param  array<int|string, int|float> $probabilities of each category - If associative array, category names are keys.
      *                                                 Otherwise, category names are array indexes.
      *
      * @throws Exception\BadParameterException if k does not indicate at least one category
@@ -46,12 +46,12 @@ class Categorical extends Discrete
         }
 
         // Must have k number of probabilities
-        if (count($probabilities) != $k) {
-            throw new Exception\BadDataException("Must have $k probabilities. Given " . count($probabilities));
+        if (\count($probabilities) != $k) {
+            throw new Exception\BadDataException("Must have $k probabilities. Given " . \count($probabilities));
         }
 
         // Probabilities must add up to 1
-        if (round(array_sum($probabilities), 1) != 1) {
+        if (\round(\array_sum($probabilities), 1) != 1) {
             throw new Exception\BadDataException('Probabilities do not add up to 1.');
         }
 
@@ -66,7 +66,7 @@ class Categorical extends Discrete
      *
      * pmf = p(x = i) = pᵢ
      *
-     * @param  mixed $x category name/number
+     * @param  int|float $x category name/number
      *
      * @return float
      *
@@ -84,7 +84,7 @@ class Categorical extends Discrete
     /**
      * Mode of the distribution
      *
-     * i such that pᵢ = max(p₁, ... pk)
+     * i such that pᵢ = \max(p₁, ... pk)
      *
      * @return mixed Category name/number. Only returns one category in case on multimodal scenario.
      */
@@ -108,7 +108,7 @@ class Categorical extends Discrete
      *
      * @param  string $name
      *
-     * @return int|array
+     * @return int|array<mixed>
      *
      * @throws Exception\BadDataException if $name is not a valid parameter
      */

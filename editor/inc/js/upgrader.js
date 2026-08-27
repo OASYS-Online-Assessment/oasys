@@ -17,6 +17,10 @@ let activePkg = null;
 let isAdmin;
 let isAE;
 
+function escapeHTML(value) {
+    return $('<div>').text(value == null ? '' : String(value)).html();
+}
+
 function onReady() {
 
     // init some default actions to prevent
@@ -59,15 +63,18 @@ function onReady() {
     // Main and only flexBox interface init
     gui.flexSection_01 = createFlexSection('UI', 'sect001', 900, 1250, 1, 'fullWidthFlex');
 
+    const releaseChannel = settings.alphaChannel ? 'alpha' : 'standard';
     gui.boxes.mainFlexBox = createFlexBox(gui.flexSection_01, 'mainFlexWindow', {
-        title: (settings.alphaChannel) ? "RELEASE CHANNEL: <strong>ALPHA</strong> (UNSTABLE!)" : "RELASE CHANNEL: <strong>STANDARD</strong>",
+        title: (releaseChannel === 'alpha') ? "RELEASE CHANNEL: <strong>ALPHA</strong> (UNSTABLE!)" : "RELEASE CHANNEL: <strong>STANDARD</strong>",
         minHeight: 480,
         panelHeight: 50,
         flex: 1,
         noPadding: false
     });
 
-    settings.alphaChannel === true ? $('#title_mainFlexWindow').css('background', 'darkorange') : $('#title_mainFlexWindow').css('background', 'blue');
+    $('#title_mainFlexWindow')
+        .addClass('upgraderReleaseChannel')
+        .addClass('upgraderReleaseChannel-' + releaseChannel);
 
     // create main text box and populate with status messages re: package availabliity, etc.
 
@@ -243,7 +250,8 @@ function dlInit(instData) {
             $("#installButtonDiv").append("<hr>");
             (olFilename === "") ? $("#instLogWindow").append("Downloading and extracting package... ") : $("#instLogWindow").append("Staging and extracting offline package... <img src='../images/ok.png' style='height: 1.3em; vertical-align: text-top'><br>");
             $("#instLogWindow").append("Removing backend sessions... <img src='../images/ok.png' style='height: 1.3em; vertical-align: text-top'><br>");
-            $("#instLogWindow").append("Enabling full system maintenance mode... <img src='../images/ok.png' style='height: 1.3em; vertical-align: text-top'><br>");
+            $("#instLogWindow").append("Enabling full system maintenance mode... <img src='../images/ok.png' style='height: 1.3em; vertical-align: text-top'> \
+                <p style='color: red;'><strong>IMPORTANT NOTE:</strong> The system will not restore the previous maintenance mode until the installation link has been clicked.</p>");
         }
     });
 }
@@ -286,13 +294,18 @@ function fetchPkgStatus(fList, curVer) {
     // condition when an update package is detected
 
     // replace linefeeds with <br> tokens
-    let longdescFixed = fList[0].longdesc.replace(/\r\n|\r|\n/g, '<br>').trim();
+    let longdescFixed = escapeHTML(fList[0].longdesc).replace(/\r\n|\r|\n/g, '<br>').trim();
+    const description = escapeHTML(fList[0].description);
+    const filename = escapeHTML(fList[0].filename);
+    const version = escapeHTML(fList[0].version);
 
     let upgType = "Oasys";
     if (typeof fList[0].module === "string") {
-        upgType = fList[0].module.toUpperCase();
+        upgType = escapeHTML(fList[0].module.toUpperCase());
         curVer = fList[0].moduleCurVer;
     }
+
+    const displayedCurrentVersion = escapeHTML(curVer);
 
     mainContent.empty();
     mainContent.append(/* html */`\
@@ -303,19 +316,19 @@ function fetchPkgStatus(fList, curVer) {
         
         <div class='upgraderTbleRow'>
             <div  class="upgraderTitleColumn"><div>
-                PACKAGE:</div></div><div class= 'upgraderInfoColumn' > ${fList[0].description}
+                PACKAGE:</div></div><div class= 'upgraderInfoColumn' > ${description}
             </div>
         </div>
         
         <div class='upgraderTbleRow'>
             <div class="upgraderTitleColumn"><div>
-                FILENAME:</div></div><div class= 'upgraderInfoColumn'>${fList[0].filename}
+                FILENAME:</div></div><div class= 'upgraderInfoColumn'>${filename}
             </div>
         </div>
         
         <div class='upgraderTbleRow'>
             <div class="upgraderTitleColumn"><div>
-                VERSION:</div></div><div class='upgraderInfoColumn' id='upgVerMsg'>This package will upgrade ${upgType} from <span class='upgrVersion'>${curVer}</span> to <span class='upgrVersion upgrNewVersion' >${fList[0].version}</span>
+                VERSION:</div></div><div class='upgraderInfoColumn' id='upgVerMsg'>This package will upgrade ${upgType} from <span class='upgrVersion'>${displayedCurrentVersion}</span> to <span class='upgrVersion upgrNewVersion' >${version}</span>
             </div>
         </div>
         
@@ -467,7 +480,7 @@ function ajaxSuccess(res) {
                 cancel: true,
                 value: 'ok'
             }],
-            contents: '<strong>Sorry! The action cannot be completed.</strong><br><p>' + res.fatalError + '</p>',
+            contents: formatActionErrorMessage('<strong>Sorry! The action cannot be completed.</strong><br><p>' + res.fatalError + '</p>'),
             title: "Fatal Error",
             icon: "../images/error.png",
             iconWidth: 64,
@@ -490,7 +503,7 @@ function ajaxSuccess(res) {
                 cancel: true,
                 value: 'ok'
             }],
-            contents: '<strong>Sorry! The action cannot be completed.</strong><br><p>' + res.error + '</p>',
+            contents: formatActionErrorMessage('<strong>Sorry! The action cannot be completed.</strong><br><p>' + res.error + '</p>'),
             title: "Error",
             icon: "../images/error.png",
             iconWidth: 64,
@@ -518,7 +531,7 @@ function ajaxSuccess(res) {
     switch (res.action) {
         case 'requestPackageList':
             fetchPkgStatus(res.fileList, res.longVer);
-            activePkg = res.fileList[0];
+            activePkg = Array.isArray(res.fileList) && res.fileList.length > 0 ? res.fileList[0] : null;
             isAdmin = res.isAdmin;
             isAE = res.isAE;
 
@@ -562,9 +575,11 @@ function ajaxSuccess(res) {
 
             $("#instLogWindow").append( /* html */ `
                 <img src='../images/ok.png' style='height: 1.3em; vertical-align: text-top'><br>
-                <span id='finalInstMsg'><a id='startInstLink' target="OAInstallerScript" onclick="window.open('${res.instAddr}')">
+                <span id='finalInstMsg'><a id='startInstLink' target="OAInstallerScript" rel="noopener">
                 <span style="font-weight: bold; color: blue; text-decoration: underline; cursor: pointer;">Start final package install script by clicking here</span></a>.</span>
             `);
+
+            $('#startInstLink').attr('href', res.instAddr);
 
             // set one time handler for getting window focus back
             $('#startInstLink').on("click", function() {

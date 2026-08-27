@@ -23,7 +23,7 @@ class DashboardTestItem {
 
 		this.active = data.active;
 
-		if (data.restrictions.dateRange !== false) {
+		if ((data.restrictions?.dateRange ?? false) !== false) {
 			if (data.restrictions.dateRange.start !== false) {
 				this.startDate = new Date(data.restrictions.dateRange.start);
 			} else {
@@ -39,14 +39,14 @@ class DashboardTestItem {
 			this.endDate = false;
 		}
 
-		if (data.restrictions.timeRestricition !== false) {
+		if ((data.restrictions?.timeRestriction ?? false) !== false) {
 			this.startTime = data.restrictions.timeRestriction.start;
 			this.endTime = data.restrictions.timeRestriction.end;
 		} else {
 			this.startTime = false;
 			this.endTime = false;
 		}
-		if (data.restrictions.testDays !== false && data.restrictions.testDays.days !== "0,1,2,3,4,5,6") {
+		if ((data.restrictions?.testDays ?? false) !== false && data.restrictions.testDays.days !== "0,1,2,3,4,5,6") {
 			this.weekDays = data.restrictions.testDays.days.split(",").map((day) => {
 				return global_getText("dashboard", DashboardTestItem.weekDays[day]);
 			});
@@ -55,6 +55,7 @@ class DashboardTestItem {
 		}
 
 		this.progress = Math.round(data.activity?.progress?.required?.percentage ?? 0);
+		this.showProgress = data.saveResults !== false;
 		this.status = data.activity.status;
 		this.newTestsContainer = "currentTestsList";
 		this.oldTestsContainer = "pastTestsList";
@@ -113,9 +114,10 @@ class DashboardTestItem {
 			timeRangeString += global_getText("dashboard", "from") + " " + this.startTime + " " + global_getText("dashboard", "to")  + " " + this.endTime;
 		}
 
+		const progressHtml = this.showProgress ? `<div class="testProgress">${this.progress} %</div>` : '';
 		const testHtml = `<div class="testItem testState_${this.state} testAvailability_${this.available ? 'true' : 'false'}" data-id="${this.id}">
 			<div class="testTitle">${this.name}</div>
-			<div class="testProgress">${this.progress} %</div>
+			${progressHtml}
 			<div class="testStatus accessDetails">${this.state === 'inactive' ? 'inactive' : ''}</div>
 			<div class="testDateRange accessDetails">${dateRangeString}</div>
 			<div class="testTimeRange accessDetails">${timeRangeString}</div>

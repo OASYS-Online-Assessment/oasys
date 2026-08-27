@@ -21,6 +21,7 @@
 		includeCSS("../../inc/nxDialog/nxDialog.css");
         includeCSS("../../inc/jquery-ui-1.12.1/jquery-ui.min.css");
         includeCSS("../../inc/jquery_colorpicker/spectrum.css");
+        includeCSS("../../inc/jquery_colorpicker/oasys-spectrum.css");
         includeCSS("style.css");
         includeJS("../../inc/js/jquery-3.2.1.min.js");
         includeJS("../../inc/jquery-ui-1.12.1/jquery-ui.min.js");
@@ -45,7 +46,6 @@
 		#keep at the bottom!
 		includeJS("inc/js/lang.js");
 		?>
-		<meta name="viewport" content="width=device-width initial-scale=1.0 maximum-scale=1.0 user-scalable=no"/>
 		<meta name="apple-mobile-web-app-capable" content="yes"/>
 		<script type="text/javascript">
 			if (window.document.documentMode) { // IE not supported
@@ -57,7 +57,6 @@
 			DATAFORMAT.setFileFormat(fileFormat);
 			DATAFORMAT.setMeta({fileversion: fileFormat});
 
-			const logEnabled = false; // AJAX write to serverside logfile
 			let UILANG;
 			$(document).ready(function() {
 				UILANG = new Lang(); // translation class

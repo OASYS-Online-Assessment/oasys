@@ -2,7 +2,8 @@
 
 
 	register_shutdown_function('outputJSON');
-	require_once __DIR__ . '/inc/php/settings.php';
+	require_once __DIR__ . '/inc/php/initSettings.php';
+	require_once __DIR__ . '/inc/php/actionAllowlist.php';
 	require_once __DIR__ . '/inc/php/OasysCredentials.php';
 	require_once __DIR__ . '/inc/php/OasysTest.php';
 	require_once __DIR__ . '/inc/php/OasysActivity.php';
@@ -37,18 +38,17 @@
 	$returnData['action'] = $action; //when returning we must specify which action was performed
 	$returnData['error'] = false; //if there is an error, this will contain a string with the error message
 
-	//make a connection to the database and define the log file in which database errors are to be recorded
-	$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/logs/ttDashboard_errors.txt', 1, $returnData, 'error');
 	$state = OasysFrontendState::getInstance($serialNumber);
 
 	//call function whose name is given by the $action variable
 	//(the name of the function must obviously exactly match the string in $action)
 	//an action function will always be given the $data sent by the client, a pointer to the database object and a pointer to the global $returnData array
+	if (oasysRejectUnknownAction(__FILE__, $action, $returnData)) exit;
 	$action($data, $db, $returnData);
 
 	function fetchStudentLoginTests(array $data, rixPDO $db, array &$returnData): void {
-		checkParams($data, ['loginId']);
-		$loginId = $data['loginId'];
+		global $state;
+		$loginId = $state->studentId;
 		$oasysCredentials = new OasysCredentials();
 		$tests = $oasysCredentials->getTestsForStudentLogin($loginId);
 		$returnData['data']['tests'] = $tests;

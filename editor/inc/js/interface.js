@@ -6,6 +6,20 @@ const loginProc = /(.*\/$|.*(index\.php.*))/.test(window.location.href); // avoi
 const urlParams = new URLSearchParams(window.location.search);
 const initLogin = urlParams.get('initlogin') === "true";
 
+function formatActionErrorMessage(msg) {
+	if (typeof msg !== 'string') return msg;
+
+	const match = msg.match(/^\s*<strong>([\s\S]*?)<\/strong>\s*<br\s*\/?>\s*(?:<br\s*\/?>\s*)?([\s\S]*)$/i);
+	if (!match) return msg;
+
+	const title = match[1].trim();
+	const cleanTitle = title.replace(/<[^>]*>/g, '').trim().toLowerCase();
+	if (cleanTitle !== 'action_not_completed' && !cleanTitle.includes('action cannot be completed')) return msg;
+
+	const body = match[2].trim();
+	return '<div class="actionError"><div class="actionErrorTitle">' + title + '</div><div class="actionErrorText">' + body + '</div></div>';
+}
+
 if (initLogin === true) {
 	// reset url address to remove initlogin param
 	const newUrl = window.location.href.split('?')[0];
@@ -25,8 +39,64 @@ function initGUI(skipMenu) {
 		flexFrame.append("<div id='interfaceFrame'><header id='header'></header><div id='outerUI'><div id='UI'></div></div></div><div id='hiddenSpace'></div>");
 		$('#interfaceFrame').css('max-width', '100%');
 	}
+	setupStatusBarWidthSync();
 }
 
+function setupStatusBarWidthSync() {
+	const ui = document.getElementById('UI');
+	const outerUI = document.getElementById('outerUI');
+	if (!ui || !outerUI || ui.dataset.statusBarWidthSync === '1') return;
+	ui.dataset.statusBarWidthSync = '1';
+
+	let scheduled = false;
+	const schedule = function() {
+		if (scheduled) return;
+		scheduled = true;
+		window.requestAnimationFrame(sync);
+	};
+
+	const resizeObserver = window.ResizeObserver ? new ResizeObserver(schedule) : null;
+
+	function sync() {
+		scheduled = false;
+		const statusBar = document.getElementById('statusBar');
+		if (!statusBar) return;
+
+		let contentWidth = outerUI.clientWidth;
+		Array.prototype.forEach.call(ui.children, function(child) {
+			if (child.id === 'statusBar' || child.id === 'inlineWaitMessage' || child.id === 'hiddenSpace') return;
+			if (child.offsetParent === null) return;
+			// Size the status bar from the section itself. A section's internal
+			// scroll width must not create horizontal scrolling for the whole UI.
+			contentWidth = Math.max(contentWidth, child.offsetLeft + child.offsetWidth);
+		});
+
+		// Keep horizontal scrolling available for genuinely wider layouts, but
+		// suppress the small internal overflows of otherwise fitting sections.
+		outerUI.style.overflowX = contentWidth > outerUI.clientWidth + 1 ? 'auto' : 'hidden';
+		statusBar.style.width = Math.ceil(contentWidth) + 'px';
+	}
+
+	if (resizeObserver) {
+		resizeObserver.observe(ui);
+		resizeObserver.observe(outerUI);
+	}
+
+	new MutationObserver(function(mutations) {
+		if (resizeObserver) {
+			mutations.forEach(function(mutation) {
+				Array.prototype.forEach.call(mutation.addedNodes, function(node) {
+					if (node.nodeType === 1) resizeObserver.observe(node);
+				});
+			});
+		}
+		schedule();
+	}).observe(ui, { childList: true, subtree: true });
+
+	window.addEventListener('resize', schedule);
+	window.oasysSyncStatusBarWidth = schedule;
+	schedule();
+}
 
 /*
 	check if editor buttons are allowed
@@ -49,7 +119,7 @@ function createMenuButtons() {
 	menu.append('<div id="viewsPanel"></div>');
 
 	// dashboard button always shown
-	registerView("dashboard", window.localUName, settings.JSrootURL + "editor/dashboard.php", "dashboard");
+	registerView("dashboard", UILANG.m('dashboard'), settings.JSrootURL + "editor/dashboard.php", "dashboard");
 	$('#viewsPanel').append('<p class="menuSeparator"></p>');
 	if (bt('content')) registerView('content', UILANG.m('content'), settings.JSrootURL + 'editor/items.php', 'content');
 	if (bt('tests')) registerView('tests', UILANG.m('tests'), settings.JSrootURL + 'editor/tests.php', 'tests');
@@ -106,7 +176,8 @@ function createMenuButtons() {
 		if_localName = localUName;
 	}
 
-	$('#viewsPanel').prepend('<div id="mainLogo""><img height="119px;" src="' + settings.JSrootURL + settings.logoAdminPanel + '" /></div><div id="logoSeparator"></div>');
+	const safeLogoAlt = $('<div>').text(settings.title || 'OASYS').html();
+	$('#viewsPanel').prepend('<div id="mainLogo"><img src="' + settings.JSrootURL + settings.logoAdminPanel + '" alt="' + safeLogoAlt + '" /></div><div id="logoSeparator"></div>');
 	$('#logoSeparator').append(/* html */ `
 		<div id="profile" class="loginStatusContainer" style="display: none;">
 			<div id="username"><svg class="userAvatar"><use href="#ic_mm_avatar"></svg><span id="un_val">${if_localName}</span></div>
@@ -116,16 +187,32 @@ function createMenuButtons() {
 			</div>
 		</div>	
 	`);
-	//Flagging Version
-	$('#viewsPanel').append('<br /><div style="text-align:center;"><div  id="versionInfo" style="color:#999;">' + UILANG.m('Version') + '&nbsp;<a id="displayinfo" style="cursor: pointer">' + String(settings.vshort) + '</a></div></div>');
-	//End Flagging DEV Version
 
-	// logoff button always shown
+	// separator + logoff button
 	$('#viewsPanel').append('<p class="menuSeparator"></p>');
 	registerView("logout", UILANG.m("Logout"), settings.JSrootURL + "", "logout");
 
+	//Flagging Version
+	$('#viewsPanel').append('<p class="menuSeparator"></p>');
+	$('#viewsPanel').append(
+		'<div style="text-align:center;">' +
+		'<div id="versionInfo" style="color:#999;">' +
+		UILANG.m('Version') + '&nbsp;<a id="displayinfo" style="cursor: pointer">' + String(settings.vshort) + '</a>' +
+		'</div>' +
+		'</div>'
+	);
+	//End Flagging DEV Version
 
-
+	// "Signed in as" block
+	if (if_localName) {
+		const safeName = $('<div>').text(if_localName).html();
+		$('#viewsPanel').append(
+			'<div id="menuUserBlock">' +
+			'<div id="menuUserLabel">' + UILANG.m('Signed in as:') + '</div>' +
+			'<div id="menuUserName">' + safeName + '</div>' +
+			'</div>'
+		);
+	}
 
 	$('#displayinfo').on('click', displayDetails);
 
@@ -227,17 +314,65 @@ function createMenuButtons() {
 			}
 		}, 10);
 	}
+
+	// check for DB DDL version consistency and autoupgrade when required
+	if (initLogin === true && loginProc === false) {
+
+		setTimeout(() => {
+			$.ajax({
+				type: "POST",
+				cache: false,
+				dataType: "json",
+				timeout: 20000, // 20 second max execution timeout for db upgrade(s)
+				url: "maintenance/autoDbUpgrade.php",
+				data: {},
+			}).done((res) => {
+				if (res.result === undefined || res.result.length === 0) return;
+				const autoUpgradeMessage = [
+					"The following automatic database processes were executed:",
+					"",
+					"<strong>" + res.result.join("<br>") + "</strong>",
+					"",
+					"You will be logged out and redirected to the login page. Please log in again to continue using OASYS."
+				].join("<br>");
+				new nxDialog('autoDbUpgradeNotice', {
+					buttons: [{
+						label: UILANG.m('OK'),
+						'default': true,
+						value: 'ok'
+					}],
+					contents: autoUpgradeMessage,
+					title: UILANG.m('Database Auto-upgrade Notice'),
+					width: 600,
+					callback: function() {
+						gotoPage("logout");
+					}
+				});
+			});
+		}, 250); /* small delay to allow rest of the page to load and avoid any potential race conditions with the autoDbUpgrade.php script and the database connection.
+				 Even if race condition occurs, it does not affect the integrity of the database upgrade process, but may show an error in the background unnecessarily. */
+	}
 }
 
-
 function displayDetails() {
-	const content = '<div class="oasysInfoCont"><table class="oasysInfoTable">' +
-		'<tr><td>Complete version number:</td><td>' + settings.v + '</td></tr>' +
-		'<tr><td>Database version number:</td><td>' + settings.database_version + '</td></tr>' +
-		'<tr><td>System in debug mode:</td><td>' + settings.debugSystem + '</td></tr>' +
-		'<tr><td>Write Logfiles:</td><td>' + settings.writeLog + '</td></tr>' +
-		'<tr><td colspan="2">' + settings.info + '</td></tr>' +
-		'</table></div>';
+	const escape = function(str) {
+		if (str === null || str === undefined) return '';
+		return String(str)
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#039;');
+	};
+	const content = '<div class="oasysInfoCont">' +
+		'<div class="oasysInfoSummary">' +
+		'<div class="oasysInfoMetric"><span>Complete version number</span><strong>' + escape(settings.v) + '</strong></div>' +
+		'<div class="oasysInfoMetric"><span>Database version number</span><strong>' + escape(settings.database_version) + '</strong></div>' +
+		'<div class="oasysInfoMetric"><span>System in debug mode</span><strong>' + escape(settings.debugSystem) + '</strong></div>' +
+		'<div class="oasysInfoMetric"><span>Write Logfiles</span><strong>' + escape(settings.writeLog) + '</strong></div>' +
+		'</div>' +
+		'<div class="oasysInfoNotes">' + (settings.info || '') + '</div>' +
+		'</div>';
 	const dialogData = {
 		buttons: [{
 			label: "AGPL v3 License",
@@ -249,17 +384,17 @@ function displayDetails() {
 			value: 'cancel',
 		}],
 		title: settings.title + ' ' + settings.vshort + ' details',
-		width: 600,
+		width: 780,
 		contents: content,
 		callback: function(button) {
 			if (button === "license") {
-				const newWin = window.open('../license.txt', '_blank');
+				const newWin = window.open(settings.JSrootURL + 'license.txt', '_blank');
 				if (newWin) {
 					newWin.opener = null;
 					try { newWin.focus(); } catch (e) { /* ignore */ }
 				} else {
 					// popup block fallback
-					window.location.href = '../../license.txt';
+					window.location.href = settings.JSrootURL + 'license.txt';
 				}
 			}
 		}
@@ -336,6 +471,9 @@ function insertLink(parent, id, label, options = {}, rowOptions = {}) {
 function insertDropdown(parent, id, label, options = {}, rowOptions = {}) {
 	const row = new jsInterfaceRow(parent, label, rowOptions);
 	const propertyCell = row.getPropertyCell();
+	if (options.theme === 'backend') {
+		propertyCell.closest('.jsInterfaceRow').addClass('backendDropdownRow');
+	}
 	const box = new jsDropList(propertyCell, id, options);
 	row.setPropertyField(box);
 	return row;
@@ -495,7 +633,10 @@ function registerView(target, name, url, id) {
 	};
 	menuButtons.set(name, new nxButton('viewsPanel', 'menuButton_' + target, buttonData));
 	let currentManagerId = $('body').data('managerid');
-	if (currentManagerId === id) menuButtons.get(name).buttonSelected(true);
+	if (currentManagerId === id) {
+		menuButtons.get(name).buttonSelected(true);
+		$('#menuButton_' + target).attr('aria-current', 'page');
+	}
 	viewManager[target] = url;
 
 	/* handle overflow of long username */

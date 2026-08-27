@@ -16,36 +16,36 @@ class Hypergeometric
     /**
      * Distribution parameter bounds limits
      * Kᵢ ∈ [1,∞)
-     * @var array
+     * @var array{K: string}
      */
-    const PARAMETER_LIMITS = [
+    public const PARAMETER_LIMITS = [
         'K' => '[1,∞)',
     ];
 
     /**
      * Distribution parameter bounds limits
      * kᵢ ∈ [0,Kᵢ]
-     * @var array
+     * @var array<string, array<string>>
      */
     protected $supportLimits = [];
 
-    /** @var array */
+    /** @var array<int|float> */
     protected $quantities;
 
     /**
      * Multivariate Hypergeometric constructor
      *
-     * @param   array $quantities
+     * @param   array<int|float> $quantities
      *
      * @throws Exception\BadDataException if the quantities are not positive integers.
      */
     public function __construct(array $quantities)
     {
-        if (count($quantities) === 0) {
+        if (\count($quantities) === 0) {
             throw new Exception\BadDataException("Array cannot be empty.");
         }
         foreach ($quantities as $K) {
-            if (!is_int($K)) {
+            if (!\is_int($K)) {
                 throw new Exception\BadDataException("Quantities must be positive integers.");
             }
             Support::checkLimits(self::PARAMETER_LIMITS, ['K' => $K]);
@@ -57,7 +57,7 @@ class Hypergeometric
     /**
      * Probability mass function
      *
-     * @param  array $picks
+     * @param  array<int|float> $picks
      *
      * @return float
      *
@@ -67,20 +67,21 @@ class Hypergeometric
     public function pmf(array $picks): float
     {
         // Must have a pick for each quantity
-        if (count($picks) !== count($this->quantities)) {
+        if (\count($picks) !== \count($this->quantities)) {
             throw new Exception\BadDataException('Number of quantities does not match number of picks.');
         }
         foreach ($picks as $i => $k) {
-            if (!is_int($k)) {
+            if (!\is_int($k)) {
                 throw new Exception\BadDataException("Picks must be whole numbers.");
             }
             Support::checkLimits(['k' => $this->supportLimits['k'][$i]], ['k' => $k]);
         }
 
-        $n       = array_sum($picks);
-        $total   = array_sum($this->quantities);
+        $n       = \array_sum($picks);
+        $total   = \array_sum($this->quantities);
 
-        $product = array_product(array_map(
+        $product = \array_product(\array_map(
+            // @phpstan-ignore-next-line (Parameter #1 $callback of function array_map expects (callable(float|int, float|int): mixed)|null, Closure(int, int): float given.)
             function (int $quantity, int $pick) {
                 return Combinatorics::combinations($quantity, $pick);
             },
@@ -88,6 +89,6 @@ class Hypergeometric
             $picks
         ));
 
-        return $product / Combinatorics::combinations($total, $n);
+        return $product / Combinatorics::combinations((int)$total, (int)$n);
     }
 }

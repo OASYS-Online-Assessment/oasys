@@ -6,7 +6,7 @@ use MathPHP\Exception;
 use MathPHP\Functions\Map;
 use MathPHP\LinearAlgebra\Eigenvalue;
 use MathPHP\LinearAlgebra\Eigenvector;
-use MathPHP\LinearAlgebra\Matrix;
+use MathPHP\LinearAlgebra\NumericMatrix;
 use MathPHP\LinearAlgebra\MatrixFactory;
 use MathPHP\Probability\Distribution\Continuous\ChiSquared;
 use MathPHP\Probability\Distribution\Continuous\StandardNormal;
@@ -23,8 +23,8 @@ use MathPHP\Trigonometry;
  */
 class Correlation
 {
-    const X = 0;
-    const Y = 1;
+    private const X = 0;
+    private const Y = 1;
 
     /**
      * Covariance
@@ -35,8 +35,8 @@ class Correlation
      * The population covariance is defined in terms of the sample means x, y
      * https://en.wikipedia.org/wiki/Covariance
      *
-     * @param array $X values for random variable X
-     * @param array $Y values for random variable Y
+     * @param array<float> $X values for random variable X
+     * @param array<float> $Y values for random variable Y
      * @param bool $population Optional flag for population or sample covariance
      *
      * @return float
@@ -63,8 +63,8 @@ class Correlation
      * cov(X, Y) = σxy = -----------------
      *                           N
      *
-     * @param array $X values for random variable X
-     * @param array $Y values for random variable Y
+     * @param array<float> $X values for random variable X
+     * @param array<float> $Y values for random variable Y
      *
      * @return float
      *
@@ -72,20 +72,20 @@ class Correlation
      */
     public static function populationCovariance(array $X, array $Y): float
     {
-        if (count($X) !== count($Y)) {
+        if (\count($X) !== \count($Y)) {
             throw new Exception\BadDataException('X and Y must have the same number of elements.');
         }
         $μₓ = Average::mean($X);
         $μy = Average::mean($Y);
-    
-        $∑⟮xᵢ − μₓ⟯⟮yᵢ − μy⟯ = array_sum(array_map(
+
+        $∑⟮xᵢ − μₓ⟯⟮yᵢ − μy⟯ = \array_sum(\array_map(
             function ($xᵢ, $yᵢ) use ($μₓ, $μy) {
                 return ( $xᵢ - $μₓ ) * ( $yᵢ - $μy );
             },
             $X,
             $Y
         ));
-        $N = count($X);
+        $N = \count($X);
 
         return $∑⟮xᵢ − μₓ⟯⟮yᵢ − μy⟯ / $N;
     }
@@ -103,8 +103,8 @@ class Correlation
      * cov(X, Y) = Sxy = ---------------
      *                         n - 1
      *
-     * @param array $X values for random variable X
-     * @param array $Y values for random variable Y
+     * @param array<float> $X values for random variable X
+     * @param array<float> $Y values for random variable Y
      *
      * @return float
      *
@@ -112,20 +112,25 @@ class Correlation
      */
     public static function sampleCovariance(array $X, array $Y): float
     {
-        if (count($X) !== count($Y)) {
+        if (\count($X) !== \count($Y)) {
             throw new Exception\BadDataException('X and Y must have the same number of elements.');
         }
+
+        $n = \count($X);
+        if ($n < 2) {
+            throw new Exception\OutOfBoundsException('Sample covariance requires at least 2 data points. n = ' . $n);
+        }
+
         $x = Average::mean($X);
         $y = Average::mean($Y);
-    
-        $∑⟮xᵢ − x⟯⟮yᵢ − y⟯ = array_sum(array_map(
+
+        $∑⟮xᵢ − x⟯⟮yᵢ − y⟯ = \array_sum(\array_map(
             function ($xᵢ, $yᵢ) use ($x, $y) {
                 return ( $xᵢ - $x ) * ( $yᵢ - $y );
             },
             $X,
             $Y
         ));
-        $n = count($X);
 
         return $∑⟮xᵢ − x⟯⟮yᵢ − y⟯ / ($n - 1);
     }
@@ -139,9 +144,9 @@ class Correlation
      * cov(X, Y, w) = sxyw = --------------------
      *                              ∑wᵢ
      *
-     * @param array $X values for random variable X
-     * @param array $Y values for random variable Y
-     * @param array $w values for weights
+     * @param array<float> $X values for random variable X
+     * @param array<float> $Y values for random variable Y
+     * @param array<float> $w values for weights
      *
      * @return float
      *
@@ -149,14 +154,14 @@ class Correlation
      */
     public static function weightedCovariance(array $X, array $Y, array $w): float
     {
-        if (count($X) !== count($Y) || count($X) !== count($w)) {
+        if (\count($X) !== \count($Y) || \count($X) !== \count($w)) {
             throw new Exception\BadDataException('X, Y and w must have the same number of elements.');
         }
 
         $μₓ = Average::weightedMean($X, $w);
         $μy = Average::weightedMean($Y, $w);
-    
-        $∑wᵢ⟮xᵢ − μₓ⟯⟮yᵢ − μy⟯ = array_sum(array_map(
+
+        $∑wᵢ⟮xᵢ − μₓ⟯⟮yᵢ − μy⟯ = \array_sum(\array_map(
             function ($xᵢ, $yᵢ, $wᵢ) use ($μₓ, $μy) {
                 return $wᵢ * ( $xᵢ - $μₓ ) * ( $yᵢ - $μy );
             },
@@ -164,8 +169,8 @@ class Correlation
             $Y,
             $w
         ));
-        
-        $∑wᵢ = array_sum($w);
+
+        $∑wᵢ = \array_sum($w);
 
         return $∑wᵢ⟮xᵢ − μₓ⟯⟮yᵢ − μy⟯ / $∑wᵢ;
     }
@@ -176,8 +181,8 @@ class Correlation
      *
      * Convenience method for population and sample correlationCoefficient
      *
-     * @param array $X values for random variable X
-     * @param array $Y values for random variable Y
+     * @param array<float> $X values for random variable X
+     * @param array<float> $Y values for random variable Y
      * @param bool $population Optional flag for population or sample covariance
      *
      * @return float
@@ -214,8 +219,8 @@ class Correlation
      *  σx is the population standard deviation of X
      *  σy is the population standard deviation of Y
      *
-     * @param array $X values for random variable X
-     * @param array $Y values for random variable Y
+     * @param array<float> $X values for random variable X
+     * @param array<float> $Y values for random variable Y
      *
      * @return float
      *
@@ -224,9 +229,20 @@ class Correlation
      */
     public static function populationCorrelationCoefficient(array $X, array $Y): float
     {
+        if (\count($X) !== \count($Y)) {
+            throw new Exception\BadDataException('X and Y must have the same number of elements.');
+        }
+
         $cov⟮X，Y⟯ = self::populationCovariance($X, $Y);
         $σx      = Descriptive::standardDeviation($X, true);
         $σy      = Descriptive::standardDeviation($Y, true);
+
+        if ($σx == 0 || $σy == 0) {
+            throw new Exception\BadDataException(
+                'Correlation coefficient is undefined when one or both variables have zero variance. ' .
+                'σx = ' . $σx . ', σy = ' . $σy
+            );
+        }
 
         return $cov⟮X，Y⟯ / ( $σx * $σy );
     }
@@ -253,8 +269,8 @@ class Correlation
      *  σx is the sample standard deviation of X
      *  σy is the sample standard deviation of Y
      *
-     * @param array $X values for random variable X
-     * @param array $Y values for random variable Y
+     * @param array<float> $X values for random variable X
+     * @param array<float> $Y values for random variable Y
      *
      * @return float
      *
@@ -263,9 +279,24 @@ class Correlation
      */
     public static function sampleCorrelationCoefficient(array $X, array $Y): float
     {
+        if (\count($X) !== \count($Y)) {
+            throw new Exception\BadDataException('X and Y must have the same number of elements.');
+        }
+
+        if (\count($X) < 2) {
+            throw new Exception\OutOfBoundsException('Sample correlation coefficient requires at least 2 data points. n = ' . \count($X));
+        }
+
         $Sxy = self::sampleCovariance($X, $Y);
         $sx  = Descriptive::standardDeviation($X, Descriptive::SAMPLE);
         $sy  = Descriptive::standardDeviation($Y, Descriptive::SAMPLE);
+
+        if ($sx == 0 || $sy == 0) {
+            throw new Exception\BadDataException(
+                'Correlation coefficient is undefined when one or both variables have zero variance. ' .
+                'sx = ' . $sx . ', sy = ' . $sy
+            );
+        }
 
         return $Sxy / ( $sx * $sy );
     }
@@ -274,18 +305,18 @@ class Correlation
      * R² - coefficient of determination
      * Convenience wrapper for coefficientOfDetermination
      *
-     * @param array $X values for random variable X
-     * @param array $Y values for random variable Y
-     * @param bool $popluation
+     * @param array<float> $X values for random variable X
+     * @param array<float> $Y values for random variable Y
+     * @param bool $population
      *
      * @return float
      *
      * @throws Exception\BadDataException
      * @throws Exception\OutOfBoundsException
      */
-    public static function r2(array $X, array $Y, bool $popluation = false): float
+    public static function r2(array $X, array $Y, bool $population = false): float
     {
-        return pow(self::r($X, $Y, $popluation), 2);
+        return \pow(self::r($X, $Y, $population), 2);
     }
 
     /**
@@ -296,18 +327,18 @@ class Correlation
      * Range of 0 - 1. Close to 1 means the regression line is a good fit
      * https://en.wikipedia.org/wiki/Coefficient_of_determination
      *
-     * @param array $X values for random variable X
-     * @param array $Y values for random variable Y
-     * @param bool $popluation
+     * @param array<float> $X values for random variable X
+     * @param array<float> $Y values for random variable Y
+     * @param bool $population
      *
      * @return float
      *
      * @throws Exception\BadDataException
      * @throws Exception\OutOfBoundsException
      */
-    public static function coefficientOfDetermination(array $X, array $Y, bool $popluation = false): float
+    public static function coefficientOfDetermination(array $X, array $Y, bool $population = false): float
     {
-        return pow(self::r($X, $Y, $popluation), 2);
+        return \pow(self::r($X, $Y, $population), 2);
     }
 
     /**
@@ -331,9 +362,9 @@ class Correlation
      *  sxw is the weighted variance of X
      *  syw is the weighted variance of Y
      *
-     * @param array $X values for random variable X
-     * @param array $Y values for random variable Y
-     * @param array $w values for weights
+     * @param array<float> $X values for random variable X
+     * @param array<float> $Y values for random variable Y
+     * @param array<float> $w values for weights
      *
      * @return float
      *
@@ -345,7 +376,7 @@ class Correlation
         $sxw         = Descriptive::weightedSampleVariance($X, $w, true);
         $syw         = Descriptive::weightedSampleVariance($Y, $w, true);
 
-        return $cov⟮X，Y，w⟯ / sqrt($sxw * $syw);
+        return $cov⟮X，Y，w⟯ / \sqrt($sxw * $syw);
     }
 
     /**
@@ -378,8 +409,8 @@ class Correlation
      *     X₀: number of pairs tied only on the X variable
      *     Y₀: number of pairs tied only on the Y variable
      *
-     * @param array $X values for random variable X
-     * @param array $Y values for random variable Y
+     * @param array<mixed> $X values for random variable X
+     * @param array<mixed> $Y values for random variable Y
      *
      * @todo Implement with algorithm faster than O(n²)
      *
@@ -389,21 +420,21 @@ class Correlation
      */
     public static function kendallsTau(array $X, array $Y): float
     {
-        if (count($X) !== count($Y)) {
+        if (\count($X) !== \count($Y)) {
             throw new Exception\BadDataException('Both random variables must have the same number of elements');
         }
 
-        $n = count($X);
+        $n = \count($X);
 
         // Match X and Y pairs and sort by X rank
-        $xy = array_map(
+        $xy = \array_map(
             function ($x, $y) {
                 return [$x, $y];
             },
             $X,
             $Y
         );
-        usort($xy, function ($a, $b) {
+        \usort($xy, function ($a, $b) {
             return $a[0] <=> $b[0];
         });
 
@@ -438,7 +469,7 @@ class Correlation
 
         // Numerator: (number of concordant pairs) - (number of discordant pairs)
         $⟮nc − nd⟯ = $nc - $nd;
-       
+
         /* tau-a (no rank ties):
          *
          *        nc - nd
@@ -455,7 +486,7 @@ class Correlation
          *   τ = -----------------------------
          *       √(nc + nd + X₀)(nc + nd + Y₀)
          */
-        return $⟮nc − nd⟯ / sqrt(($nc + $nd + $ties_x) * ($nc + $nd + $ties_y));
+        return $⟮nc − nd⟯ / \sqrt(($nc + $nd + $ties_x) * ($nc + $nd + $ties_y));
     }
 
     /**
@@ -471,8 +502,8 @@ class Correlation
      *    cov(rgᵪ, rgᵧ): covariance of the rank variables
      *    σᵣᵪ and σᵣᵧ:   standard deviations of the rank variables
      *
-     * @param array $X values for random variable X
-     * @param array $Y values for random variable Y
+     * @param array<int|float> $X values for random variable X
+     * @param array<int|float> $Y values for random variable Y
      *
      * @return float
      *
@@ -481,7 +512,7 @@ class Correlation
      */
     public static function spearmansRho(array $X, array $Y): float
     {
-        if (count($X) !== count($Y)) {
+        if (\count($X) !== \count($Y)) {
             throw new Exception\BadDataException('Both random variables for spearmansRho must have the same number of elements');
         }
 
@@ -497,11 +528,17 @@ class Correlation
     /**
      * Descriptive correlation report about two random variables
      *
-     * @param  array $X values for random variable X
-     * @param  array $Y values for random variable Y
+     * @param  array<float> $X values for random variable X
+     * @param  array<float> $Y values for random variable Y
      * @param  bool $population Optional flag if all samples of a population are present
      *
-     * @return array [cov, r, R2, tau, rho]
+     * @return array{
+     *     cov: float,
+     *     r:   float,
+     *     r2:  float,
+     *     tau: float,
+     *     rho: float,
+     * }
      *
      * @throws Exception\BadDataException
      * @throws Exception\OutOfBoundsException
@@ -525,14 +562,14 @@ class Correlation
      * The function will return $num_points pairs of X,Y data
      * http://stackoverflow.com/questions/3417028/ellipse-around-the-data-in-matlab
      *
-     * @param array $X an array of independent data
-     * @param array $Y an array of dependent data
+     * @param array<float> $X an array of independent data
+     * @param array<float> $Y an array of dependent data
      * @param float $z the number of standard deviations to encompass
      * @param int $num_points the number of points to include around the ellipse. The actual array
      *                          will be one larger because the first point and last will be repeated
      *                          to ease display.
      *
-     * @return array paired x and y points on an ellipse aligned with the data provided
+     * @return array<array<float>> paired x and y points on an ellipse aligned with the data provided
      *
      * @throws Exception\BadDataException
      * @throws Exception\BadParameterException
@@ -549,38 +586,38 @@ class Correlation
 
         $data_array[] = $X;
         $data_array[] = $Y;
-        $data_matrix  = new Matrix($data_array);
-        
-        $covarience_matrix = $data_matrix->covarianceMatrix();
-        
+        $data_matrix  = new NumericMatrix($data_array);
+
+        $covariance_matrix = $data_matrix->covarianceMatrix();
+
         // Scale the data by the confidence interval
-        $cov         = $covarience_matrix->scalarMultiply($χ²);
+        $cov         = $covariance_matrix->scalarMultiply($χ²);
         $eigenvalues = Eigenvalue::closedFormPolynomialRootMethod($cov);
 
         // Sort the eigenvalues from highest to lowest
-        rsort($eigenvalues);
+        \rsort($eigenvalues);
         $V = Eigenvector::eigenvectors($cov, $eigenvalues);
 
         // Make ia diagonal matrix of the eigenvalues
         $D = MatrixFactory::diagonal($eigenvalues);
-        $D = $D->map('sqrt');
+        $D = $D->map('\sqrt');
         $transformation_matrix = $V->multiply($D);
-        
+
         $x_bar = Average::mean($X);
         $y_bar = Average::mean($Y);
-        $translation_matrix = new Matrix([[$x_bar],[$y_bar]]);
-        
-        // We add a row to allow the transformation matrix to also traslate the ellipse to a different location
+        $translation_matrix = new NumericMatrix([[$x_bar],[$y_bar]]);
+
+        // We add a row to allow the transformation matrix to also translate the ellipse to a different location
         $transformation_matrix = $transformation_matrix->augment($translation_matrix);
-        
-        $unit_circle = new Matrix(Trigonometry::unitCircle($num_points));
-        
+
+        $unit_circle = new NumericMatrix(Trigonometry::unitCircle($num_points));
+
         // We add a column of ones to allow us to translate the ellipse
         $unit_circle_with_ones = $unit_circle->augment(MatrixFactory::one($num_points, 1));
-        
+
         // The unit circle is rotated, stretched, and translated to the appropriate ellipse by the translation matrix.
         $ellipse = $transformation_matrix->multiply($unit_circle_with_ones->transpose())->transpose();
-        
+
         return $ellipse->getMatrix();
     }
 }

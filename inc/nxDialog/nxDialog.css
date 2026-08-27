@@ -1,7 +1,7 @@
-/* nxDialog, v1.64 */
+/* nxDialog, v1.7 */
 
 .nxDialogVeil {
-	background-color: rgba(255, 255, 255, 0.5);
+	background-color: rgba(15, 23, 31, 0.58);
 	position: fixed;
 	left: 0;
 	right: 0;
@@ -13,30 +13,36 @@
 }
 
 .nxDialog {
-	box-shadow: 0 3px 5px rgba(0, 0, 0, 0.45);
+	box-shadow: 0 16px 36px rgba(18, 31, 43, 0.30), 0 2px 8px rgba(18, 31, 43, 0.18);
 	position: absolute;
-	background: #ebebeb;
-	border: 1px solid #888;
+	background: #ffffff;
+	border: 1px solid #b9c9d8;
+	border-radius: 8px;
 	top: 50%;
 	left: 50%;
 	transform: translate(-50%, -50%);
 	max-width: 95vw;
 	display: grid;
-	gap: 20px;
+	gap: 14px;
 	grid-template-columns: max-content 1fr;
+	overflow: hidden;
+	color: #26394a;
 }
 
 .nxDialogTitle:not(:empty) {
-	padding: 0.3em 0.7em 0.4em 0.7em;
+	padding: 9px 14px 10px;
 }
 
 .nxDialogTitle {
 	word-wrap: break-word;
 	position: relative;
-	color: white;
-	background-color: #373737;
+	color: #ffffff;
+	background-color: #227daa;
+	border-bottom: 1px solid #1d6f98;
 	cursor: move;
 	grid-area: 1 / 1 / 2 / 3;
+	font-weight: 600;
+	letter-spacing: 0;
 }
 
 .nxDialogBody {
@@ -44,13 +50,15 @@
 	max-height: 80vh;
 	overflow: auto;
 	grid-area: 2 / 2 / 3 / 3;
-	margin-right: 10px;
+	margin-right: 18px;
+	line-height: 1.38;
+	color: #26394a;
 }
 
 .nxDialogBody.nxDialogOverflow + .nxDialogButtons {
-	border-top: 1px solid #666;
-	box-shadow: rgba(0, 0, 0, 0.1) 0 0 5px 5px;
-	background-color: rgba(255, 255, 255, 0.5);
+	border-top: 1px solid #cbd9e6;
+	box-shadow: 0 -4px 12px rgba(18, 31, 43, 0.06);
+	background-color: rgba(248, 251, 253, 0.96);
 }
 
 .nxDialogButtons {
@@ -59,7 +67,8 @@
 	transition-property: border-top, box-shadow, background-color;
 	transition-duration: 0.3s;
 	grid-area: 3 / 1 / 4 / 3;
-	padding: 10px;
+	padding: 12px 14px 14px;
+	background: #ffffff;
 }
 
 .nxDialogBody > *:first-child {
@@ -75,23 +84,233 @@
 	-webkit-appearance: none;
 	-moz-appearance: none;
 	appearance: none;
-	border: 1px solid #ccc;
+	border: 1px solid #cbd9e6;
+	border-radius: 6px;
 	background-color: white;
 	font-size: inherit;
-	padding: 3px;
-	color: #444;
+	padding: 7px 9px;
+	color: #26394a;
 	box-sizing: border-box;
+	box-shadow: inset 0 1px 1px rgba(18, 31, 43, 0.04);
 }
 
-.nxDialogBody input:focus, .nxDialogBody textarea:focus {
-	border: 1px solid #ccc;
+.nxDialogBody input[type=text]:focus, .nxDialogBody input[type=password]:focus, .nxDialogBody textarea:focus {
+	border: 1px solid #2c86b2;
 	background-color: #ffffff;
-	color: #444;
+	color: #26394a;
+	box-shadow: 0 0 0 2px rgba(44, 134, 178, 0.14);
+}
+
+.nxDialogBody > p {
+	line-height: 1.38;
+	color: #26394a;
+}
+
+.nxDialogBody > p:only-child,
+.nxDialogBody > p:has(input),
+.nxDialogBody > p:has(textarea),
+.nxDialogBody > p:has(select),
+.nxDialogBody > p:has([id^="dialogField"]),
+.nxDialogBody > p:has(.jsDropListContainer) {
+	margin: 0;
+	padding: 12px 14px;
+	border: 1px solid #cbd9e6;
+	border-radius: 8px;
+	background: #f8fbfd;
+	color: #536579;
+	font-weight: 600;
+	text-align: left;
+}
+
+.nxDialogBody > p:has(input) + p,
+.nxDialogBody > p:has(textarea) + p,
+.nxDialogBody > p:has(select) + p,
+.nxDialogBody > p:has([id^="dialogField"]) + p,
+.nxDialogBody > p:has(.jsDropListContainer) + p {
+	margin-top: 8px;
+}
+
+.nxDialogBody > p:has(input) br,
+.nxDialogBody > p:has(textarea) br,
+.nxDialogBody > p:has(select) br,
+.nxDialogBody > p:has([id^="dialogField"]) br,
+.nxDialogBody > p:has(.jsDropListContainer) br {
+	display: none;
+}
+
+.nxDialogBody > p input[type=text],
+.nxDialogBody > p input[type=password],
+.nxDialogBody > p textarea,
+.nxDialogBody > input[type=text],
+.nxDialogBody > input[type=password],
+.nxDialogBody > textarea {
+	display: block;
+	width: 100% !important;
+	margin: 7px 0 0 !important;
+}
+
+.nxDialogBody > p .jsDropListContainer {
+	margin-top: 8px;
+	width: 100% !important;
+}
+
+.tmActionConfirm,
+.csvImportConfirm {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	padding: 12px 14px;
+	border: 1px solid #cbd9e6;
+	border-radius: 8px;
+	background: #f8fbfd;
+	text-align: left;
+}
+
+.tmActionConfirm strong,
+.csvImportConfirm strong {
+	color: #43586d;
+	font-size: 17px;
+	font-weight: 700;
+}
+
+.tmActionConfirm span,
+.csvImportConfirm span {
+	color: #536579;
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.tmActionConfirmMeta {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-top: 2px;
+	padding-top: 8px;
+	border-top: 1px solid #e2e9f1;
+}
+
+.tmActionConfirmMeta span {
+	color: #536579;
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+}
+
+.tmActionConfirmMeta strong {
+	color: #175978;
+	font-size: 14px;
+	text-align: right;
+}
+
+.tmDialogForm .tmActionConfirmMeta {
+	margin-top: 0;
+	padding-top: 0;
+	border-top: 0;
+}
+
+.tmActionConfirmNote {
+	margin: 2px 0 0;
+	padding: 8px 10px;
+	border: 1px solid #f1c27d;
+	border-radius: 6px;
+	background: #fff8e6;
+	color: #7a4d00;
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.tmDialogForm {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 12px 14px;
+	border: 1px solid #cbd9e6;
+	border-radius: 8px;
+	background: #f8fbfd;
+	text-align: left;
+}
+
+.tmDialogFormIntro {
+	margin: 0;
+	color: #536579;
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.tmDialogFormField {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+
+.tmDialogFormField label {
+	color: #43586d;
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.tmDialogFormField input[type="text"],
+.tmDialogFormField input[type="password"],
+.tmDialogFormField textarea {
+	box-sizing: border-box;
+	width: 100%;
+	height: 34px;
+	margin: 0 !important;
+	padding: 7px 9px;
+	border: 1px solid #b9cfdf;
+	border-radius: 6px;
+	background: #fff;
+	color: #43586d;
+	font-size: 14px;
+	font-weight: 700;
+	outline: none;
+}
+
+.tmDialogFormField input[type="text"]:focus,
+.tmDialogFormField input[type="password"]:focus,
+.tmDialogFormField textarea:focus {
+	border-color: #2583ad;
+	box-shadow: 0 0 0 2px rgba(37, 131, 173, 0.16);
+}
+
+.tmDialogForm .sublineDialog {
+	display: block;
+	margin-top: -2px;
+	color: #6b7e90;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.tmDialogSwitchRow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	min-height: 34px;
+	padding-top: 2px;
+}
+
+.tmDialogSwitchRow .jsInterfaceRow {
+	width: 100%;
+	margin: 0;
 }
 
 .nxDialogIconWrapper {
 	grid-area: 2 / 1 / 3 / 2;
-	margin-left: 10px;
+	margin-left: 18px;
+	align-self: start;
+	width: 54px;
+	height: 54px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: #eef4f8;
+	border: 1px solid #cbd9e6;
+	color: #175978;
+	font-weight: 700;
+	font-size: 28px;
 }
 
 .nxDialogIconWrapper:empty {
@@ -100,6 +319,74 @@
 
 .nxDialogIconWrapper:empty + .nxDialogBody {
 	grid-area: 2 / 1 / 3 / 3;
-	margin-left: 20px;
-	margin-right: 20px;
+	margin-left: 18px;
+	margin-right: 18px;
+}
+
+.nxDialogIcon {
+	max-width: 34px;
+	max-height: 34px;
+	object-fit: contain;
+}
+
+.nxDialog-error .nxDialogIcon,
+.nxDialog-warning .nxDialogIcon,
+.nxDialog-success .nxDialogIcon,
+.nxDialog-info .nxDialogIcon {
+	display: none;
+}
+
+.nxDialogSemanticIcon {
+	display: none;
+}
+
+.nxDialog-error .nxDialogIconWrapper,
+.nxDialog-warning .nxDialogIconWrapper,
+.nxDialog-success .nxDialogIconWrapper,
+.nxDialog-info .nxDialogIconWrapper {
+	box-sizing: border-box;
+}
+
+.nxDialog-error .nxDialogIconWrapper {
+	background: #fff1f1;
+	border-color: #f0b7b7;
+	color: #8a1f1f;
+}
+
+.nxDialog-warning .nxDialogIconWrapper {
+	background: #fff8e6;
+	border-color: #f1c27d;
+	color: #7a4d00;
+}
+
+.nxDialog-success .nxDialogIconWrapper {
+	background: #eef9f1;
+	border-color: #8ad0a7;
+	color: #156c2f;
+}
+
+.nxDialog-info .nxDialogIconWrapper {
+	background: #eaf4f9;
+	border-color: #b9d7e8;
+	color: #175978;
+}
+
+.nxDialog-error .nxDialogIconWrapper::before {
+	content: "!";
+}
+
+.nxDialog-warning .nxDialogIconWrapper::before {
+	content: "!";
+}
+
+.nxDialog-success .nxDialogIconWrapper::before {
+	content: "\2713";
+}
+
+.nxDialog-info .nxDialogIconWrapper::before {
+	content: "i";
+}
+
+.nxDialogBody strong:first-child {
+	color: #43586d;
 }

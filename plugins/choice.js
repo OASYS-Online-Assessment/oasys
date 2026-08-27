@@ -252,7 +252,7 @@
 			case 'dropdown':
 				const dlData = {
 					onChange: onChangeDD,
-					elements: deepCopy(items[state.questionLanguage]),
+					elements: deepCopy(items[language]),
 					initialValue: currentValue ?? defaultValue,
 					readOnly: options.readOnly,
 					dataId: options.id,

@@ -14,9 +14,9 @@ class Uniform extends Discrete
      * Distribution parameter bounds limits
      * a ∈ (-∞,∞)
      * b ∈ (-∞,∞)  b > a
-     * @var array
+     * @var array{"a": string, "b": string}
      */
-    const PARAMETER_LIMITS = [
+    public const PARAMETER_LIMITS = [
         'a' => '(-∞,∞)',
         'b' => '(-∞,∞)',
     ];
@@ -24,9 +24,9 @@ class Uniform extends Discrete
     /**
      * Distribution support bounds limits
      * k ∈ (-∞,∞)
-     * @var array
+     * @var array{"k": string}
      */
-    const SUPPORT_LIMITS = [
+    public const SUPPORT_LIMITS = [
         'k' => '(-∞,∞)',
     ];
 

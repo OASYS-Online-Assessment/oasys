@@ -160,28 +160,67 @@ function onReady() {
         actionButtonsSize: '30px',
         hideDeleteLinks: false
     };
-    gui.backupsView = new jsSortableTable('backupList', 'backupList_table', backupOptions);
+    gui.backupsView = new JsSortableTable('backupList', 'backupList_table', backupOptions);
 
     //populate view with active backup ZIPs
     fetchBackups();
-
 }
 
 function fetchBackups() {
-    startAjax('fetchBackups', {});
+    $(".bfm").remove();
+    startAjax('fetchBackups', {}).then((res) => {
+
+        if (res.bkprereqfail.length > 0) {
+
+            buttons.createBackup.disable();
+            
+            let bkpfailmsg = $('<div class="bfm">')
+                .html(`<div><p style='font-weight: bold; color: red;'>Backup functionality is not available due to the following:</p> ${res.bkprereqfail.map(reason => '• ' + reason).join('<br><br>')}</div>`)
+                .css({
+                    display: 'flex',
+                    'color': "#505050",
+                    'font-size': '15px',
+                    'justify-content': 'center',
+                    'align-items': 'center',
+                    'width': '700px',
+                    'border': '1px solid black',
+                    'margin-top': '90px',
+                    'margin-left': 'auto',
+                    'margin-right': 'auto',
+                    'padding-top': '20px',
+                    'padding-left': "20px",
+                    'padding-right': "20px",
+                    'padding-bottom': '30px',
+                    'background-color': '#edededff'
+                });
+
+            $('#sortableTable_backupList_table').after(bkpfailmsg);
+        }
+    });
 }
 
 function createBackup(task, button) {
 
     if (!button) {
         let message = ( /* html */ `
-        <h4>Which type of backup would you like to create?</h4><p>
-        
-        <strong>Snapshot:</strong><br>
-        This will backup the <em>database</em> which contains all of your data at this point in time, and all uploaded <em>media</em>.<br><br>
-        
-        <strong>Full Backup:</strong>
-        <br>This creates a full backup of your OASYS data and file system. System logs and extraneous operational directories are excluded.</p>`);
+        <div class="backupTypeDialog">
+            <h4>Which type of backup would you like to create?</h4>
+            <div class="backupTypeOptions">
+                <section class="backupTypeCard">
+                    <div class="backupTypeCardHeader">
+                        <strong>Snapshot</strong>
+                        <span>Recommended for routine saves</span>
+                    </div>
+                    <p>Backs up the <em>database</em>, all current OASYS data, and uploaded <em>media</em> at this point in time.</p>
+                </section>
+                <section class="backupTypeCard">
+                    <div class="backupTypeCardHeader">
+                        <strong>Full Backup</strong>
+                        <span>Complete archive</span>
+                    <p>Creates a full backup of your OASYS data and file system. System logs and extraneous operational directories are excluded.</p>
+                </section>
+            </div>
+        </div>`);
         new nxDialog('backupDialog', {
             buttons: [{
                 label: 'Create Snapshot',
@@ -234,7 +273,7 @@ function actUsrCheck(dataParam, action) {
                 content += `<span style="text-decoration: underline; font-weight: bold;">Active Backend Logins</span><br>`;
 
                 ca_res.beusers.forEach(e => {
-                    content += e + "<br>";
+                    content += escapeHtml(e) + "<br>";
                 })
             }
 
@@ -269,7 +308,7 @@ function deleteZip(delId, a, b, c, d, e, button) {
 
     if (delId) {
         if (!button) {
-            let message = '<p>Are you sure you want to remove this backup file:<strong> ' + idFilenameLink[delId] + '</strong></p>';
+            let message = '<div class="deleteConfirm"><div class="deleteConfirmText"><p>Are you sure you want to remove this backup file:</p></div><ul class="deleteList"><li class="typefile">' + escapeHtml(idFilenameLink[delId]) + '</li></ul></div>';
             new nxDialog('deleteDialog', {
                 buttons: [{
                     label: 'Cancel',
@@ -326,7 +365,7 @@ function snRestore(hId, fileDbVer, button) {
             let message = "<p><h2><strong style='color: red;'>WARNING!!!</strong></h2></p>\
             <p>Restoring this snapshot will <u>permanently</u> revert your database state, and all current settings and items will be lost!</p>\
             \
-            <p>Only continue if you are 100% sure you want to restore your database from<strong>  " + idFilenameLink[hId] + ".</strong></p>";
+            <p>Only continue if you are 100% sure you want to restore your database from<strong>  " + escapeHtml(idFilenameLink[hId]) + ".</strong></p>";
 
             new nxDialog('deleteDialog', {
                 buttons: [{
@@ -377,6 +416,15 @@ function dlZip(hId) {
 
 /* server communication */
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 async function startAjax(action, data) {
     waitDialog.show();
     let params = {
@@ -397,7 +445,7 @@ function ajaxError(jqXHR, textStatus, errorThrown) {
             cancel: true,
             value: 'ok'
         }],
-        contents: jqXHR.responseJSON.fatalError,
+        contents: escapeHtml(jqXHR.responseJSON?.fatalError || textStatus || 'Request failed.'),
         title: 'Error: ' + errorThrown,
         width: 500
     });
@@ -435,7 +483,7 @@ function ajaxSuccess(res) {
                 cancel: true,
                 value: 'ok'
             }],
-            contents: '<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br>' + res.fatalError,
+            contents: formatActionErrorMessage('<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br>' + escapeHtml(res.fatalError)),
             title: UILANG.m("Error"),
             icon: "../images/error.png",
             iconWidth: 50,
@@ -456,7 +504,7 @@ function ajaxSuccess(res) {
                 cancel: true,
                 value: 'ok'
             }],
-            contents: '<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br>' + res.error,
+            contents: formatActionErrorMessage('<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br>' + escapeHtml(res.error)),
             title: UILANG.m("Error"),
             icon: "../images/error.png",
             iconWidth: 50,
@@ -470,16 +518,16 @@ function ajaxSuccess(res) {
     switch (res.action) {
 
         case 'restoreSnapshot':
-            new nxDialog('error', {
+            new nxDialog('success', {
                 buttons: [{
                     label: 'OK',
                     'default': true,
                     cancel: false,
                     value: 'ok'
                 }],
-                contents: `<p>Contents of snapshot file <strong>${res.restoreResult}</strong> sucessfully RESTORED!</p>`,
+                contents: `<p>Contents of snapshot file <strong>${escapeHtml(res.restoreResult)}</strong> successfully RESTORED!</p>`,
                 // contents: 'Archive <strong>' + res.deleteResult + '</strong> successfully DELETED!<br>',
-                title: "Delete Success",
+                title: "Restore Success",
                 icon: "../images/ok.png",
                 iconWidth: 50,
                 width: 500,
@@ -498,6 +546,11 @@ function ajaxSuccess(res) {
 
 
             $.each(res['data'], function(key, value) {
+				const rawFilename = value.filename;
+				value.filename = escapeHtml(value.filename);
+				value.comment = escapeHtml(value.comment ?? '');
+				value.version = escapeHtml(value.version ?? '');
+				value.db_ver = escapeHtml(value.db_ver ?? '');
 
                 // selectively remove restore buttons if not type snapshot
                 if (value.actionButtons[1]['hiddenData'] === false) {
@@ -509,7 +562,7 @@ function ajaxSuccess(res) {
                 gui.backupsView.addElement(value, true);
 
                 /* work around for missing hiddenID -> fileName link with this global object which holds the keyval for deleteBackup action use. */
-                idFilenameLink[value.hiddenID] = value.filename;
+                idFilenameLink[value.hiddenID] = rawFilename;
             });
 
             // hide various elements from non-elevated adm or superadm
@@ -548,14 +601,14 @@ function ajaxSuccess(res) {
             if (res.fileErrList.length > 0) {
                 let errFileAdd = "<p>The following files could not be added to the archive: <br><br>";
                 res.fileErrList.forEach(efName => {
-                    errFileAdd += "<code>" + efName + "</code><br>";
+                    errFileAdd += "<code>" + escapeHtml(efName) + "</code><br>";
                 });
                 errFileAdd += "</p>"
             }
 
-            const ctPrefix = '<p>Archive <code style="font-weight: bold;">' + res.createResult + '</code> successfully CREATED!</p>';
+            const ctPrefix = '<p>Archive <code style="font-weight: bold;">' + escapeHtml(res.createResult) + '</code> successfully CREATED!</p>';
 
-            new nxDialog('error', {
+            new nxDialog('success', {
                 buttons: [{
                     label: 'OK',
                     'default': true,
@@ -564,7 +617,6 @@ function ajaxSuccess(res) {
                 }],
                 contents: ctPrefix + (typeof errFileAdd !== 'undefined' ? errFileAdd : ''), // conditional to show if any files could not be added to ZIP
                 title: "Backup Success",
-                icon: "../images/ok.png",
                 iconWidth: 50,
                 width: 500,
                 callback: function() { startAjax('fetchBackups', {}) }
@@ -572,16 +624,15 @@ function ajaxSuccess(res) {
             break;
 
         case 'deleteBackup':
-            new nxDialog('error', {
+            new nxDialog('success', {
                 buttons: [{
                     label: 'OK',
                     'default': true,
                     cancel: false,
                     value: 'ok'
                 }],
-                contents: 'Archive <strong>' + res.deleteResult + '</strong> successfully DELETED!<br>',
+                contents: 'Archive <strong>' + escapeHtml(res.deleteResult) + '</strong> successfully DELETED!<br>',
                 title: "Delete Success",
-                icon: "../images/ok.png",
                 iconWidth: 50,
                 width: 500,
                 callback: function() { startAjax('fetchBackups', {}) }

@@ -3,7 +3,12 @@
 namespace MathPHP\LinearAlgebra\Decomposition;
 
 use MathPHP\Exception;
-use MathPHP\LinearAlgebra\Matrix;
+use MathPHP\Exception\BadDataException;
+use MathPHP\Exception\DivisionByZeroException;
+use MathPHP\Exception\IncorrectTypeException;
+use MathPHP\Exception\MathException;
+use MathPHP\Exception\MatrixException;
+use MathPHP\LinearAlgebra\NumericMatrix;
 use MathPHP\LinearAlgebra\MatrixFactory;
 use MathPHP\LinearAlgebra\Vector;
 
@@ -44,29 +49,29 @@ use MathPHP\LinearAlgebra\Vector;
  * L = [0.5  1 0]  U = [0 1 1.5]
  *     [0.5 -1 1]      [0 0  -2]
  *
- * @property-read Matrix $L Lower triangular matrix in LUP decomposition
- * @property-read Matrix $U Upper triangular matrix in LUP decomposition
- * @property-read Matrix $P Permutation matrix in LUP decomposition
+ * @property-read NumericMatrix $L Lower triangular matrix in LUP decomposition
+ * @property-read NumericMatrix $U Upper triangular matrix in LUP decomposition
+ * @property-read NumericMatrix $P Permutation matrix in LUP decomposition
  */
 class LU extends Decomposition
 {
-    /** @var Matrix Lower triangular matrix in LUP decomposition */
+    /** @var NumericMatrix Lower triangular matrix in LUP decomposition */
     private $L;
 
-    /** @var Matrix Upper triangular matrix in LUP decomposition */
+    /** @var NumericMatrix Upper triangular matrix in LUP decomposition */
     private $U;
 
-    /** @var Matrix Permutation matrix in LUP decomposition */
+    /** @var NumericMatrix Permutation matrix in LUP decomposition */
     private $P;
 
     /**
      * LU constructor
      *
-     * @param Matrix $L Lower triangular matrix
-     * @param Matrix $U Upper triangular matrix
-     * @param Matrix $P Permutation matrix
+     * @param NumericMatrix $L Lower triangular matrix
+     * @param NumericMatrix $U Upper triangular matrix
+     * @param NumericMatrix $P Permutation matrix
      */
-    private function __construct(Matrix $L, Matrix $U, Matrix $P)
+    private function __construct(NumericMatrix $L, NumericMatrix $U, NumericMatrix $P)
     {
         $this->L = $L;
         $this->U = $U;
@@ -77,7 +82,7 @@ class LU extends Decomposition
      * Decompose a matrix into an LU Decomposition (using Doolittle decomposition) with pivoting via permutation matrix
      * Factory method to create LU objects.
      *
-     * @param Matrix $A
+     * @param NumericMatrix $A
      *
      * @return LU
      *
@@ -88,7 +93,7 @@ class LU extends Decomposition
      * @throws Exception\OutOfBoundsException
      * @throws Exception\VectorException
      */
-    public static function decompose(Matrix $A): LU
+    public static function decompose(NumericMatrix $A): LU
     {
         if (!$A->isSquare()) {
             throw new Exception\MatrixException('LU decomposition only works on square matrices');
@@ -97,7 +102,9 @@ class LU extends Decomposition
         $n = $A->getN();
 
         // Initialize L as diagonal ones matrix, and U as zero matrix
-        $L = MatrixFactory::diagonal(array_fill(0, $n, 1))->getMatrix();
+        /** @var array<int> $fill */
+        $fill = \array_fill(0, $n, 1);
+        $L = MatrixFactory::diagonal($fill)->getMatrix();
         $U = MatrixFactory::zero($n, $n)->getMatrix();
 
         // Create permutation matrix P and pivoted PA
@@ -125,7 +132,7 @@ class LU extends Decomposition
             }
         }
 
-        // Create LU decomposition
+        // Create LU decomposition @phpstan-ignore-next-line
         return new LU(MatrixFactory::create($L), MatrixFactory::create($U), $P);
     }
 
@@ -150,7 +157,7 @@ class LU extends Decomposition
      * PA = [α₁₁ α₁₂ α₁₃] / interchanged
      *      [α₃₁ α₃₂ α₃₃]
      *
-     * @return Matrix
+     * @return NumericMatrix
      *
      * @throws Exception\BadDataException
      * @throws Exception\IncorrectTypeException
@@ -158,7 +165,7 @@ class LU extends Decomposition
      * @throws Exception\MatrixException
      * @throws Exception\OutOfBoundsException
      */
-    protected static function pivotize(Matrix $A): Matrix
+    protected static function pivotize(NumericMatrix $A): NumericMatrix
     {
         $n = $A->getN();
         $P = MatrixFactory::identity($n);
@@ -217,23 +224,23 @@ class LU extends Decomposition
      *   xᵢ = --- | yᵢ - ∑ Uᵢⱼxⱼ |
      *        Uᵢᵢ  \   ʲ⁼ⁱ⁺¹     /
      *
-     * @param Vector|array $b solution to Ax = b
+     * @param Vector|array<int|float> $b solution to Ax = b
      *
      * @return Vector x
      *
-     * @throws Exception\IncorrectTypeException if b is not a Vector or array
-     * @throws Exception\MatrixException
-     * @throws Exception\VectorException
-     * @throws Exception\OutOfBoundsException
-     * @throws Exception\BadParameterException
+     * @throws BadDataException
+     * @throws DivisionByZeroException
+     * @throws IncorrectTypeException if b is not a Vector or array
+     * @throws MathException
+     * @throws MatrixException
      */
     public function solve($b): Vector
     {
         // Input must be a Vector or array.
-        if (!($b instanceof Vector || is_array($b))) {
+        if (!($b instanceof Vector || \is_array($b))) {
             throw new Exception\IncorrectTypeException('b in Ax = b must be a Vector or array');
         }
-        if (is_array($b)) {
+        if (\is_array($b)) {
             $b = new Vector($b);
         }
 
@@ -279,7 +286,7 @@ class LU extends Decomposition
         }
 
         // Return unknown xs as Vector
-        return new Vector(array_reverse($x));
+        return new Vector(\array_reverse($x));
     }
 
     /**
@@ -287,11 +294,11 @@ class LU extends Decomposition
      *
      * @param string $name
      *
-     * @return Matrix
+     * @return NumericMatrix
      *
      * @throws Exception\MatrixException
      */
-    public function __get(string $name): Matrix
+    public function __get(string $name): NumericMatrix
     {
         switch ($name) {
             case 'L':
@@ -301,27 +308,6 @@ class LU extends Decomposition
 
             default:
                 throw new Exception\MatrixException("LU class does not have a gettable property: $name");
-        }
-    }
-
-    /**************************************************************************
-     * ArrayAccess INTERFACE
-     **************************************************************************/
-
-    /**
-     * @param mixed $i
-     * @return bool
-     */
-    public function offsetExists($i): bool
-    {
-        switch ($i) {
-            case 'L':
-            case 'U':
-            case 'P':
-                return true;
-
-            default:
-                return false;
         }
     }
 }

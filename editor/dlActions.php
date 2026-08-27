@@ -36,9 +36,10 @@ if ($loginAuth !== true) {
 # Validate inputted filename and type meets expected pattern #
 # ---------------------------------------------------------- #
 
-$fCheckRE = preg_match('/^oasys.*\.zip$/', $file2get);
+$fCheckRE = is_string($file2get) && basename($file2get) === $file2get
+    && preg_match('/^oasys_(snapshot|fullBackup|installer)_[A-Za-z0-9_.-]+\.zip$/', $file2get) === 1;
 
-if ($fCheckRE !== 1) {
+if ($fCheckRE !== true) {
     echo "Bad filename requested. Please contact the System Administrator.";
     $myAuth->writeLogEntry("BAD INPUT: Attempted invalid file download request with name: [$file2get] and result: [$fCheckRE]");
     exit;
@@ -73,6 +74,15 @@ ini_set('memory_limit', '-1');
 # Send the file via headers #
 # ------------------------- #
 $file2get = $pathStub . $file2get;
+
+$allowedRoot = realpath($pathStub);
+$resolvedFile = realpath($file2get);
+if ($allowedRoot === false || $resolvedFile === false || !is_file($resolvedFile) || !str_starts_with($resolvedFile, rtrim($allowedRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)) {
+    http_response_code(404);
+    echo "Archive file not found.";
+    exit;
+}
+$file2get = $resolvedFile;
 
 header('Content-Description: File Transfer');
 header('Content-Type: application/zip');

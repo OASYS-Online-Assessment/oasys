@@ -33,9 +33,6 @@ const sections = {
 	icons: false
 };
 
-let params;
-let documentName = '';
-let overwrite = 0;
 let touchDevice = false;
 
 //let pointerHandler; // UG todo: remove touchDevice and all related stuff

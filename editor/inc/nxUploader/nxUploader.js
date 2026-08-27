@@ -4,7 +4,7 @@
 
 	/*
 
-	 nxUploader v2.08
+	 nxUploader v2.09
 	 copyright 2016-2025 by Eric J. FRANCOIS
 	 -------------------------------------------------------------------------------------------------------------------
 	 VERSIONS:
@@ -14,6 +14,7 @@
 	 v2.06					method "destroy" added
 	 v2.07					removed binaryString readType as it is deprecated
 	 v2.08					blocking uploads where filename contains <...> segments
+	 v2.09					abort whole batch if files are offending
 	 -------------------------------------------------------------------------------------------------------------------
 
 	 Usage:
@@ -74,7 +75,7 @@
 		nxuSettings.dropMessage = UILANG.m('Please drop file here!');
 		nxuSettings.showFolderDropMessage = false;
 		nxuSettings.singleUploadMsg = UILANG.m('Only one file can be uploaded at a time. Please try again.');
-
+		nxuSettings.abortOnInvalidFiletype = false;
 
 		if (params)    nxuSettings = $.extend(true, nxuSettings, params);
 
@@ -234,6 +235,19 @@
 					s,
 					humanReadableSize(nxuSettings.maxSize)
 				));
+			}
+
+			if (nxuSettings.abortOnInvalidFiletype && (invalidFiles.length > 0 || oversizedFiles.length > 0)) {
+				// Clear any queued uploads (we might have already enqueued some valid files)
+				uploadQueue = [];
+				fileList = [];
+
+				// Remove progress rows, hide UI
+				uploadTable.find('tr').remove();
+				dialog.hide();
+				uploadVeil.hide();
+
+				return;
 			}
 
 			if (uploadQueue.length > 0) {

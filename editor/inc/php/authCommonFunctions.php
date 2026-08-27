@@ -12,8 +12,8 @@
 # Preload authentication check #
 # ---------------------------- #
 
-require_once __DIR__."/../../userMgmtActions.php";
-require_once __DIR__.'/../../inc/php/uiLang.php'; // required for translation inclusion
+require_once __DIR__ . "/../../userMgmtActions.php";
+require_once __DIR__ . '/../../inc/php/uiLang.php'; // required for translation inclusion
 
 $myAuth = new userAuth();
 
@@ -21,6 +21,17 @@ $myAuth = new userAuth();
 if (in_array("systemsettings", $settings['editorButtons']) === true && $myAuth->checkElevatedAdmin() === false && $myAuth->checkAdmin() === true) {
     unset($settings['editorButtons'][array_search("systemsettings", $settings['editorButtons'])]);
     $settings['editorButtons'] = array_values($settings['editorButtons']);
+}
+
+/* special upgrader menu item removal for containerized environments */
+if (isset($_SERVER["OASYS_APP_RUNMODE"]) && $_SERVER["OASYS_APP_RUNMODE"] === "containerized") {
+    unset($settings['editorButtons'][array_search("upgrader", $settings['editorButtons'])]);
+    $settings['editorButtons'] = array_values($settings['editorButtons']);
+}
+
+if ((isset($pageName) && $pageName === "upgrader") && (isset($_SERVER["OASYS_APP_RUNMODE"]) && $_SERVER["OASYS_APP_RUNMODE"] === "containerized")) {
+    echo "Upgrader access is disabled for containerized instances. <a href='dashboard.php'>Click here to return to the editor</a>.";
+    exit;
 }
 
 /* return admin level(s) (if any) */
@@ -35,7 +46,7 @@ $uiLang = new uiLang($settings['interfaceLanguage']);
 // if the auth constructor results in an error, we want to immediately exit and report said error
 if ($myAuth->returnData['error'] !== false) {
     $myAuth->writeLogEntry("SYSTEM ERROR: " . $myAuth->returnData['error'] . " [" . basename(__FILE__) . "]");
-    $myAuth->killSession("Unknown system error.", true);
+    $myAuth->killBackendState("Unknown system error.", true);
     exit;
 }
 
@@ -46,15 +57,15 @@ $auth = $myAuth->getAuthResult(true);
 
 if ($auth !== true) {
     $myAuth->writeLogEntry("ACCOUNT RESTRICTION: Attempted page load : [\"$pageName.php\"] failed with reason: " . ($auth !== true ? $auth : $auth));
-    $myAuth->killSession($auth, true); //@phan-suppress-current-line PhanTypeMismatchArgument
+    $myAuth->killBackendState($auth, true); //@phan-suppress-current-line PhanTypeMismatchArgument
 
     if ($isActionFile) {
         $returnData['error'] = $auth;
         $returnData['forceLoginRedirect'] = true;
     } elseif ($pageName === 'login') {
-		$returnData['error'] = "previewAccessDenied";
-		die();
-	} else {
+        $returnData['error'] = "previewAccessDenied";
+        die();
+    } else {
         echo "<script>alert(\"" . $uiLang->translate($auth) . "\"); window.location.replace('" . $settings['JSrootURL'] . "editor/index.php');</script>";
     }
     exit;
@@ -80,8 +91,8 @@ if ($edtRes !== true) {
         $returnData['error'] = "<br>Editor access not allowed.";
         $returnData['forceLoginRedirect'] = true;
     } elseif ($pageName === 'login') {
-		$returnData['error'] = "previewAccessDenied";
-	} else {
+        $returnData['error'] = "previewAccessDenied";
+    } else {
         header("Location: {$settings['JSrootURL']}editor/index.php");
     }
     exit;
@@ -94,11 +105,21 @@ switch ($pageName) {
     case 'users':
     case 'l10n':
     case 'backup':
-    case 'upgrader':
         if (!$myAuth->checkAdmin()) {
             $returnData['error'] = "<br>You do not have sufficient privileges to access this area.";
             $returnData['forceLoginRedirect'] = true;
             $myAuth->writeLogEntry("ACCOUNT RESTRICTION: Attempted page load : [" . basename(__FILE__) . "] failed with reason: User not in 'superadmin' nor 'admin' group.");
+            header('Location: index.php');
+            exit;
+        }
+
+        break;
+
+    case 'upgrader':
+        if (!$myAuth->checkSA()) {
+            $returnData['error'] = "<br>You do not have sufficient privileges to access this area.";
+            $returnData['forceLoginRedirect'] = true;
+            $myAuth->writeLogEntry("ACCOUNT RESTRICTION: Attempted upgrader access failed because the user is not a superadmin.");
             header('Location: index.php');
             exit;
         }

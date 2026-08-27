@@ -34,12 +34,12 @@ use MathPHP\Exception;
  */
 class RandomVariable
 {
-    const SAMPLE_SKEWNESS      = 'sample';
-    const POPULATION_SKEWNESS  = 'population';
-    const ALTERNATIVE_SKEWNESS = 'alternative';
+    public const SAMPLE_SKEWNESS      = 'sample';
+    public const POPULATION_SKEWNESS  = 'population';
+    public const ALTERNATIVE_SKEWNESS = 'alternative';
 
-    const SAMPLE_KURTOSIS     = 'sample';
-    const POPULATION_KURTOSIS = 'population';
+    public const SAMPLE_KURTOSIS     = 'sample';
+    public const POPULATION_KURTOSIS = 'population';
 
     /**
      * n-th Central moment
@@ -64,16 +64,16 @@ class RandomVariable
             throw new Exception\BadDataException('Cannot find the central moment of an empty list of numbers');
         }
 
-        $μ         = Average::mean($X);
-        $∑⟮xᵢ − μ⟯ⁿ = array_sum(array_map(
+        $μ       = Average::mean($X);
+        $∑⟮xᵢ−μ⟯ⁿ = \array_sum(\array_map(
             function ($xᵢ) use ($μ, $n) {
-                return pow(($xᵢ - $μ), $n);
+                return \pow(($xᵢ - $μ), $n);
             },
             $X
         ));
-        $N = count($X);
+        $N = \count($X);
 
-        return $∑⟮xᵢ − μ⟯ⁿ / $N;
+        return $∑⟮xᵢ−μ⟯ⁿ / $N;
     }
 
     /**
@@ -106,8 +106,8 @@ class RandomVariable
 
         $μ₃ = self::centralMoment($X, 3);
         $μ₂ = self::centralMoment($X, 2);
-    
-        $μ₂³′² = pow($μ₂, 3 / 2);
+
+        $μ₂³′² = \pow($μ₂, 3 / 2);
         if ($μ₂³′² == 0) {
             return \NAN;  // Prevents division by zero in μ₃ / μ₂³′² equation
         }
@@ -140,22 +140,22 @@ class RandomVariable
      */
     public static function sampleSkewness(array $X): float
     {
-        $n = count($X);
+        $n = \count($X);
         if ($n < 3) {
             throw new Exception\BadDataException('Cannot find the sample skewness of less than three numbers');
         }
 
-        $μ₃    = self::centralMoment($X, 3);
-        $μ₂    = self::centralMoment($X, 2);
+        $μ₃ = self::centralMoment($X, 3);
+        $μ₂ = self::centralMoment($X, 2);
 
-        $μ₂³′² = pow($μ₂, 3 / 2);
+        $μ₂³′² = \pow($μ₂, 3 / 2);
         if ($μ₂³′² == 0) {
             return \NAN;  // Prevents division by zero in μ₃ / μ₂³′² equation
         }
 
-        $√⟮n⟮n − 1⟯⟯ = sqrt($n * ($n - 1));
+        $√⟮n⟮n−1⟯⟯ = \sqrt($n * ($n - 1));
 
-        return ($μ₃ / $μ₂³′²) * ( $√⟮n⟮n − 1⟯⟯ / ($n - 2) );
+        return ($μ₃ / $μ₂³′²) * ( $√⟮n⟮n−1⟯⟯ / ($n - 2) );
     }
 
     /**
@@ -181,26 +181,26 @@ class RandomVariable
      */
     public static function alternativeSkewness(array $X): float
     {
-        $N  = count($X);
+        $N  = \count($X);
         if ($N < 2) {
             throw new Exception\BadDataException('Cannot find the skewness of less than two numbers');
         }
 
         $μ         = Average::mean($X);
-        $∑⟮xᵢ − μ⟯³ = array_sum(array_map(
+        $∑⟮xᵢ−μ⟯³ = \array_sum(\array_map(
             function ($xᵢ) use ($μ) {
-                return pow(($xᵢ - $μ), 3);
+                return \pow(($xᵢ - $μ), 3);
             },
             $X
         ));
-        $σ³ = pow(Descriptive::standardDeviation($X, Descriptive::SAMPLE), 3);
+        $σ³ = \pow(Descriptive::standardDeviation($X, Descriptive::SAMPLE), 3);
 
-        $⟮σ³ × ⟮N − 1⟯⟯ = ($σ³ * ($N - 1));
-        if ($⟮σ³ × ⟮N − 1⟯⟯ == 0) {
+        $⟮σ³×⟮N−1⟯⟯ = ($σ³ * ($N - 1));
+        if ($⟮σ³×⟮N−1⟯⟯ == 0) {
             return \NAN;
         }
 
-        return $∑⟮xᵢ − μ⟯³ / $⟮σ³ × ⟮N − 1⟯⟯;
+        return $∑⟮xᵢ−μ⟯³ / $⟮σ³×⟮N−1⟯⟯;
     }
 
     /**
@@ -260,10 +260,10 @@ class RandomVariable
             throw new Exception\BadDataException("SES requires a dataset of n > 2. N of $n given.");
         }
 
-        $６n⟮n − 1⟯           = 6 * $n * ($n - 1);
-        $⟮n − 2⟯⟮n ＋ 1⟯⟮n ＋ 2⟯ = ($n - 2) * ($n + 1) * ($n + 3);
+        $６n⟮n−1⟯       = 6 * $n * ($n - 1);
+        $⟮n−2⟯⟮n＋1⟯⟮n＋3⟯ = ($n - 2) * ($n + 1) * ($n + 3);
 
-        return sqrt($６n⟮n − 1⟯ / $⟮n − 2⟯⟮n ＋ 1⟯⟮n ＋ 2⟯);
+        return \sqrt($６n⟮n−1⟯ / $⟮n−2⟯⟮n＋1⟯⟮n＋3⟯);
     }
 
     /**
@@ -293,7 +293,7 @@ class RandomVariable
         }
 
         $μ₄  = self::centralMoment($X, 4);
-        $μ₂² = pow(self::centralMoment($X, 2), 2);
+        $μ₂² = \pow(self::centralMoment($X, 2), 2);
 
         if ($μ₂² == 0) {
             return \NAN;
@@ -327,16 +327,16 @@ class RandomVariable
      */
     public static function populationKurtosis(array $X): float
     {
-        if (count($X) < 4) {
-            throw new Exception\BadDataException('Cannot find the kurtosis of an empty list of numbers');
+        if (\count($X) < 4) {
+            throw new Exception\BadDataException('Cannot find the kurtosis of fewer than 4 numbers');
         }
 
         $g₂ = self::sampleKurtosis($X);
 
-        $n = count($X);
-        $⟮n ＋ 1⟯g₂ ＋ 6 = ($n + 1) * $g₂ + 6;
+        $n = \count($X);
+        $⟮n＋1⟯g₂＋6 = ($n + 1) * $g₂ + 6;
 
-        return ($⟮n ＋ 1⟯g₂ ＋ 6 * ($n - 1)) / (($n - 2) * ($n - 3));
+        return ($⟮n＋1⟯g₂＋6 * ($n - 1)) / (($n - 2) * ($n - 3));
     }
 
     /**
@@ -379,7 +379,7 @@ class RandomVariable
      * Is the kurtosis negative? (Platykurtic)
      * Indicates a flat distribution.
      *
-     * @param array $X list of numbers (random variable X)
+     * @param array<float> $X list of numbers (random variable X)
      * @param string $type (optional) determines the kurtsosis algorithm used (POPULATION_KURTOSIS (default), SAMPLE_KURTOSIS)
      *
      * @return bool true if platykurtic
@@ -395,7 +395,7 @@ class RandomVariable
      * Is the kurtosis postive? (Leptokurtic)
      * Indicates a peaked distribution.
      *
-     * @param array $X list of numbers (random variable X)
+     * @param array<float> $X list of numbers (random variable X)
      * @param string $type (optional) determines the kurtsosis algorithm used (POPULATION_KURTOSIS (default), SAMPLE_KURTOSIS)
      *
      * @return bool true if leptokurtic
@@ -411,7 +411,7 @@ class RandomVariable
      * Is the kurtosis zero? (Mesokurtic)
      * Indicates a normal distribution.
      *
-     * @param array $X list of numbers (random variable X)
+     * @param array<float> $X list of numbers (random variable X)
      * @param string $type (optional) determines the kurtsosis algorithm used (POPULATION_KURTOSIS (default), SAMPLE_KURTOSIS)
      *
      * @return bool true if mesokurtic
@@ -443,11 +443,11 @@ class RandomVariable
             throw new Exception\BadDataException("SEK requires a dataset of n > 3. N of $n given.");
         }
 
-        $２⟮SES⟯        = 2 * self::ses($n);
-        $⟮n² − 1⟯       = $n ** 2 - 1;
-        $⟮n − 3⟯⟮n ＋ 5⟯ = ($n - 3) * ($n + 5);
+        $２⟮SES⟯    = 2 * self::ses($n);
+        $⟮n²−1⟯     = $n ** 2 - 1;
+        $⟮n−3⟯⟮n＋5⟯ = ($n - 3) * ($n + 5);
 
-        return $２⟮SES⟯ * sqrt($⟮n² − 1⟯ / $⟮n − 3⟯⟮n ＋ 5⟯);
+        return $２⟮SES⟯ * \sqrt($⟮n²−1⟯ / $⟮n−3⟯⟮n＋5⟯);
     }
 
     /**
@@ -476,14 +476,14 @@ class RandomVariable
         }
 
         $s  = Descriptive::standardDeviation($X, Descriptive::SAMPLE);
-        $√n = sqrt(count($X));
+        $√n = \sqrt(\count($X));
         return $s / $√n;
     }
 
     /**
      * SEM - Convenience method for standard error of the mean
      *
-     * @param array $X list of numbers (random variable X)
+     * @param array<float> $X list of numbers (random variable X)
      *
      * @return float
      *
@@ -513,7 +513,11 @@ class RandomVariable
      * @param float  $σ standard deviation
      * @param string $cl confidence level (Ex: 95, 99, 99.5, 99.9, etc.)
      *
-     * @return array [ ci, lower_bound, upper_bound ]
+     * @return array{
+     *     ci: float|null,
+     *     lower_bound: float|null,
+     *     upper_bound: float|null,
+     * }
      *
      * @throws Exception\BadDataException
      */
@@ -525,7 +529,7 @@ class RandomVariable
 
         $z = Table\StandardNormal::getZScoreForConfidenceInterval($cl);
 
-        $ci = $z * ($σ / sqrt($n));
+        $ci = $z * ($σ / \sqrt($n));
 
         $lower_bound = $μ - $ci;
         $upper_bound = $μ + $ci;
@@ -554,7 +558,7 @@ class RandomVariable
             throw new Exception\BadDataException('Cannot find the sum of squares of an empty list of numbers');
         }
 
-         $∑⟮xᵢ⟯² = array_sum(Map\Single::square($numbers));
+         $∑⟮xᵢ⟯² = \array_sum(Map\Single::square($numbers));
 
          return $∑⟮xᵢ⟯²;
     }
@@ -576,14 +580,14 @@ class RandomVariable
             throw new Exception\BadDataException('Cannot find the sum of squares deviations of an empty list of numbers');
         }
 
-        $μ         = Average::mean($numbers);
-        $∑⟮xᵢ − μ⟯² = array_sum(array_map(
+        $μ       = Average::mean($numbers);
+        $∑⟮xᵢ−μ⟯² = \array_sum(\array_map(
             function ($xᵢ) use ($μ) {
-                return pow(($xᵢ - $μ), 2);
+                return \pow(($xᵢ - $μ), 2);
             },
             $numbers
         ));
 
-        return $∑⟮xᵢ − μ⟯²;
+        return $∑⟮xᵢ−μ⟯²;
     }
 }

@@ -1,2 +1,2 @@
 <?php
-	include "../fetchMediaFile.php";
+	include __DIR__ . "/../fetchMediaFile.php";

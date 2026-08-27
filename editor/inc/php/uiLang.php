@@ -39,7 +39,9 @@ class uiLang
 
 		// define DOCROOT constant
 		global $settings;
-		if (!defined("DOCROOT")) define("DOCROOT", str_replace("//", "/", ($_SERVER['CONTEXT_DOCUMENT_ROOT'] ?? $_SERVER['DOCUMENT_ROOT']) . $settings['rootURL']));
+		if (!defined("DOCROOT")) {
+			define("DOCROOT", realpath(__DIR__ . '/../../../') . '/');
+		}
 
 		# --------------------------------- #
 		# Load JSON language files #
@@ -96,13 +98,15 @@ class uiLang
 		# replace placeholders
 		# ----------------------------------------- #
 		if(isset($replaceList)) {
-			$parts = explode('%@',$translation);
-			$translation = '';
-			while ($tmp = array_shift($replaceList)) {
-				$translation .= array_shift($parts).$tmp;
+			//replace occurrences of %@ by elements of $replaceList in order from first to last
+			foreach ($replaceList as $replacement) {
+				$pos = strpos($translation, '%@');
+				if ($pos === false) {
+					break; // no more placeholders
+				}
+				$translation = substr_replace($translation, $replacement, $pos, 2);
 			}
 		}
-
 
 		// RETURN TRANSLATION OR KEY IF NO TRANSLATION EXISTS
 		return $translation;

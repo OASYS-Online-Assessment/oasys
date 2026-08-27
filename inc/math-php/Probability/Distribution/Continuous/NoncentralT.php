@@ -5,6 +5,7 @@ namespace MathPHP\Probability\Distribution\Continuous;
 use MathPHP\Functions\Special;
 use MathPHP\Functions\Support;
 use MathPHP\Probability\Combinatorics;
+use MathPHP\NumericalAnalysis\RootFinding\SecantMethod;
 
 /**
  * Noncentral t-distribution
@@ -16,9 +17,9 @@ class NoncentralT extends Continuous
      * Distribution parameter bounds limits
      * ν ∈ (0,∞)
      * μ ∈ (-∞,∞)
-     * @var array
+     * @var array{"ν": string, "μ": string}
      */
-    const PARAMETER_LIMITS = [
+    public const PARAMETER_LIMITS = [
         'ν' => '(0,∞)',
         'μ' => '(-∞,∞)',
     ];
@@ -26,9 +27,9 @@ class NoncentralT extends Continuous
     /**
      * Distribution support bounds limits
      * x ∈ (-∞,∞)
-     * @var array
+     * @var array{x: string}
      */
-    const SUPPORT_LIMITS = [
+    public const SUPPORT_LIMITS = [
         'x' => '(-∞,∞)',
     ];
 
@@ -72,16 +73,16 @@ class NoncentralT extends Continuous
         $ν = $this->ν;
         $μ = $this->μ;
 
-        $part1 =  $ν ** ($ν / 2) * Special::gamma($ν + 1) * exp(-1 * $μ ** 2 / 2) / 2 ** $ν / ($ν + $x ** 2) ** ($ν / 2) / Special::gamma($ν / 2);
+        $part1 =  $ν ** ($ν / 2) * Special::gamma($ν + 1) * \exp(-1 * $μ ** 2 / 2) / 2 ** $ν / ($ν + $x ** 2) ** ($ν / 2) / Special::gamma($ν / 2);
 
         $F1 = $ν / 2 + 1;
         $F2 = 3 / 2;
         $F3 = $μ ** 2 * $x ** 2 / 2 / ($ν + $x ** 2);
-        $inner_part1 = sqrt(2) * $μ * $x * Special::confluentHypergeometric($F1, $F2, $F3) / ($ν + $x ** 2) / Special::gamma(($ν + 1) / 2);
+        $inner_part1 = \sqrt(2) * $μ * $x * Special::confluentHypergeometric($F1, $F2, $F3) / ($ν + $x ** 2) / Special::gamma(($ν + 1) / 2);
 
         $F1 = ($ν + 1) / 2;
         $F2 = 1 / 2;
-        $inner_part2 = Special::confluentHypergeometric($F1, $F2, $F3) / sqrt($ν + $x ** 2) / Special::gamma($ν / 2 + 1);
+        $inner_part2 = Special::confluentHypergeometric($F1, $F2, $F3) / \sqrt($ν + $x ** 2) / Special::gamma($ν / 2 + 1);
 
         return $part1 * ($inner_part1 + $inner_part2);
     }
@@ -153,9 +154,9 @@ class NoncentralT extends Continuous
         $j   = 0;
 
         do {
-            $exp = exp(-1 * $μ ** 2 / 2) * ($μ ** 2 / 2) ** $j;
+            $exp = \exp(-1 * $μ ** 2 / 2) * ($μ ** 2 / 2) ** $j;
             $pⱼ  = 1 / Combinatorics::factorial($j) * $exp;
-            $qⱼ  = $μ / sqrt(2) / Special::gamma($j + 3 / 2) * $exp;
+            $qⱼ  = $μ / \sqrt(2) / Special::gamma($j + 3 / 2) * $exp;
             $I1  = Special::regularizedIncompleteBeta($y, $j + 1 / 2, $ν / 2);
             $I2  = Special::regularizedIncompleteBeta($y, $j + 1, $ν / 2);
 
@@ -186,18 +187,40 @@ class NoncentralT extends Continuous
         if ($ν == 1) {
             return \NAN;
         }
-        return $μ * sqrt($ν / 2) * Special::gamma(($ν - 1) / 2) / Special::gamma($ν / 2);
+        return $μ * \sqrt($ν / 2) * Special::gamma(($ν - 1) / 2) / Special::gamma($ν / 2);
     }
 
     /**
      * Median of the distribution
-     * @note: This is probably not correct and should be updated.
-     * @todo: Replace with actual median calculation.
      *
+     * The median of the noncentral t-distribution does not have a closed-form solution
+     * and must be computed numerically. It is defined as the value x where CDF(x) = 0.5.
+     *
+     * This implementation uses the Secant Method to find the root of:
+     *   f(x) = CDF(x) - 0.5
+     *
+     * The Secant Method is chosen because:
+     * - It requires only function evaluations (no derivative needed)
+     * - It has superlinear convergence rate (~1.618)
+     * - It is more efficient than Bisection Method for this problem
+     * - The median is always near the noncentrality parameter μ, making guesses reliable
+     *
+     * References:
+     * - Secant Method: https://en.wikipedia.org/wiki/Secant_method
+     * - Noncentral t-distribution: https://en.wikipedia.org/wiki/Noncentral_t-distribution
      * @return float
      */
     public function median(): float
     {
-        return $this->mean();
+        $f = function ($x) {
+            return $this->cdf($x) - 0.5;
+        };
+
+        return SecantMethod::solve(
+            $f,
+            $this->μ - 1,   // p₀: Initial guess (before median)
+            $this->μ + 1,   // p₁: Second guess (after median)
+            1e-10           // tolerance for convergence
+        );
     }
 }

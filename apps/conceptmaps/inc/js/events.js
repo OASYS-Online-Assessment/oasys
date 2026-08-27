@@ -31,37 +31,13 @@ function onMessage(e) {
 	}
 }
 
-function getURLParameters() {
-	let rx = /[?&](.+?)=([^&]*)/g;
-	let allParams = {};
-	let param = '';
-	RegExp.lastIndex = 0;
-	do {
-		param = rx.exec(window.location);
-		if (param) allParams[decodeURI(param[1])] = decodeURI(param[2]);
-	} while (param);
-	return allParams;
-}
-
-
 function domReady() {
 	$('#controls-container').on('click', e => e.preventDefault());
 	$('#innerLeftPanel').on('click', e => e.preventDefault());
-	params = getURLParameters();
-	documentName = params['document'] || 'untitled document';
 	if (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0)) {
 		handleSize = 25;
 		touchDevice = true;
 	}
-	$.ajaxSetup({
-		type: "POST",
-		cache: false,
-		dataType: "json",
-		timeout: 10000,
-		success: onAjaxData,
-		error: onAjaxError,
-		url: 'actions.php'
-	});
 	initCanvas();
 	// UG here
 	drawMode = 'rectangle';
@@ -385,6 +361,22 @@ function domReady() {
 		hideWhenDisabled: false,
 		active: true
 	};
+	const colorPickerPalette = [
+		['#000000', '#ffffff', '#d9d9d9'],
+		['#ff0000', '#f59e0b', '#fde047'],
+		['#22c55e', '#1f80aa', '#0000ff'],
+		['#7c3aed', '#ec4899', '#92400e']
+	];
+	const colorPickerDefaults = {
+		showPalette: true,
+		showInput: true,
+		showInitial: false,
+		preferredFormat: 'hex',
+		chooseText: 'OK',
+		cancelText: UILANG.m('Cancel'),
+		clickoutFiresChange: false,
+		palette: colorPickerPalette
+	};
 
 
 	//create sections
@@ -397,22 +389,15 @@ function domReady() {
 	//create buttons in sidebar
 	bDrawingTool = new nxMultiState('properties', 'drawingTool', drawingToolData); // UG done shape
 	$('#properties').append('<div id="container_cm_objects_color"><input type="text" id="cm_objects_color"></div>');
-	$('#cm_objects_color').spectrum({
-    	showPalette: true,
+	$('#cm_objects_color').spectrum(Object.assign({}, colorPickerDefaults, {
     	color: objColor,
-    	chooseText: "OK",
-    	cancelText: "",
-    	clickoutFiresChange: false,
-    	palette: [
-    	    ['black', 'white', 'red', 'blue'],
-    	],
     	replacerClassName: 'colorpicker',
     	change: function(color) {
     		if ((color ?? null) === null) return;
     		let c = color.toHexString(); // #ff0000
     		toolCallbackInterface({'data':{sender:'colorButton', color:c}});
 		}
-	});
+	}));
 	function toolCallbackInterface(e) { // interface providing expected data to toolCallback
 		toolCallback(e.data.sender, e.data.color);
 	}
@@ -421,23 +406,15 @@ function domReady() {
 	bWidth = new nxMultiState('properties', 'widthButton', widthData); // UG done
 
 	$('#properties').append('<div id="container_cm_stroke_color"><input type="text" id="cm_stroke_color"></div>');
-	$('#cm_stroke_color').spectrum({
-    	showPalette: true,
-    	preferredFormat: "hex",
+	$('#cm_stroke_color').spectrum(Object.assign({}, colorPickerDefaults, {
     	color: conColor,
-    	chooseText: "OK",
-    	cancelText: "",
-    	clickoutFiresChange: false,
-    	palette: [
-    	    ['black', 'white', 'red', 'blue'],
-    	],
     	replacerClassName: 'colorpicker',
     	change: function(color) {
     		if ((color ?? null) === null) return;
     		let c = color.toHexString(); // #ff0000
     		toolCallbackInterface({'data':{sender:'strokeColorButton', color:c}});
 		}
-	});
+	}));
 
 	// remove unicode arrow from sidebar colorpickers
 	$('.colorpicker .sp-dd').empty();
@@ -498,13 +475,16 @@ function domReady() {
 		contents: gridContents
 	});
 
-	let lockContents = '<div><input type="checkbox" id="cbLockShapes"><label data-translate="Lock content">' + UILANG.m('Lock content') + '</label></div><div><input type="checkbox" id="cbLabelsEditable"><label data-translate="Labels editable">' + UILANG.m('Labels editable') + '</label></div>';
+	let lockContents = '<div class="lockHilight"><input type="checkbox" id="cbLockShapes"><label data-translate="Lock content">' + UILANG.m('Lock content') + '</label></div><div class="lockHilight"><input type="checkbox" id="cbLabelsEditable"><label data-translate="Labels editable">' + UILANG.m('Labels editable') + '</label></div>';
 	lockPopup = new nxPopup('lockPopup', {
 		width: 250,
 		height: 60,
 		fixedTopMargin: '7',
 		background: 'rgba(255, 255, 255, 0.5)',
-		contents: lockContents
+		contents: lockContents,
+		callbacks: {
+			show: syncLockPopupState
+		}
 	});
 	let langContents = '<ul id="languageSelectList">'+
 	'<li><button class="langSelButton" id="langEN" onclick="languageChanged(this)" value="EN">EN</button></li>'+
@@ -541,7 +521,7 @@ function domReady() {
 		contents: shortcutsContents
 	});
 
-	let labelEditorContent = '<div style="touch-action: none;" class="section" onclick="{e => e.preventDefault()}"><div id="label-editor-header"><p data-translate="Label" class="sectionTitle" id="labelEditorSection_title" style="touch-action: none; float: left;">'+UILANG.m('Label')+'</p></div>' +
+	let labelEditorContent = '<div style="touch-action: none;" class="cm-label-editor-dialog" onclick="{e => e.preventDefault()}"><div id="label-editor-header"><p data-translate="Label" class="sectionTitle" id="labelEditorSection_title" style="touch-action: none; float: left;">'+UILANG.m('Label')+'</p></div>' +
 		'<div id="labelEditorContainer"> '+
 		'<div class="popup-toolbar">' +
 			'<div class="popup-btn cm_toolbar_bold_btn_'+UILANG.currentLang()+'" id="cm_toolbar_bold_btn" data-key="font-weight"></div>' +
@@ -560,12 +540,12 @@ function domReady() {
 		'</div>' +
 		'<textarea id="labelEditor" spellcheck="false" style="touch-action: none;"></textarea>' +
 		'</div>' +
-		'<img id="labelEditorCloseBtn" src="images/icons/ic_cm_ok_btn.svg" style="height: 40px; width: 40px; display: block; margin-left: auto;" class="nxButtonIcon nxButtonSmallIcon">' +
+		'<div id="labelEditorActions"><button type="button" id="labelEditorCloseBtn">OK</button></div>' +
 		'</div>';
 	labelEditorPopup = new nxPopup('labelEditorPopup', {
 		//anchor: $('#helpButton'),
 		width: 400,
-		height: 270,
+		height: 260,
 		background: 'rgba(255, 255, 255, 0.5)',
 		contents: labelEditorContent,
 		callbacks: {
@@ -582,19 +562,12 @@ function domReady() {
 	labelEditor = $('#labelEditor');
 	labelEditor.on({focus: editorFocused, blur: editorLostFocus, input: onEditorActivity});
 
-	$('#cm_toolbar_color').spectrum({
-		showPalette: true,
-		chooseText: "OK",
-		cancelText: "",
-		palette: [
-			['black', 'white', 'red', 'blue'],
-		],
-		disabled: true,
+	$('#cm_toolbar_color').spectrum(Object.assign({}, colorPickerDefaults, {
 		change: function(color) {
 			let c = color.toHexString(); // #ff0000
 			formatLabel({'data':{sender:'cm_toolbar_color', color:c}});
 		},
-	});
+	}));
 
 	let pointerHandler = jsPointerHandler.instance;
 	pointerHandler.listen($('#labelEditorCloseBtn'), {
@@ -623,6 +596,8 @@ function domReady() {
 	$('.hoverHilight').click(hoverHilightClick).children().css('pointer-events', 'none');
 
 	$('#cbLabelsEditable, #cbLockShapes').on('click', lockStateChange);
+	$('#lockPopup .lockHilight').click(lockHilightClick).children().css('pointer-events', 'none');
+	syncLockPopupState();
 
 	$("#zoomSlider").html("<input type='range' id='zoomRange' min='-4' max='4' value='0'>");
 	$("#zoomRange").on("input", zoomSlide);
@@ -634,10 +609,6 @@ function domReady() {
 	});
 	$('#scrollMsg').toggle();
 
-	if (params.file) {
-		loadFile(params.file);
-		if (bTools) bTools.fallback(); //activate selector tool if user loads an existing document, rather than the default draw tool
-	}
 	newUndoStep();
 
 	if (OASYSCOM.getContext() !== 'manualCorrection') { // stop all in manual correction context
@@ -700,6 +671,20 @@ function hoverHilightClick(e) {
 		target.prop('checked', true);
 		settingsChanged(target.attr('id'), true);
 	}
+}
+
+function lockHilightClick(e) {
+	const target = $(e.delegateTarget).find('input[type=checkbox]');
+	if (target.prop('disabled')) return;
+	target.prop('checked', !target.prop('checked'));
+	lockStateChange({target: target.get(0)});
+}
+
+function syncLockPopupState() {
+	$('#lockPopup .lockHilight').each(function() {
+		const checkbox = $(this).find('input[type=checkbox]');
+		$(this).toggleClass('is-disabled', checkbox.prop('disabled'));
+	});
 }
 
 function docKeyDown(e) {
@@ -829,6 +814,7 @@ function lockStateChange(e) {
 		let tralse = !$('#cbLabelsEditable').prop('checked'); // if checked is then locked is false
 		DATAFORMAT.setLabelsLocked(tralse);
 	}
+	syncLockPopupState();
 	if (OASYSCOM.getContext() === 'editor')savingWatcher.setSaved(false);
 }
 
@@ -1027,7 +1013,6 @@ function toolCallback(sender, value, lockState) {
 			break;
 		case 'uploadButton':
 			log('upload document');
-			// saveDocument(); UG remove
 			uploadDocument();
 			break;
 		case 'downloadButton':

@@ -9,13 +9,13 @@ trait PowerModel
 
     /** @var int a parameter index */
     protected static $A = 0;
-    
+
    /**
     * Evaluate the power curve equation from power law regression parameters for a value of x
     * y = axᵇ
     *
     * @param float $x
-    * @param array $params
+    * @param array<int, float> $params
     *
     * @return float y evaluated
     */
@@ -30,9 +30,12 @@ trait PowerModel
     /**
      * Get regression parameters (a and b)
      *
-     * @param array $params
+     * @param array<int, float> $params
      *
-     * @return array [ a => number, b => number ]
+     * @return array{
+     *     a: float,
+     *     b: float,
+     * }
      */
     public function getModelParameters(array $params): array
     {
@@ -45,12 +48,12 @@ trait PowerModel
     /**
      * Get regression equation (y = axᵇ) in format y = ax^b
      *
-     * @param array $params
+     * @param array<int, float> $params
      *
      * @return string
      */
     public function getModelEquation(array $params): string
     {
-        return sprintf('y = %fx^%f', $params[self::$A], $params[self::$B]);
+        return \sprintf('y = %fx^%f', $params[self::$A], $params[self::$B]);
     }
 }

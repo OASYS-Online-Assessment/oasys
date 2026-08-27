@@ -1,46 +1,80 @@
 .jstsContainer {
 	position: relative;
 	overflow: hidden;
-	/*border: 1px solid #666;*/
 	display: inline-block;
 	vertical-align: bottom;
-	border-radius: 2px;
+	box-sizing: border-box;
+	border: 1px solid #d7dee8;
+	border-radius: 9999px;
+	background: #f5f7fa;
+	box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
 }
 
-.jstsContainer *:not(.locked)  {
+.jstsContainer,
+.jstsContainer * {
 	cursor: pointer;
 }
 
 .jstsBackground {
-	background-repeat: no-repeat;
-	position: relative;
-	top: 0px;
-	background-size: 100% 100%;
-	height: 100%;
-	width: 150%;
-	left: -50%;
+	position: absolute;
+	top: 2px;
+	bottom: 2px;
+	left: 2px;
+	z-index: 1;
+	width: calc(50% - 2px);
+	height: auto;
+	border-radius: 9999px;
+	background: #ff4f4f;
+	background-image: none !important;
+	box-shadow: inset 0 1px 1px rgba(0,0,0,.08);
+	transition: background-color .18s ease;
+}
+
+.jstsBackground::before {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #fff;
+	content: "\00d7";
+	font-family: Arial, sans-serif;
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 1;
+}
+
+.jstsContainer.selected .jstsBackground {
+	left: 0;
+	background: #4fc85a;
+}
+
+.jstsContainer.selected .jstsBackground::before {
+	content: "\2713";
+	font-size: 12px;
 }
 
 .jstsHandle {
-	background: #e6e6e6; /* Old browsers */
-	background: -moz-linear-gradient(top, #e6e6e6 0%, #d6d6d6 100%); /* FF3.6-15 */
-	background: -webkit-linear-gradient(top, #e6e6e6 0%,#d6d6d6 100%); /* Chrome10-25,Safari5.1-6 */
-	background: linear-gradient(to bottom, #e6e6e6 0%,#d6d6d6 100%); /* W3C, IE10+, FF16+, Chrome26+, Opera12+, Safari7+ */
-	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#d8d8d8', endColorstr='#b2b2b2',GradientType=0 ); /* IE6-9 */
-	width:50%;
-	position:absolute;
-	top:0px;
-	bottom:0px;
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	z-index: 3;
+	width: 50%;
+	border-radius: 9999px;
+	background: transparent;
 	opacity: 1;
-	border-radius: 2px;
+}
 
+.jstsContainer.locked {
+	opacity: 1;
+	filter: none;
+}
+
+.jstsContainer.locked,
+.jstsContainer.locked * {
+	cursor: not-allowed;
 }
 
 .jstsContainer.locked > .jstsBackground {
-	filter: url("data:image/svg+xml;utf8,<svg%20xmlns='http://www.w3.org/2000/svg'><filter%20id='grayscale'><feColorMatrix%20type='matrix'%20values='0.3333%200.3333%200.3333%200%200.2%200.3333%200.3333%200.3333%200%200.2%200.3333%200.3333%200.3333%200%200.2%200%200%200%201%200'/></filter></svg>#grayscale"); /* Firefox 3.5+ */
-	filter: contrast(50%) brightness(130%) grayscale(100%); /* Current draft standard */
-	-webkit-filter: contrast(50%) brightness(130%) grayscale(100%);
-	-moz-filter: contrast(50%) brightness(130%) grayscale(100%);
-	-ms-filter: contrast(50%) brightness(130%) grayscale(100%);
-	-o-filter: contrast(50%) brightness(130%) grayscale(100%);
+	filter: none;
 }

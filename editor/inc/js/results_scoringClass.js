@@ -15,6 +15,7 @@ class Scoring {
         this.pHtml = null;
         this.qXtraInfo = null;
         this.readOnly = false;
+        this.readOnlyByPermission = false;
         this.msOnly = true;
         this.t1 = null;
         this.noSel = false;
@@ -24,6 +25,8 @@ class Scoring {
         this.langSels = [];
         this.testLang = null;
         this.blockFS = false;
+        this.qlDD;
+        this.i_data;
     }
 
     async getPDD() {
@@ -41,8 +44,8 @@ class Scoring {
     ms_kbreg(register = true, pdd) {
         if (register) {
             let s_self = this;
-            $(document).off();
-            $(document).on("keydown", function(e) {
+            $(document).off('.manualScoring');
+            $(document).on("keydown.manualScoring", function(e) {
 
                 // handle question item navigation & misc shortcuts only if not in middle of scoring
                 if (!window.stopNAV) {
@@ -91,11 +94,11 @@ class Scoring {
                 }
             });
         } else {
-            $(document).off();
+            $(document).off('.manualScoring');
         }
 
         // always re-init native context menu disabling
-        $(document).on("contextmenu", function(e) {
+        $(document).off('contextmenu.manualScoring').on("contextmenu.manualScoring", function(e) {
             e.preventDefault();
             return false;
         });
@@ -120,6 +123,10 @@ class Scoring {
             width: 80,
             height: 100,
             callback: () => {
+                if (scoring.pageSelectionData && scoring.pageSelectionData.canWriteScores !== true) {
+                    gui.statusBar.setStatus(UILANG.m("You do not have write access to this test taker."), 3500, "red");
+                    return;
+                }
 
                 let testId = scoring.pageSelectionData.testId;
                 let pId = (scoring.viewType === "t") ? listData.userInfo.passwordId : scoring.pageSelectionData.passwordId;
@@ -142,19 +149,28 @@ class Scoring {
                     datafields: ['testId', 'pId'],
                     values: { testId: testId, pId: pId, lId: lId },
                     contents: /* html */ `
-                            <h4 class="ms_reset_headerTxt">${UILANG.m("RESET SCORES FOR TEST TAKER / PASSWORD")}:</h4>
-                            <h4 class="ms_reset_headerTxt" style="color: rgb(33, 126, 170)">${lId} / ${pId} </h4>
-
-                            <p>${UILANG.m("A scoring reset will revert all manually corrected items back to their original unscored state for this test taker and password.")}\
-                                <br><br><span style='font-weight: bold; font-size: smaller; color: red;'>${UILANG.m("* Please note that this will also remove all comments from all items!")}</span></p>
-
-                            <p>
-                                <div><input type='checkbox' name='rc_type' id='rc_conf' value='rc_conf'><label for="rc_conf">&nbsp;${UILANG.m("I confirm")}</label></div>
-                            </p>
+                        <div class="msResetDialog">
+                            <div class="msDialogMessage msDialogMessage-warning">
+                                <div class="msDialogBadge">!</div>
+                                <div class="msDialogCopy">
+                                    <strong>${UILANG.m("Reset scoring")}</strong>
+                                    <p>${UILANG.m("A scoring reset will revert all manually corrected items back to their original unscored state for this test taker and password.")}</p>
+                                    <p>${UILANG.m("Please note that this will also remove all comments from all items!")}</p>
+                                </div>
+                            </div>
+                            <div class="msResetTarget">
+                                <span>${UILANG.m("Test taker / password")}</span>
+                                <strong>${lId} / ${pId}</strong>
+                            </div>
+                            <label class="msConfirmCheck" for="rc_conf">
+                                <input type='checkbox' name='rc_type' id='rc_conf' value='rc_conf'>
+                                <span>${UILANG.m("I confirm")}</span>
+                            </label>
 
                             <input type='hidden' id='testId' value=${testId}>
                             <input type='hidden' id='pId' value=${pId}>
-                        `,
+                        </div>
+                    `,
                     callback: (button, data) => {
                         if (button === 'ok') {
 
@@ -216,8 +232,6 @@ class Scoring {
     kbShortsInit() {
         $('#bKbShortcuts').off(); // ensure all handlers are cleared since we are initalizing this button on each test list (depth 3) call
         $('#bKbShortcuts').remove(); // remove previously initialized button2 for correction reset dialog
-        $('#bSwichTestLang').off(); // ensure all handlers are cleared since we are initalizing this button on each test list (depth 3) call
-        $('#bSwichTestLang').remove(); // remove previously initialized button2 for correction reset dialog
 
         //Keyboard Shortcuts button
         buttons.keyboardShortcuts = new jsButton2($('header'), 'bKbShortcuts', {
@@ -232,21 +246,6 @@ class Scoring {
 
         if (!(buttons.keyboardShortcuts in msDetailView)) msDetailView.push(buttons.keyboardShortcuts);
     }
-
-    chLangBtnInit(i_data) {
-        buttons.switchTestLang = new jsButton2($('header'), 'bSwichTestLang', {
-            label: UILANG.m('Change test language'),
-            icon: '../images/toolbarIcons/ic_tb_switchTestLang.png',
-            iconWidth: 48,
-            width: 80,
-            height: 100,
-            callback: function() { scoring.initLangBox(i_data) },
-            disabled: false
-        });
-        if (!(buttons.switchTestLang in msDetailView)) msDetailView.push(buttons.switchTestLang);
-
-    }
-
 
     /**
      * Disable/enable scoring radio buttons.
@@ -276,26 +275,31 @@ class Scoring {
     kbPopup() {
         new nxDialog('kbHelperDiag', {
             contents: /* html */ `
-                <h2 style="text-align: center;">${UILANG.m("Keyboard &amp; Mouse Shortcut Guide")}</h2>
-                <hr>
-                <table id="ms_kbhTable">
-                    <tr><td colspan="2" class='ms_kbh_sect'>${UILANG.m("Test/Test Taker Navigation")}</td></tr>
-                    <tr><td>Up Arrow</td><td>${UILANG.m("Move to next item in question/test taker list.")}</td></tr>
-                    <tr><td>Down Arrow</td><td>${UILANG.m("Move to previous item in question/test taker list.")}</td></tr>
-                    <tr><td>ALT+N</td><td>${UILANG.m("Move to next entry.")}</td></tr>
-                    <tr><td>ALT+P</td><td>${UILANG.m("Move to previous entry.")}</td></tr>
-                    <!-- <tr><td>Mouse Wheel Up/Down</td><td>${UILANG.m("Move up/down in question/test taker list when pointer is on<br>list or scoring area.")}</td></tr> -->
-                    <tr><td colspan="2" class='ms_kbh_sect'>${UILANG.m("Comments")}</tr>
-                    <tr><td>ALT+C</td><td>${UILANG.m("Focus on comment field.")}</td></tr>
-                    <tr><td>ALT+S</td><td>${UILANG.m("Save comment (when comment field has text).")}</td></tr>
-                    <tr><td colspan="2" class='ms_kbh_sect'>${UILANG.m("Scoring")}</td></tr>
-                    <tr><td>1, 2, 3, etc.</td><td>${UILANG.m("Assign <em>n</em> points (decimals are allowed in increments of 0.5).")}</td></tr>
-                    <tr><td>Right Arrow</td><td>${UILANG.m("Increment score value by 0.5")}</td></tr>
-                    <tr><td>Left Arrow</td><td>${UILANG.m("Decrement score value by 0.5")}</td></tr>
-                    <tr><td colspan="2" class='ms_kbh_sect'>${UILANG.m("Test Page Navigation")}</td></tr>
-                    <tr><td>Shift + Left Arrow</td><td>${UILANG.m("Navigate leftward amongst items within a multi-question test page.")}</td></tr>
-                    <tr><td>Shift + Right Arrow</td><td>${UILANG.m("Navigate rightward amongst items within a multi-question test page.")}</td></tr>
-                </table>
+                <div class="msShortcutDialog">
+                    <div class="msShortcutGroup">
+                        <h3>${UILANG.m("Test/Test Taker Navigation")}</h3>
+                        <div class="msShortcutRow"><kbd>Up Arrow</kbd><span>${UILANG.m("Move to next item in question/test taker list.")}</span></div>
+                        <div class="msShortcutRow"><kbd>Down Arrow</kbd><span>${UILANG.m("Move to previous item in question/test taker list.")}</span></div>
+                        <div class="msShortcutRow"><kbd>ALT+N</kbd><span>${UILANG.m("Move to next entry.")}</span></div>
+                        <div class="msShortcutRow"><kbd>ALT+P</kbd><span>${UILANG.m("Move to previous entry.")}</span></div>
+                    </div>
+                    <div class="msShortcutGroup">
+                        <h3>${UILANG.m("Comments")}</h3>
+                        <div class="msShortcutRow"><kbd>ALT+C</kbd><span>${UILANG.m("Focus on comment field.")}</span></div>
+                        <div class="msShortcutRow"><kbd>ALT+S</kbd><span>${UILANG.m("Save comment (when comment field has text).")}</span></div>
+                    </div>
+                    <div class="msShortcutGroup">
+                        <h3>${UILANG.m("Scoring")}</h3>
+                        <div class="msShortcutRow"><kbd>1, 2, 3</kbd><span>${UILANG.m("Assign <em>n</em> points (decimals are allowed in increments of 0.5).")}</span></div>
+                        <div class="msShortcutRow"><kbd>Right Arrow</kbd><span>${UILANG.m("Increment score value by 0.5")}</span></div>
+                        <div class="msShortcutRow"><kbd>Left Arrow</kbd><span>${UILANG.m("Decrement score value by 0.5")}</span></div>
+                    </div>
+                    <div class="msShortcutGroup">
+                        <h3>${UILANG.m("Test Page Navigation")}</h3>
+                        <div class="msShortcutRow"><kbd>Shift + Left Arrow</kbd><span>${UILANG.m("Navigate leftward amongst items within a multi-question test page.")}</span></div>
+                        <div class="msShortcutRow"><kbd>Shift + Right Arrow</kbd><span>${UILANG.m("Navigate rightward amongst items within a multi-question test page.")}</span></div>
+                    </div>
+                </div>
             `,
             width: 650,
             title: UILANG.m("Keyboard Help"),
@@ -392,10 +396,10 @@ class Scoring {
 
                 const origPtVal = $(`#${ms_slId}`).slider("option", "value");
 
-                /* 
+                /*
                     FYI: Because of a FF bug, the Windows key is not capturable in combination with another key, so WIN+RIGHT/WIN+LEFT increments/decrements the score, and WIN+# to shortcut navigate into the FF app.
                     Works fine in Chrome, not tested in Safari/etc.
-                    
+
                     https://bugzilla.mozilla.org/show_bug.cgi?id=1232918
                  */
 
@@ -485,8 +489,8 @@ class Scoring {
             $('#inav_right').remove();
 
 
-            $('#isub_arrows').prepend(`<span class="ms_inav_btn" id="inav_left">&#9664;</span>`);
-            $('#isub_arrows').append(`<span class="ms_inav_btn" id="inav_right">&#9654;</span>`);
+            $('#isub_arrows').prepend(`<span class="ms_inav_btn ms_inav_disabled" id="inav_left">&#9664;</span>`);
+            $('#isub_arrows').append(`<span class="ms_inav_btn ms_inav_disabled" id="inav_right">&#9654;</span>`);
 
             /* KB NAVIGATION REGISTRATION LOGIC FOR MULTI/SINGLE QUESTION PAGES */
             if (this.isMultiItem && (pdd.items.indexOf(item) > 0)) {
@@ -527,9 +531,8 @@ class Scoring {
             $('.ms_q_item').remove();
             thisObj.pHtml = "";
             setTimeout(() => {
-                $(".ms_corKey, .ms_corKeyBlock").empty();
                 thisObj.htmlPreview(pdd);
-                $('#ms_questionArea').append(thisObj.pHtml);
+                thisObj.questionPaneBody().append(thisObj.pHtml);
             }, 100);
 
             setTimeout(() => {
@@ -568,22 +571,21 @@ class Scoring {
                 // never allow direct non-selected condition on text score input
                 $(this).on('mouseup mousedown click', () => $("#" + sliderItem.id).trigger('select'));
 
+                const currentIdx = items.indexOf(s_self.hex2str(sliderItem.dataset.sllink.substring(2)));
+                if ((direction === "left" && currentIdx <= 0) || (direction === "right" && currentIdx >= items.length - 1)) return;
+
                 $("[id^='ms_score_slider_'], [id^='t_ms_score_slider_'], [id^='m_ms_score_slider_']").hide();
 
                 /* determine next index value to load */
                 let nextIdx = null;
                 switch (direction) {
                     case "left":
-                        // the next index value is reset if at end of list, otherwise, the next decremented value
-                        nextIdx = items.indexOf(s_self.hex2str(sliderItem.dataset.sllink.substring(2)));
-                        nextIdx = (nextIdx === 0) ? items.length - 1 : nextIdx - 1;
+                        nextIdx = currentIdx - 1;
 
                         break;
 
                     case "right":
-                        // the next index value is reset if at end of list, otherwise, the next incremented value
-                        nextIdx = items.indexOf(s_self.hex2str(sliderItem.dataset.sllink.substring(2)));
-                        nextIdx = (nextIdx > items.length - 2) ? 0 : nextIdx + 1;
+                        nextIdx = currentIdx + 1;
 
                         break;
 
@@ -595,6 +597,8 @@ class Scoring {
                     default:
                         break;
                 }
+
+                if (nextIdx < 0) nextIdx = 0;
 
                 /* advanced interaction UI handling */
 
@@ -623,12 +627,15 @@ class Scoring {
 
                                 item = items[nextIdx];
                                 let subIdx = item.match(/\d*$/g)[0];
+                                const $itemBlock = $("#" + "q_item_" + scoring.str2hex(item));
                                 if (pdd.htmlPreview[nextIdx].type === "inline_textfields") {
-                                    $(".previewTag_inlineText").removeClass("ms_itxt_active").addClass("ms_itxt_inactive");
-                                    $(Object.values($("#" + "q_item_" + scoring.str2hex(item) + " span[class^='previewTag_']"))[subIdx - 1]).parent().addClass("ms_itxt_active").removeClass("ms_itxt_inactive");
+                                    const $inlineTexts = $itemBlock.find(".previewTag_inlineText");
+                                    $inlineTexts.removeClass("ms_itxt_active").addClass("ms_itxt_inactive");
+                                    $inlineTexts.eq(subIdx - 1).parent().addClass("ms_itxt_active").removeClass("ms_itxt_inactive");
                                 } else if (pdd.htmlPreview[nextIdx].type === "inline_gaps") {
-                                    $(".previewTag_inlineGap").removeClass("ms_igap_active").addClass("ms_igap_inactive");
-                                    $(Object.values($("#" + "q_item_" + scoring.str2hex(item) + " span[class^='previewTag_']"))[subIdx - 1]).addClass("ms_igap_active").removeClass("ms_igap_inactive");
+                                    const $inlineGaps = $itemBlock.find(".previewTag_inlineGap");
+                                    $inlineGaps.removeClass("ms_igap_active").addClass("ms_igap_inactive");
+                                    $inlineGaps.eq(subIdx - 1).addClass("ms_igap_active").removeClass("ms_igap_inactive");
 
                                 }
                             }
@@ -643,17 +650,29 @@ class Scoring {
                         // choice matrix entry highlight
 
                         (function doCmDraw() {
+                            const hDataBlock = pdd.htmlPreview[nextIdx];
+                            const itemLang = s_self.previewLangForItem(hDataBlock, pdd, items[nextIdx]);
+                            const rowMatchData = s_self.choiceMatrixRowMatchData(hDataBlock, items[nextIdx], itemLang);
+                            const $rowCells = s_self.choiceMatrixRowCells($('#ms_questionArea'), hDataBlock, items[nextIdx], itemLang, rowMatchData);
 
                             // recurse if elements not fully drawn due to animation delay
 
-                            if ($(`[data-group="${pdd.htmlPreview[nextIdx].cmtx_row}"]`).parent().length === 0) {
+                            if ($rowCells.parent().length === 0) {
                                 setTimeout(() => {
                                     doCmDraw();
                                 }, 50);
                             }
 
-                            $('.matrixRow').removeClass('ms_cmtrx_active').addClass("ms_cmtrx_inactive");
-                            $(`[data-group="${pdd.htmlPreview[nextIdx].cmtx_row}"]`).parent().removeClass("ms_cmtrx_inactive").addClass("ms_cmtrx_active");
+                            $('#ms_questionArea .matrixRow, #ms_questionArea .matrixChoicesRow')
+                                .removeClass('ms_cmtrx_active ms_cmtrx_currentRow')
+                                .addClass("ms_cmtrx_inactive")
+                                .children()
+                                .removeClass('ms_cmtrx_currentCell');
+                            $rowCells.closest('.matrixRow, .matrixChoicesRow')
+                                .removeClass("ms_cmtrx_inactive")
+                                .addClass("ms_cmtrx_active ms_cmtrx_currentRow")
+                                .children()
+                                .addClass('ms_cmtrx_currentCell');
                         })();
 
 
@@ -680,7 +699,7 @@ class Scoring {
                                 if (typeof $(qItemTarg)[1] === "undefined") return; // ignore scroll call when there isn't at least a secondary item in the question block (index item [1])
 
                                 let animSpeed = (settings.disableAnimations) ? 0 : 200;
-                                $('#ms_questionArea').animate({
+                                $('#ms_questionScrollBody').animate({
                                     scrollTop: $(".ms_cmtrx_active:visible")[0].offsetTop - 60
                                 }, animSpeed);
                             }, 50);
@@ -726,7 +745,6 @@ class Scoring {
                         }, 50);
 
                         break;
-
                 }
 
                 let itemHex = s_self.str2hex(items[nextIdx]);
@@ -753,7 +771,12 @@ class Scoring {
 
                 // update scoring type label
                 s_self.sc_type = pdd.scoringInfo[s_self.itemName].itemScoreType;
-                $('#s_scType').html((s_self.sc_type === "manual") ? UILANG.m("manual scoring") : UILANG.m("auto-scored"));
+                const scoreModeLabel = (s_self.sc_type === "manual") ? UILANG.m("Manual Scoring") : UILANG.m("Auto-Scored");
+                $('#s_scType').html(scoreModeLabel);
+                $('#scoreAssignmentContainer')
+                    .removeClass('msScoreModeManual msScoreModeAuto')
+                    .addClass(s_self.sc_type === "manual" ? 'msScoreModeManual' : 'msScoreModeAuto')
+                    .attr('data-mode-label', scoreModeLabel);
 
                 // show/hide max depending on scoring type
                 if (s_self.sc_type === "manual") $(`#m_ms_score_slider_${itemHex}`).css('visibility', '');
@@ -774,10 +797,13 @@ class Scoring {
                 // update UI for item navigation section
                 $(`[id^="ms_isel_"]`).removeClass('ms_i_selected').addClass('ms_i_not_selected');
                 $(`#ms_isel_${itemHex}`).removeClass('ms_i_not_selected').addClass('ms_i_selected');
+                $('#inav_left').toggleClass('ms_inav_disabled', nextIdx <= 0);
+                $('#inav_right').toggleClass('ms_inav_disabled', nextIdx >= items.length - 1);
 
                 // update question title label
                 $('#qItemLabel').html(s_self.itemName);
                 $('#rItemLabel').html(s_self.itemName);
+                s_self.updateResponseLanguageLabel(pdd, s_self.itemName, pdd.htmlPreview[nextIdx]);
 
                 // update sumbox values
                 $('#ms_sumBox_qName').html(s_self.itemName);
@@ -788,7 +814,7 @@ class Scoring {
                 $('#ms_scoregiven').html(pdd.scoredByInfo[s_self.itemName].scoreValue);
 
                 // determine read only status based on scoring type or test taker completion status, and lock down necessary elements
-                s_self.readOnly = s_self.sc_type === "auto" || s_self.alreadyInRO;
+                s_self.readOnly = s_self.sc_type === "auto" || s_self.alreadyInRO || s_self.readOnlyByPermission;
 
                 // disable scoring ability
                 s_self.scoringButtonsDisable(s_self.readOnly);
@@ -813,7 +839,7 @@ class Scoring {
                 s_self.hideItemBlock();
                 s_self.showItemBlock();
 
-                (pdd.comments[scoring.itemName]) ? s_self.cmt_remEntry.enable() : s_self.cmt_remEntry.disable();
+                (pdd.comments[scoring.itemName] && !s_self.readOnly) ? s_self.cmt_remEntry.enable() : s_self.cmt_remEntry.disable();
 
                 // fill comment box with comment when applicable
                 if (pdd.comments[scoring.itemName]) {
@@ -851,6 +877,13 @@ class Scoring {
                 return false; // required for navigation requests -- don't know why
             }
         });
+
+        // remove legacy manual language chooser; previews follow the stored answer language.
+        $('#dlVeil_qLangSel').remove();
+        $('#ms_qLangSlot').empty();
+        this.qlDD = null;
+
+        // load mathjax related symbols
         MathJax.typeset();
     }
 
@@ -860,6 +893,10 @@ class Scoring {
             if (touched === 0 && this.viewType === 't') pg_left[this.pageSelectionData.passwordId]--; // decrement number of items left to score
             if (touched === 0 && this.viewType === 'q') pg_left[this.pageSelectionData.pageId]--; // decrement number of items left to score [question list view]
             touched = 1;
+            if (this.sc_type === "manual" && this.pageSelectionData.scoringInfo?.[this.itemName]) {
+                this.pageSelectionData.scoringInfo[this.itemName].touched = 1;
+                $(`#ms_isel_${this.str2hex(this.itemName)}`).removeClass('ms_i_unscored').addClass('ms_i_scored');
+            }
         } else {
             touched = this.pageSelectionData.scoringInfo[this.itemName].touched;
         }
@@ -869,13 +906,10 @@ class Scoring {
             $('#ms_sumBox_status').html(UILANG.m("AUTOSCORED")).removeClass("notscored").addClass("scored");
         } else {
             $('#ms_sumBox_qtype').html(UILANG.m("Manual"));
-            if (touched === 0) {
-                $('#ms_sumBox_status').html(UILANG.m("REQUIRES MANUAL SCORING")).removeClass("scored").addClass("notscored");
-            } else {
-                if (fromScoring) this.pageSelectionData.scoringInfo[this.itemName].touched = 1;
+            if (this.allManualItemsScored(this.pageSelectionData.scoringInfo)) {
                 $('#ms_sumBox_status').html(UILANG.m("MANUALLY SCORED")).removeClass("notscored").addClass("scored");
-                $(`#ms_isel_${this.str2hex(this.itemName)}`).removeClass('ms_i_unscored').addClass('ms_i_scored');
-
+            } else {
+                $('#ms_sumBox_status').html(UILANG.m("REQUIRES MANUAL SCORING")).removeClass("scored").addClass("notscored");
             }
         }
 
@@ -888,47 +922,109 @@ class Scoring {
 
     }
 
+    allManualItemsScored(scoringInfo) {
+        let hasManual = false;
+        for (const [itemName, itemInfo] of Object.entries(scoringInfo ?? {})) {
+            if (itemName === "pageName" || itemName === "sortOrder" || typeof itemInfo !== "object" || itemInfo === null) continue;
+            if (itemInfo.itemScoreType !== "manual") continue;
+            hasManual = true;
+            if (parseInt(itemInfo.touched) === 0) return false;
+        }
+        return hasManual;
+    }
+
     /**
      * Update the table score and panel titles
      */
+    formatScoreNumber(value) {
+        const numericValue = parseFloat(value) || 0;
+        return Number.isInteger(numericValue) ? String(numericValue) : String(Math.round(numericValue * 100) / 100);
+    }
+
+    scoreParts(scoringInfo, scoreValues = {}, updatedScore = null) {
+        const parts = {
+            manual: 0,
+            auto: 0,
+            hasManual: false,
+            hasAuto: false,
+            hasTouchedManual: false,
+            isComplete: true
+        };
+
+        for (const [itemName, itemInfo] of Object.entries(scoringInfo ?? {})) {
+            if (itemName === "pageName" || itemName === "sortOrder" || typeof itemInfo !== "object" || itemInfo === null) continue;
+
+            const isUpdatedItem = updatedScore !== null && itemName === updatedScore.itemName;
+            const rawValue = isUpdatedItem ? updatedScore.scoreValue : scoreValues?.[itemName];
+            const scoreValue = typeof rawValue === "object" ? rawValue?.scoreValue : rawValue;
+            const numericScore = parseFloat(scoreValue ?? itemInfo.earned ?? 0) || 0;
+
+            if (itemInfo.itemScoreType === "manual") {
+                parts.hasManual = true;
+                parts.manual += numericScore;
+                if (isUpdatedItem || parseInt(itemInfo.touched) !== 0) parts.hasTouchedManual = true;
+                if (!isUpdatedItem && parseInt(itemInfo.touched) === 0) parts.isComplete = false;
+            } else if (itemInfo.itemScoreType === "auto") {
+                parts.hasAuto = true;
+                parts.auto += numericScore;
+                if (parseInt(itemInfo.touched) === 0) parts.isComplete = false;
+            }
+        }
+
+        return parts;
+    }
+
+    buildScoreLabel(scoringInfo, scoreValues = {}, updatedScore = null) {
+        const parts = this.scoreParts(scoringInfo, scoreValues, updatedScore);
+
+        if (!parts.isComplete) {
+            return `<span class="list_incomplete_scoring">${UILANG.m("Incomplete")}</span>`;
+        }
+
+        let displayScore = 0;
+        let hasScoreValues = false;
+
+        for (const [itemName, rawValue] of Object.entries(scoreValues ?? {})) {
+            const scoreValue = updatedScore !== null && itemName === updatedScore.itemName
+                ? updatedScore.scoreValue
+                : (typeof rawValue === "object" ? rawValue?.scoreValue : rawValue);
+            if (typeof scoreValue === "undefined") continue;
+            displayScore += parseFloat(scoreValue) || 0;
+            hasScoreValues = true;
+        }
+
+        if (updatedScore !== null && typeof scoreValues?.[updatedScore.itemName] === "undefined") {
+            displayScore += parseFloat(updatedScore.scoreValue) || 0;
+            hasScoreValues = true;
+        }
+
+        if (!hasScoreValues) displayScore = parts.manual + parts.auto;
+
+        return `<span class="list_complete_scoring">${this.formatScoreNumber(displayScore)}</span>`;
+    }
+
     async updateScoreAndPanelLabels(data, isUpdate = false, isMulti = false) {
 
         const tableRowId = (isUpdate) ? this.pageId : data.pageId;
-
-        let score;
-
-        if (isUpdate && isMulti) {
-            score = data.updatedScore.updatedSumScore;
-        } else if (isUpdate && !isMulti) {
-            score = data.updatedScore.scoreValue;
-        } else {
-            score = data.score;
-        }
 
         const pageName = data.pageName;
 
         if (this.viewType === 't') {
 
-            let tData = data.scoringInfo ?? this.pageSelectionData.scoringInfo;
+            let tData = data.scoringInfo ?? (this.pageSelectionData.unfilteredScoringInfo ?? this.pageSelectionData.scoringInfo);
+            const scoreValues = data.scoredByInfo ?? (this.pageSelectionData.unfilteredScoredByInfo ?? this.pageSelectionData.scoredByInfo);
 
-            if (isUpdate) tData[data.updatedScore.itemName].touched = 1;
+            if (isUpdate && typeof tData[data.updatedScore.itemName] !== "undefined") tData[data.updatedScore.itemName].touched = 1;
 
-            /* look for an unscored item and set qt_total label as 'incomplete', or the actual page score */
-            Object.values(tData).every((e) => {
-                if (e.touched === 0) {
-                    $('#testListItem_' + parseInt(tableRowId) + ' > span > span.qt_total').html(`<span class='list_incomplete_scoring'>${UILANG.m("Incomplete")}</span>`); // show incomplete scoring status for page
-                    return false;
-                } else {
-                    $('#testListItem_' + parseInt(tableRowId) + ' > span > span.qt_total').html(`<span class='list_complete_scoring'>${score}</span>`); // update qTable selected row 'score' label;
-                    return true;
-                }
-            });
+            $('#testListItem_' + parseInt(tableRowId) + ' > span > span.qt_total').html(this.buildScoreLabel(tData, scoreValues, isUpdate ? data.updatedScore : null));
 
             if (!isUpdate) ms_panels.right_section.box.setTitle( /* html */ `<span class='ms_title_emph'>${pageName}</span>`);
         }
 
         if (this.viewType === 'q') {
-            $('#testListItem_' + parseInt(data.passwordId) + ' > span > span.qt_total').html(`${score} pts.`); // update qTable selected row 'score' label
+            const qData = data.scoringInfo ?? (this.pageSelectionData.unfilteredScoringInfo ?? this.pageSelectionData.scoringInfo);
+            const scoreValues = data.scoredByInfo ?? (this.pageSelectionData.unfilteredScoredByInfo ?? this.pageSelectionData.scoredByInfo);
+            $('#testListItem_' + parseInt(data.passwordId) + ' > span > span.qt_total').html(this.buildScoreLabel(qData, scoreValues, isUpdate ? data.updatedScore : null));
             if (!isUpdate) ms_panels.right_section.box.setTitle( /* html */ `${UILANG.m('Test Taker:')} <span class='ms_title_emph'>${data.loginName}</span> [${data.loginId}] | ${UILANG.m("Password Id:")} <span class='ms_title_emph'>${data.passwordId}</span>`);
         }
     }
@@ -964,37 +1060,40 @@ class Scoring {
 
         /* set/update live score and page info labels */
         $('#qSummaryStats').append( /* html */ `
-        <div class="sumbox_header">${UILANG.m("Test Taker Information")}</div>
-            <table class="ms_sumBoxTable">
-                <tr><td class="ms_sumBox">${UILANG.m("Test Taker")}</td><td class="ms_sumBox_val">${pdd.liveScore.loginName}</td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Password Id")}</td><td class="ms_sumBox_val">${this.pageSelectionData.passwordId}</td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Password Tag")}</td><td class="ms_sumBox_val">${this.pageSelectionData.passwordTag}</td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Last Connected")}</td><td class="ms_sumBox_val">${pdd.liveScore.lConn}</td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Test Progress")}</td><td class="ms_sumBox_val">${fProg}</td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Total Score")}</td><td class="ms_sumBox_val_score" id="mssb_fScore">${fScore}</td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Total Points")}</td><td class="ms_sumBox_val_score" id="mssb_tPoints">${pdd.liveScore.points}</td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Remaining Items")}</td><td class="ms_sumBox_val"><span id="ms_remItems"></span></td></tr>
-            </table>
+            <section class="msInfoCard">
+                <h3>${UILANG.m("Test Taker Information")}</h3>
+                <div class="msInfoRows">
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Test Taker")}</span><strong class="ms_sumBox_val">${pdd.liveScore.loginName}</strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Password Id")}</span><strong class="ms_sumBox_val">${this.pageSelectionData.passwordId}</strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Password Tag")}</span><strong class="ms_sumBox_val">${this.pageSelectionData.passwordTag}</strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Last Connected")}</span><strong class="ms_sumBox_val">${pdd.liveScore.lConn}</strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Test Progress")}</span><strong class="ms_sumBox_val">${fProg}</strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Total Score")}</span><strong class="ms_sumBox_val_score" id="mssb_fScore">${fScore}</strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Total Points")}</span><strong class="ms_sumBox_val_score" id="mssb_tPoints">${pdd.liveScore.points}</strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Remaining Items")}</span><strong class="ms_sumBox_val"><span id="ms_remItems"></span></strong></div>
+                </div>
+            </section>
 
-            <hr> 
+            <section class="msInfoCard">
+                <h3>${UILANG.m("Question Scoring Information")}</h3>
+                <div class="msInfoRows">
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Scorer")}</span><strong class="ms_sumBox_val"><span id="ms_scoreby"></span></strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Scorer ID")}</span><strong class="ms_sumBox_val"><span id="ms_scorebyid"></span></strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Scoring Time")}</span><strong class="ms_sumBox_val"><span id="ms_scoretime"></span></strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Score Given")}</span><strong class="ms_sumBox_val"><span id="ms_scoregiven"></span></strong></div>
+                </div>
+            </section>
 
-            <div class="sumbox_header">${UILANG.m("Question Scoring Information")}</div>
-            <table class="ms_sumBoxTable">
-                <tr><td class="ms_sumBox">${UILANG.m("Scorer")}</td><td class="ms_sumBox_val"><span id="ms_scoreby"></span></td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Scorer ID")}</td><td class="ms_sumBox_val"><span id="ms_scorebyid"></span></td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Scoring Time")}</td><td class="ms_sumBox_val"><span id="ms_scoretime"></span></td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Score Given")}</td><td class="ms_sumBox_val"><span id="ms_scoregiven"></span></td></tr>
-            </table>
-
-            <div class="sumbox_header">${UILANG.m("Test Page Information")}</div>
-            <table class="ms_sumBoxTable">
-                <tr><td class="ms_sumBox">${UILANG.m("Test Name")}</td><td class="ms_sumBox_val">${pdd.testName}</td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Page Name")}</td><td class="ms_sumBox_val">${(this.pageSelectionData.qType === 't') ? this.pageSelectionData.name : this.pageSelectionData.pageName}</td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Question Name")}</td><td class="ms_sumBox_val"><span id="ms_sumBox_qName"></span></td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Question Type")}</td><td class="ms_sumBox_val"><span id="ms_sumBox_qtype"></span></td></tr>
-                <tr><td class="ms_sumBox">${UILANG.m("Scoring Status")}</td><td class="ms_sumBox_val"><span id="ms_sumBox_status"></span></td></tr>
-            </table>
-
+            <section class="msInfoCard">
+                <h3>${UILANG.m("Test Page Information")}</h3>
+                <div class="msInfoRows">
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Test Name")}</span><strong class="ms_sumBox_val">${pdd.testName}</strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Page Name")}</span><strong class="ms_sumBox_val">${(this.pageSelectionData.qType === 't') ? this.pageSelectionData.name : this.pageSelectionData.pageName}</strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Question Name")}</span><strong class="ms_sumBox_val"><span id="ms_sumBox_qName"></span></strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Question Type")}</span><strong class="ms_sumBox_val"><span id="ms_sumBox_qtype"></span></strong></div>
+                    <div class="msInfoRow"><span class="ms_sumBox">${UILANG.m("Scoring Status")}</span><strong class="ms_sumBox_val"><span id="ms_sumBox_status"></span></strong></div>
+                </div>
+            </section>
         `);
     }
 
@@ -1008,63 +1107,28 @@ class Scoring {
 
         for (let i = 0; i < pdd.items.length; i++) {
 
+            const rawItemName = pdd.items[i];
             const itemName = this.str2hex(pdd.items[i]);
             // const hDataBlock = fetchObjectFromArray(pdd.htmlPreview, {'id': itemName}, true);
             const hDataBlock = pdd.htmlPreview[i];
+            const itemScoreType = pdd.scoringInfo?.[rawItemName]?.itemScoreType;
+            const isAutoScoredItem = itemScoreType === 'auto';
+            const itemCorrectionKey = pdd.corKey?.[rawItemName];
 
             /* question preview block(s) */
             const theEditor = ef.getEditorClass(hDataBlock.type);
 
             /* setup test language selection */
             if (typeof (hDataBlock.question) !== "undefined") {
-                this.langSelConfig(Object.keys(hDataBlock.question));
+                // this.langSelConfig(Object.keys(hDataBlock.question));
+                this.langSels = Object.keys(hDataBlock.question);
             } else if (typeof (hDataBlock.source) !== "undefined") {
-                this.langSelConfig(Object.keys(hDataBlock.source));
+                // this.langSelConfig(Object.keys(hDataBlock.source));
+                this.langSels = Object.keys(hDataBlock.source);
             } else {
                 continue;
             }
-            // on initial page load, no lang is selected, so select the first one available
-            if (this.testLang === null) this.testLang = pdd.languages[0];
-
-            // let's separate the page lang so we can retain our "session" lang found in this.testLang
-            let q_lang = this.testLang;
-
-            // the page being loaded may have different lang options thant the previous one, so we implement a failback to whatever this question contains (if not the previous lang value)
-
-            // conditional for the rare case when an auto scored advanced editor is mixed in with a manual question (adv editors do not have the 'question' key)
-            if (typeof hDataBlock.question === "undefined") {
-                q_lang = Object.keys(hDataBlock.source)[0];
-            } else {
-                if (Object.keys(hDataBlock.question).includes(q_lang) === false) q_lang = Object.keys(hDataBlock.question)[0];
-            }
-
-            /* correction key block(s) */
-
-            // skip loop condition (when no valid correction key available)
-            if (!(pdd.corKey === null || (!(this.hex2str(itemName) in pdd.corKey)) || (pdd.corKey[scoring.hex2str(itemName)].length === 1 && pdd.corKey[scoring.hex2str(itemName)][0] === ""))) {
-
-                $(`#ms_corKey_container_${itemName}`).remove(); // for when animation redraw call leads to multiple executions on same itemName value
-
-                this.pHtml += /* html */ `<div id="ms_corKey_container_${itemName}"><span class="ms_corKey" id="ckLabel_item_${itemName}">${UILANG.m("Correction key")}</span>`;
-
-                for (let [corKey, corVal] of Object.entries(pdd.corKey[scoring.hex2str(itemName)])) {
-
-                    // correction block header
-                    this.pHtml += /* html */ `<span id='ckli_item_${itemName}' class='ms_corKeyBlock' style="display: block;">`; // display must be force set here to prevent jquery from setting to 'inline' style on show()
-
-                    // correction block data (conditional)
-                    if (corVal !== "") {
-                        const corKeyStr = (pdd.corKey[scoring.hex2str(itemName)] instanceof Array) ? "" : corKey + ": ";
-                        if (typeof corVal.name !== "undefined") corVal = corVal.name;
-                        this.pHtml += /* html */ `<li class="ms_itemBullet">${corKeyStr}${corVal}</li>`;
-                    }
-
-                    // correction block footer
-                    this.pHtml += "</span>";
-                }
-                this.pHtml += /* html */`</div>`;
-
-            }
+            const q_lang = this.previewLangForItem(hDataBlock, pdd, rawItemName);
 
             /* concept map interaction special handler */
             if (hDataBlock.type === "conceptmap") {
@@ -1091,12 +1155,287 @@ class Scoring {
                 if (pdd.itemType[i] === 'oasysSlider') forceWidth = (Math.floor($('#ms_questionArea').width()) - 22); // special forced width for sliders/slikerts
                 if (pdd.itemType[i] === 'oasysSlikert') forceWidth = (Math.floor($('#ms_questionArea').width())); // special forced width for sliders/slikerts
                 let prevGen = theEditor.generatePreview(hDataBlock, q_lang, { maxWidth: forceWidth, skipShuffling: true });
+                prevGen = this.decorateQuestionReferencePreview(hDataBlock, q_lang, prevGen);
+                if (isAutoScoredItem) {
+                    prevGen = this.decorateCorrectAnswerQuestionPreview(prevGen, itemCorrectionKey, hDataBlock, rawItemName, i, q_lang);
+                }
                 this.pHtml += /* html */ `<div class="ms_q_item" id="q_item_${itemName}">${prevGen}</div>`;
             }
         }
 
         MathJax.typeset();
         return true;
+    }
+
+    correctionKeyHasValues(correctionKey) {
+        if (correctionKey === null || typeof correctionKey === 'undefined') return false;
+        if (Array.isArray(correctionKey)) return correctionKey.some(value => value !== '');
+        if (typeof correctionKey === 'object') return Object.values(correctionKey).some(value => value !== '');
+        return correctionKey !== '';
+    }
+
+    correctionAnswerValues(correctionKey) {
+        if (!this.correctionKeyHasValues(correctionKey)) return [];
+
+        if (Array.isArray(correctionKey)) {
+            return [...new Set(correctionKey.flatMap(value => this.correctionAnswerValues(value)))];
+        }
+
+        if (typeof correctionKey === 'object') {
+            const values = [];
+            for (const [key, value] of Object.entries(correctionKey)) {
+                const keyIsNamedValue = key !== '' && Number.isNaN(parseInt(key, 10));
+                if (value === true || value === 'true') {
+                    if (key !== '') values.push(key);
+                    continue;
+                }
+                if (value === false || value === 'false' || value === '') continue;
+                if (keyIsNamedValue) values.push(key);
+                if (typeof value?.name !== 'undefined') {
+                    values.push(value.name);
+                } else {
+                    values.push(...this.responseAnswerValues(value));
+                }
+            }
+            return [...new Set(values.filter(value => value !== ''))];
+        }
+
+        return [correctionKey];
+    }
+
+    correctAnswerDisplayValue(values, hDataBlock, lang) {
+        const displayValues = values.map(value => this.responseAnswerLabel(hDataBlock, value, lang));
+        return [...new Set(displayValues)].join(' / ');
+    }
+
+    decorateCorrectAnswerQuestionPreview(previewHtml, correctionKey, hDataBlock, item, itemIndex, lang) {
+        const values = this.correctionAnswerValues(correctionKey);
+        if (values.length === 0) return previewHtml;
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = previewHtml;
+        wrapper.classList.add('msQuestionCorrectPreview');
+
+        let decorated = false;
+        if (['slider', 'slikert'].includes(hDataBlock.type)) {
+            decorated = this.decorateCorrectRangePreview($(wrapper), correctionKey, values, hDataBlock);
+        } else {
+            const correctAnswer = ['textfield', 'textarea', 'inline_textfields', 'inline_gaps'].includes(hDataBlock.type) ?
+                this.correctAnswerDisplayValue(values, hDataBlock, lang) :
+                values;
+            decorated = this.decorateResponsePreview($(wrapper), correctAnswer, hDataBlock, item, itemIndex, lang);
+        }
+        return decorated ? wrapper.outerHTML : previewHtml;
+    }
+
+    numericCorrectionRange(correctionKey) {
+        if (correctionKey === null || typeof correctionKey === 'undefined' || correctionKey === '') return null;
+
+        if (typeof correctionKey !== 'object') {
+            const value = parseFloat(correctionKey);
+            return Number.isNaN(value) ? null : { from: value, to: value };
+        }
+
+        if (Array.isArray(correctionKey)) {
+            const numericValues = correctionKey
+                .flatMap(value => value && typeof value === 'object' ? Object.values(value) : value)
+                .map(value => parseFloat(typeof value?.name !== 'undefined' ? value.name : value))
+                .filter(value => !Number.isNaN(value));
+            if (numericValues.length === 0) return null;
+            if (numericValues.length === 1) return { from: numericValues[0], to: numericValues[0] };
+            return { from: Math.min(numericValues[0], numericValues[1]), to: Math.max(numericValues[0], numericValues[1]) };
+        }
+
+        const rangeKeyPairs = [
+            ['from', 'to'],
+            ['min', 'max'],
+            ['minimum', 'maximum'],
+            ['lower', 'upper'],
+            ['start', 'end'],
+            ['fromValue', 'toValue'],
+            ['rangeFrom', 'rangeTo']
+        ];
+        for (const [fromKey, toKey] of rangeKeyPairs) {
+            if (typeof correctionKey[fromKey] === 'undefined' || typeof correctionKey[toKey] === 'undefined') continue;
+            const from = parseFloat(correctionKey[fromKey]);
+            const to = parseFloat(correctionKey[toKey]);
+            if (!Number.isNaN(from) && !Number.isNaN(to)) return { from: Math.min(from, to), to: Math.max(from, to) };
+        }
+
+        const nestedValues = Object.values(correctionKey).filter(value => value && typeof value === 'object');
+        if (nestedValues.length === 1) {
+            const nestedRange = this.numericCorrectionRange(nestedValues[0]);
+            if (nestedRange !== null) return nestedRange;
+        }
+
+        const numericValues = Object.entries(correctionKey)
+            .flatMap(([key, value]) => (value === true || value === 'true') ? key : value)
+            .map(value => parseFloat(typeof value?.name !== 'undefined' ? value.name : value))
+            .filter(value => !Number.isNaN(value));
+        if (numericValues.length === 0) return null;
+        if (numericValues.length === 1) return { from: numericValues[0], to: numericValues[0] };
+        return { from: Math.min(numericValues[0], numericValues[1]), to: Math.max(numericValues[0], numericValues[1]) };
+    }
+
+    decorateCorrectRangePreview($target, correctionKey, values, hDataBlock) {
+        const range = this.numericCorrectionRange(correctionKey);
+        if (range === null) return this.decorateResponsePreview($target, values[0], hDataBlock, hDataBlock.id ?? '', 0, '');
+        if (range.from === range.to) return this.decorateResponsePreview($target, range.from, hDataBlock, hDataBlock.id ?? '', 0, '');
+
+        return hDataBlock.type === 'slikert' ?
+            this.decorateResponseSlikertRange($target, range, hDataBlock) :
+            this.decorateResponseSliderRange($target, range, hDataBlock);
+    }
+
+    decorateQuestionReferencePreview(hDataBlock, lang, previewHtml) {
+        previewHtml = this.decorateInlineQuestionReferencePreview(hDataBlock, lang, previewHtml);
+        previewHtml = this.decorateChoiceDropdownQuestionReferencePreview(hDataBlock, lang, previewHtml);
+        return previewHtml;
+    }
+
+    inlineReferenceFields(hDataBlock, lang) {
+        const fieldsByLang = hDataBlock?.fields?.[lang] ?? hDataBlock?.fields?.[Object.keys(hDataBlock?.fields ?? {})[0]];
+        return this.choiceCollectionEntries(fieldsByLang).sort((a, b) => {
+            const numA = parseInt(a?.number, 10);
+            const numB = parseInt(b?.number, 10);
+            if (Number.isNaN(numA) || Number.isNaN(numB)) return 0;
+            return numA - numB;
+        });
+    }
+
+    inlineReferenceText(field) {
+        const label = (field?.label && typeof field.label === 'object') ? Object.values(field.label)[0] : field?.label;
+        return this.stripHtml(field?.name ?? label ?? field?.value ?? '');
+    }
+
+    normalizeInlineReferenceText(value) {
+        return this.stripHtml(value).trim().toLowerCase();
+    }
+
+    inlineAnswerLabel(answer, lang) {
+        const label = (answer?.label && typeof answer.label === 'object') ? (answer.label?.[lang] ?? Object.values(answer.label)[0]) : answer?.label;
+        return this.stripHtml(label ?? answer?.name ?? answer?.value ?? '');
+    }
+
+    decorateInlineQuestionReferencePreview(hDataBlock, lang, previewHtml) {
+        if (!['inline_textfields', 'inline_gaps'].includes(hDataBlock?.type)) return previewHtml;
+
+        const fields = this.inlineReferenceFields(hDataBlock, lang);
+        if (fields.length === 0 && hDataBlock.type !== 'inline_gaps') return previewHtml;
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = previewHtml;
+        const selector = hDataBlock.type === 'inline_textfields' ? '.previewTag_inlineText' : '.previewTag_inlineGap';
+        const targets = [...wrapper.querySelectorAll(selector)];
+
+        fields.forEach((field, fallbackIdx) => {
+            const fieldText = this.inlineReferenceText(field);
+            if (fieldText === '') return;
+
+            const fieldIdx = parseInt(field?.number, 10) - 1;
+            const target = targets[Number.isNaN(fieldIdx) ? fallbackIdx : fieldIdx];
+            if (!target) return;
+
+            target.textContent = fieldText;
+            target.classList.add('msQuestionReferenceField');
+            target.setAttribute('title', `${UILANG.m("Initial answer")}: ${fieldText}`);
+            target.style.width = 'auto';
+        });
+
+        if (hDataBlock.type === 'inline_gaps') {
+            this.decorateInlineGapDistractors(wrapper, hDataBlock, lang, fields);
+        }
+
+        return wrapper.innerHTML;
+    }
+
+    decorateInlineGapDistractors(wrapper, hDataBlock, lang, fields) {
+        const stock = wrapper.querySelector('.previewTag_inlineDraggableStock');
+        if (!stock) return;
+
+        const correctValues = new Set(fields.flatMap(field => [
+            this.inlineReferenceText(field),
+            field?.value,
+            field?.number
+        ].map(value => this.normalizeInlineReferenceText(value))).filter(Boolean));
+        const distractors = this.choiceCollectionEntries(hDataBlock.answers)
+            .map(answer => {
+                return {
+                    label: this.inlineAnswerLabel(answer, lang),
+                    value: this.stripHtml(answer?.value ?? '')
+                };
+            })
+            .filter(answer => {
+                if (answer.label === '') return false;
+                return !correctValues.has(this.normalizeInlineReferenceText(answer.label))
+                    && !correctValues.has(this.normalizeInlineReferenceText(answer.value));
+            });
+
+        if (distractors.length === 0) {
+            stock.remove();
+            return;
+        }
+
+        stock.innerHTML = '';
+        stock.classList.add('msQuestionDistractorStock');
+
+        const label = document.createElement('span');
+        label.className = 'msQuestionDistractorLabel';
+        label.textContent = UILANG.m("Distractors");
+        stock.appendChild(label);
+
+        distractors.forEach(answer => {
+            const chip = document.createElement('span');
+            chip.className = 'msQuestionDistractorChip';
+            chip.textContent = answer.label;
+            if (answer.value !== '') chip.setAttribute('title', answer.value);
+            stock.appendChild(chip);
+        });
+    }
+
+    choiceDropdownReferenceEntries(hDataBlock, lang) {
+        const choices = this.choiceCollectionEntries(hDataBlock?.choices).map(choice => {
+            const label = (choice?.label && typeof choice.label === 'object') ? (choice.label?.[lang] ?? Object.values(choice.label)[0]) : choice?.label;
+            return {
+                label: this.stripHtml(label ?? choice?.name ?? choice?.value ?? ''),
+                value: this.stripHtml(choice?.value ?? '')
+            };
+        }).filter(choice => choice.label !== '');
+
+        if (hDataBlock?.order === 'alphabet') {
+            choices.sort((a, b) => a.label.toLowerCase().localeCompare(b.label.toLowerCase()));
+        }
+
+        return choices;
+    }
+
+    decorateChoiceDropdownQuestionReferencePreview(hDataBlock, lang, previewHtml) {
+        if (hDataBlock?.type !== 'choice' || hDataBlock?.choiceType !== 'dropdown') return previewHtml;
+
+        const choices = this.choiceDropdownReferenceEntries(hDataBlock, lang);
+        if (choices.length === 0) return previewHtml;
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = previewHtml;
+        const dropdown = wrapper.querySelector('.previewTag_DD');
+        if (!dropdown) return previewHtml;
+
+        dropdown.classList.add('msQuestionChoiceDropdownReference');
+        dropdown.innerHTML = `<span>${UILANG.m("Choices")}</span><span>&#9660;</span>`;
+
+        const list = document.createElement('div');
+        list.className = 'msQuestionChoiceDropdownList';
+
+        choices.forEach(choice => {
+            const row = document.createElement('span');
+            row.className = 'msQuestionChoiceDropdownItem';
+            row.textContent = choice.label;
+            if (choice.value !== '') row.setAttribute('title', choice.value);
+            list.appendChild(row);
+        });
+
+        dropdown.insertAdjacentElement('afterend', list);
+        return wrapper.innerHTML;
     }
 
     /**
@@ -1115,7 +1454,7 @@ class Scoring {
                 <div id="ms_itemHeadline">
 
                     <div id="ms_scoreBoxInfo">
-                    <span id="s_scType"></span> | <span id="s_fullName"></span> 
+                    <span id="s_scType"></span> | <span id="s_fullName"></span>
                     </div>
                     <div id="scoringItemsContainer">
                     <div id="isub_nav_holder"></div>
@@ -1126,7 +1465,7 @@ class Scoring {
 
                 </div>
 
-                
+
 
                 <!-- scoring selection section -->
                 <div id='scoreKeyInner'></div> <!-- dynamically populated based on scoring model value -->
@@ -1144,7 +1483,7 @@ class Scoring {
                     <div class="ms_cmtBtnBlock">
                         <div class="ms_cmtNavBtns" id="cmtSaveBtn"></div>
                         <div class="ms_cmtNavBtns" id="cmtRemBtn"></div>
-                        <!-- <div class="ms_cmtNavBtns" id="cmtRptBtn"></div> --> 
+                        <!-- <div class="ms_cmtNavBtns" id="cmtRptBtn"></div> -->
                     </div>
 
                 </div>
@@ -1160,7 +1499,7 @@ class Scoring {
 
         // initialize first question since this method is called at the start of page load
         this.buildScoringOptsUI(pdd);
-        this.item_switch(pdd, "clicked");
+        this.item_switch(pdd, "clicked", false, this.itemName);
     }
 
     /**
@@ -1199,16 +1538,677 @@ class Scoring {
         return retArrStr;
     }
 
+    escapeHtml(str) {
+        return String(str ?? '').replace(/[&<>"']/g, function(char) {
+            return ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            })[char];
+        });
+    }
+
+    stripHtml(str) {
+        const el = document.createElement('div');
+        el.innerHTML = String(str ?? '');
+        return el.textContent || el.innerText || '';
+    }
+
+    responseHasAnswer(answer) {
+        if (typeof answer === 'undefined' || answer === null) return false;
+        if (answer === '' || answer === '[]') return false;
+        if (Array.isArray(answer) && answer.length === 0) return false;
+        if (typeof answer === 'object' && Object.keys(answer).length === 0) return false;
+        return true;
+    }
+
+    responseAnswerValues(answer) {
+        if (!this.responseHasAnswer(answer)) return [];
+        if (Array.isArray(answer)) return answer.flatMap(v => this.responseAnswerValues(v));
+        if (typeof answer === 'object') {
+            return Object.entries(answer).flatMap(([key, value]) => {
+                if (value === true || value === 'true' || value === 1) return [String(key)];
+                if (value === false || value === 'false' || value === 0) return [];
+                return this.responseAnswerValues(value);
+            });
+        }
+        if (typeof answer !== 'string') return [String(answer)];
+
+        try {
+            const parsed = JSON.parse(answer);
+            if (Array.isArray(parsed) || (parsed !== null && typeof parsed === 'object')) return this.responseAnswerValues(parsed);
+            if (parsed !== null) return [String(parsed)];
+        } catch (_e) {
+            // Plain scalar answer, keep as-is.
+        }
+        return [answer];
+    }
+
+    responseValueCandidates(value) {
+        const valueStr = String(value);
+        const candidates = new Set([valueStr]);
+
+        candidates.add(this.str2hex(valueStr));
+        if (/^[0-9a-f]+$/i.test(valueStr) && valueStr.length % 2 === 0) {
+            candidates.add(this.hex2str(valueStr));
+        }
+
+        return candidates;
+    }
+
+    addChoiceEntryCandidates(candidates, entry, lang) {
+        if (!entry || typeof entry !== 'object') return candidates;
+
+        if (typeof entry.value !== 'undefined') {
+            this.responseValueCandidates(entry.value).forEach(candidate => candidates.add(candidate));
+        }
+
+        const label = (typeof entry.label === 'object') ? (entry.label?.[lang] ?? Object.values(entry.label)[0]) : entry.label;
+        if (typeof label !== 'undefined') {
+            this.responseValueCandidates(label).forEach(candidate => candidates.add(candidate));
+        }
+
+        if (typeof entry.name !== 'undefined') {
+            this.responseValueCandidates(entry.name).forEach(candidate => candidates.add(candidate));
+        }
+
+        return candidates;
+    }
+
+    choiceCollectionEntries(collection) {
+        if (Array.isArray(collection)) return collection;
+        if (collection && typeof collection === 'object') return Object.values(collection);
+        return [];
+    }
+
+    responseExpandedCandidates(value, collection = [], lang) {
+        const candidates = this.responseValueCandidates(value);
+
+        for (const entry of this.choiceCollectionEntries(collection)) {
+            const entryCandidates = this.addChoiceEntryCandidates(new Set(), entry, lang);
+            if ([...entryCandidates].some(candidate => candidates.has(candidate))) {
+                entryCandidates.forEach(candidate => candidates.add(candidate));
+            }
+        }
+
+        return candidates;
+    }
+
+    candidateSetsOverlap(a, b) {
+        return [...a].some(candidate => b.has(candidate));
+    }
+
+    choiceMatrixRowMatchData(hDataBlock, item, lang) {
+        const rowSeedValues = [
+            hDataBlock.cmtx_row,
+            (typeof hDataBlock.id !== 'undefined') ? String(item).replace(`${hDataBlock.id}_`, '') : null
+        ].filter(value => value !== null && typeof value !== 'undefined' && value !== '');
+        const rowCandidates = new Set(rowSeedValues.flatMap(value => [...this.responseExpandedCandidates(value, hDataBlock.rows, lang)]));
+        const rowIndexes = new Set();
+        const rowNumberMatch = String(item).match(/_row_(\d+)$/);
+        if (rowNumberMatch) {
+            const rowIndex = parseInt(rowNumberMatch[1], 10) - 1;
+            if (!Number.isNaN(rowIndex) && rowIndex >= 0) rowIndexes.add(rowIndex);
+        }
+
+        this.choiceCollectionEntries(hDataBlock.rows).forEach((row, idx) => {
+            const rowEntryCandidates = this.addChoiceEntryCandidates(new Set(), row, lang);
+            const rowValue = String(row.value ?? '');
+            const itemStr = String(item);
+
+            if (
+                this.candidateSetsOverlap(rowCandidates, rowEntryCandidates) ||
+                (rowValue !== '' && itemStr.endsWith(`_${rowValue}`)) ||
+                (rowValue !== '' && itemStr.endsWith(`_${this.str2hex(rowValue)}`))
+            ) {
+                rowIndexes.add(idx);
+                rowEntryCandidates.forEach(candidate => rowCandidates.add(candidate));
+            }
+        });
+
+        return { rowCandidates, rowIndexes };
+    }
+
+    choiceMatrixCellMatchesRow($cell, hDataBlock, lang, rowMatchData) {
+        const group = $cell.attr('data-group');
+        if (typeof group !== 'undefined') {
+            const cellRowCandidates = this.responseExpandedCandidates(group, hDataBlock.rows, lang);
+            if (this.candidateSetsOverlap(rowMatchData.rowCandidates, cellRowCandidates)) return true;
+        }
+
+        const rowIndex = parseInt($cell.attr('data-row'), 10);
+        return !Number.isNaN(rowIndex) && rowMatchData.rowIndexes.has(rowIndex);
+    }
+
+    choiceMatrixCellValueCandidates($cell, hDataBlock, lang) {
+        const candidates = new Set();
+        const cellValue = $cell.attr('data-value');
+
+        if (typeof cellValue !== 'undefined') {
+            this.responseExpandedCandidates(cellValue, hDataBlock.labels, lang).forEach(candidate => candidates.add(candidate));
+        }
+
+        const innerValue = $cell.find('[data-value]').first().attr('data-value');
+        if (typeof innerValue !== 'undefined') {
+            this.responseExpandedCandidates(innerValue, hDataBlock.labels, lang).forEach(candidate => candidates.add(candidate));
+        }
+
+        const colIndex = parseInt($cell.attr('data-col'), 10);
+        if (!Number.isNaN(colIndex) && hDataBlock.labels?.[colIndex]) {
+            this.addChoiceEntryCandidates(candidates, hDataBlock.labels[colIndex], lang);
+        }
+
+        return candidates;
+    }
+
+    choiceMatrixRowIndexFromItem(item) {
+        const rowNumberMatch = String(item).match(/_row_(\d+)$/);
+        if (!rowNumberMatch) return null;
+
+        const rowIndex = parseInt(rowNumberMatch[1], 10) - 1;
+        return (!Number.isNaN(rowIndex) && rowIndex >= 0) ? rowIndex : null;
+    }
+
+    choiceMatrixRowCells($root, hDataBlock, item, lang, rowMatchData) {
+        const itemId = this.str2hex(item);
+        const $itemRoot = $root.filter(`#q_item_${itemId}, #r_item_${itemId}`)
+            .add($root.find(`#q_item_${itemId}, #r_item_${itemId}`))
+            .first();
+        const $searchRoot = ($itemRoot.length > 0) ? $itemRoot : $root;
+
+        let $rowCells = $searchRoot.find('.matrixChoiceCell').filter((_, cell) => {
+            return this.choiceMatrixCellMatchesRow($(cell), hDataBlock, lang, rowMatchData);
+        });
+
+        if ($rowCells.length === 0) {
+            const rowIndex = this.choiceMatrixRowIndexFromItem(item);
+            if (rowIndex !== null) {
+                $rowCells = $searchRoot.find('.matrixRow, .matrixChoicesRow').eq(rowIndex).find('.matrixChoiceCell');
+            }
+        }
+
+        return $rowCells;
+    }
+
+    choiceMatrixCellColumnIndex($cell) {
+        const colIndex = parseInt($cell.attr('data-col'), 10);
+        if (!Number.isNaN(colIndex)) return colIndex;
+
+        const $choiceRow = $cell.closest('.matrixHeader');
+        if ($choiceRow.length > 0) {
+            const positionalIndex = $choiceRow.find('.matrixChoiceCell').index($cell);
+            if (positionalIndex >= 0) return positionalIndex;
+        }
+
+        const $matrixRow = $cell.closest('.matrixRow, .matrixChoicesRow');
+        if ($matrixRow.length > 0) {
+            const positionalIndex = $matrixRow.find('.matrixChoiceCell').index($cell);
+            if (positionalIndex >= 0) return positionalIndex;
+        }
+
+        return null;
+    }
+
+    choiceMatrixCellTitle($cell, hDataBlock, lang) {
+        const rowIndex = parseInt($cell.attr('data-row'), 10);
+        const colIndex = this.choiceMatrixCellColumnIndex($cell);
+        const rows = this.choiceCollectionEntries(hDataBlock.rows);
+        const labels = this.choiceCollectionEntries(hDataBlock.labels);
+        const row = !Number.isNaN(rowIndex) ? rows[rowIndex] : null;
+        const label = colIndex !== null ? labels[colIndex] : null;
+        const rowLabel = row ? this.responseAnswerLabel({ rows: [row] }, row.value, lang) : ($cell.attr('data-group') ?? '');
+        const valueLabel = label ? this.responseAnswerLabel({ labels: [label] }, label.value, lang) : ($cell.attr('data-value') ?? $cell.find('[data-value]').first().attr('data-value') ?? '');
+
+        return `${rowLabel}${rowLabel && valueLabel ? ': ' : ''}${valueLabel}`;
+    }
+
+    choiceMatrixSelectedLabelIndexes(values, labels, lang) {
+        const selected = new Set(values.flatMap(value => [...this.responseExpandedCandidates(value, labels, lang)]));
+        const selectedIndexes = new Set();
+
+        this.choiceCollectionEntries(labels).forEach((label, idx) => {
+            const labelCandidates = this.addChoiceEntryCandidates(new Set(), label, lang);
+            if (this.candidateSetsOverlap(selected, labelCandidates)) selectedIndexes.add(idx);
+        });
+
+        return selectedIndexes;
+    }
+
+    responseAnswerLabel(hDataBlock, value, lang) {
+        const valueStr = this.stripHtml(value);
+        const choiceCollections = [
+            hDataBlock?.choices,
+            hDataBlock?.labels,
+            hDataBlock?.answers,
+            hDataBlock?.rows
+        ];
+
+        for (const collection of choiceCollections) {
+            const match = this.choiceCollectionEntries(collection).find(entry => String(entry.value) === valueStr || this.str2hex(String(entry.value)) === valueStr);
+            if (match) {
+                const label = (typeof match.label === 'object') ? match.label?.[lang] : match.label;
+                return this.stripHtml(label ?? match.name ?? match.value ?? valueStr);
+            }
+        }
+
+        return valueStr;
+    }
+
+    responseCorrectnessClass(pdd, item) {
+        if (pdd.scoringInfo?.[item]?.itemScoreType !== "auto") return '';
+
+        const earned = parseFloat(pdd.scoringInfo[item].earned);
+        const max = parseFloat(pdd.assignmentStruct?.[item]?.posPts);
+        if (Number.isNaN(earned) || Number.isNaN(max)) return '';
+
+        return earned >= max ? 'msResponseCorrect' : 'msResponseWrong';
+    }
+
+    responseRawHtml(answer, hDataBlock, lang) {
+        const values = this.responseAnswerValues(answer);
+        if (values.length === 0) return '';
+
+        return /* html */ `
+            <div class="msResponseRaw">
+                <span>${UILANG.m("Recorded value")}</span>
+                ${values.map(value => {
+                    const label = this.responseAnswerLabel(hDataBlock, value, lang);
+                    return `<strong title="${this.escapeHtml(value)}">${this.escapeHtml(label)}</strong>`;
+                }).join('')}
+            </div>
+        `;
+    }
+
+    responseNoAnswerHtml(loginName, missing = false) {
+        const msg = missing ? UILANG.m("did not answer this item") : UILANG.m("left this item blank");
+        return /* html */ `
+            <div class="msResponseEmpty">
+                <div class="msResponseEmptyIcon">!</div>
+                <div class="msResponseEmptyText">
+                    <strong>${this.escapeHtml(loginName)}</strong>
+                    <span>${msg}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    responseLang(hDataBlock, pdd, item = '') {
+        return this.previewLangForItem(hDataBlock, pdd, item);
+    }
+
+    previewLangForItem(hDataBlock, pdd, item = '') {
+        const languages = this.previewLanguagesForBlock(hDataBlock);
+        if (languages.length === 0) return '';
+        const answerLang = pdd?.scoringInfo?.[item]?.givenAnswerLanguage ?? '';
+        return this.matchPreviewLanguage(languages, answerLang)
+            || this.matchPreviewLanguage(languages, this.testLang)
+            || this.matchPreviewLanguage(languages, pdd?.languages?.[0])
+            || languages[0];
+    }
+
+    previewLanguagesForBlock(hDataBlock) {
+        if (hDataBlock?.question && typeof hDataBlock.question === 'object') return Object.keys(hDataBlock.question);
+        if (hDataBlock?.source && typeof hDataBlock.source === 'object') return Object.keys(hDataBlock.source);
+        return [];
+    }
+
+    matchPreviewLanguage(languages, preferred) {
+        if (!preferred) return '';
+        if (languages.includes(preferred)) return preferred;
+        const normalizedPreferred = this.normalizeLanguageKey(preferred);
+        return languages.find(lang => this.normalizeLanguageKey(lang) === normalizedPreferred) || '';
+    }
+
+    normalizeLanguageKey(lang) {
+        return String(lang || '').trim().replace('-', '_').toLowerCase();
+    }
+
+    answerLanguageLabel(pdd, item, hDataBlock) {
+        return pdd?.scoringInfo?.[item]?.givenAnswerLanguage || '';
+    }
+
+    updateResponseLanguageLabel(pdd, item, hDataBlock) {
+        const lang = this.answerLanguageLabel(pdd, item, hDataBlock);
+        $('#rItemLang').html(lang ? `<span>${UILANG.m('Answer language')}: ${this.escapeHtml(lang)}</span>` : '');
+    }
+
+    responsePreviewHtml(pdd, hDataBlock, lang, item, sItem) {
+        if (!hDataBlock) return '';
+        if (hDataBlock.type === "conceptmap") return '';
+        if (typeof lang === 'undefined') return '';
+
+        const ef = new EditorFactory();
+        const theEditor = ef.getEditorClass(hDataBlock.type);
+        if (!theEditor || typeof theEditor.generatePreview !== 'function') return '';
+        let forceWidth = 1024;
+        const itemIndex = pdd.items.indexOf(item);
+        if (pdd.itemType[itemIndex] === 'oasysSlider') forceWidth = Math.max(260, Math.floor($('#ms_answerArea').width()) - 22);
+        if (pdd.itemType[itemIndex] === 'oasysSlikert') forceWidth = Math.max(260, Math.floor($('#ms_answerArea').width()));
+
+        let html = theEditor.generatePreview(hDataBlock, lang, { maxWidth: forceWidth, skipShuffling: true });
+        html = html.replaceAll('_preview', `_response_${sItem}`);
+        return html;
+    }
+
+    renderResponsePreview(pdd, item, hDataBlock, i) {
+        const sItem = this.str2hex(item);
+        const answer = scoring.answerSet[item];
+        const correctnessClass = this.responseCorrectnessClass(pdd, item);
+        const $answerBody = this.answerPaneBody();
+
+        if (typeof answer === "undefined") {
+            $answerBody.append(/* html */ `<div id='r_item_${sItem}' class="${correctnessClass}">${this.responseNoAnswerHtml(pdd.loginName, true)}</div>`);
+            return;
+        }
+
+        if (!this.responseHasAnswer(answer)) {
+            $answerBody.append(/* html */ `<div id='r_item_${sItem}' class="${correctnessClass}">${this.responseNoAnswerHtml(pdd.loginName)}</div>`);
+            return;
+        }
+
+        const lang = this.responseLang(hDataBlock, pdd, item);
+        const previewHtml = this.responsePreviewHtml(pdd, hDataBlock, lang, item, sItem);
+        if (previewHtml === '') {
+            $answerBody.append(/* html */ `<div id='r_item_${sItem}' class="${correctnessClass}">${this.responseRawHtml(answer, hDataBlock, lang)}</div>`);
+            return;
+        }
+
+        $answerBody.append(/* html */ `
+            <div id='r_item_${sItem}' class="msResponsePreviewWrap ${correctnessClass}">
+                <div class="msResponsePreview">${previewHtml}</div>
+            </div>
+        `);
+
+        const decorated = this.decorateResponsePreview($(`#r_item_${sItem}`), answer, hDataBlock, item, i, lang);
+        if (!decorated) {
+            $(`#r_item_${sItem}`).append(this.responseRawHtml(answer, hDataBlock, lang));
+        }
+    }
+
+    decorateResponsePreview($target, answer, hDataBlock, item, i, lang) {
+        const values = this.responseAnswerValues(answer);
+        if (values.length === 0) return false;
+
+        switch (hDataBlock.type) {
+            case 'textfield':
+                return this.decorateResponseText($target.find('.previewTag_TF').first(), values[0], item);
+            case 'textarea':
+                return this.decorateResponseTextarea($target, values[0], item);
+            case 'inline_textfields':
+                return this.decorateResponseInlineText($target, values[0], item);
+            case 'inline_gaps':
+                return this.decorateResponseInlineGap($target, values[0], hDataBlock, item, lang);
+            case 'choice':
+                return this.decorateResponseChoice($target, values, hDataBlock, lang);
+            case 'choicematrix':
+                return this.decorateResponseChoiceMatrix($target, values, hDataBlock, item, lang);
+            case 'slider':
+                return this.decorateResponseSlider($target, values[0], hDataBlock);
+            case 'slikert':
+                return this.decorateResponseSlikert($target, values[0], hDataBlock);
+            default:
+                return false;
+        }
+    }
+
+    decorateResponseText($field, value, item) {
+        if ($field.length === 0) return false;
+        const displayValue = String(value);
+        const fieldWidth = Math.max(8, Math.min(90, displayValue.length + 2));
+        $field
+            .addClass('msResponseFilledField')
+            .attr('title', `${item}: ${value}`);
+        if ($field.is('input, textarea')) {
+            $field
+                .val(displayValue)
+                .css({
+                    width: `min(${fieldWidth}ch, 100%)`,
+                    maxWidth: '100%'
+                });
+        } else {
+            $field.text(displayValue);
+        }
+        return true;
+    }
+
+    decorateResponseTextarea($target, value, item) {
+        const $textarea = $target.find('textarea').first();
+        if ($textarea.length === 0) return false;
+        $textarea
+            .addClass('msResponseTextarea')
+            .attr('title', `${item}: ${value}`)
+            .val(value);
+        return true;
+    }
+
+    decorateResponseInlineText($target, value, item) {
+        const subIdx = parseInt(String(item).match(/\d+$/)?.[0] ?? '1', 10) - 1;
+        return this.decorateResponseText($target.find('.previewTag_inlineText').eq(subIdx), value, item);
+    }
+
+    decorateResponseInlineGap($target, value, hDataBlock, item, lang) {
+        const subIdx = parseInt(String(item).match(/\d+$/)?.[0] ?? '1', 10) - 1;
+        const label = this.responseAnswerLabel(hDataBlock, value, lang);
+        const $gap = $target.find('.previewTag_inlineGap').eq(subIdx);
+        if ($gap.length === 0) return false;
+        $gap
+            .addClass('msResponseFilledField')
+            .attr('title', `${item}: ${value}`)
+            .text(label);
+        if (!$target.hasClass('msQuestionCorrectPreview') && $target.closest('.msQuestionCorrectPreview').length === 0) {
+            $target.find('.previewTag_inlineDraggableStock').remove();
+        }
+        return true;
+    }
+
+    decorateResponseChoice($target, values, hDataBlock, lang) {
+        if (hDataBlock.choiceType === 'dropdown') {
+            const label = this.responseAnswerLabel(hDataBlock, values[0], lang);
+            const $dropdown = $target.find('.previewTag_DD').first();
+            if ($dropdown.length === 0) return false;
+            $dropdown
+                .addClass('msResponseDropdown')
+                .attr('title', values[0])
+                .html(`${this.escapeHtml(label)} <span>&#9660;</span>`);
+            return true;
+        }
+
+        const selected = new Set(values.flatMap(value => [...this.responseValueCandidates(value)]));
+        let choices = deepCopy(hDataBlock.choices ?? []);
+        if (hDataBlock.order === 'alphabet') {
+            orderArrayByProperty(choices, 'label', lang);
+        }
+
+        let didDecorate = false;
+        const $cells = $target.find('.choiceCell, .choiceCellInline');
+        choices.forEach((choice, idx) => {
+            const value = String(choice.value);
+            if (!selected.has(value) && !selected.has(this.str2hex(value))) return;
+            const $cell = $cells.eq(idx);
+            if ($cell.length === 0) return;
+            $cell.addClass('msResponseSelectedChoice').attr('title', `${value}`);
+            $cell.find('.previewTag_RB, .previewTag_CB').first().addClass('msResponseChecked');
+            didDecorate = true;
+        });
+        return didDecorate;
+    }
+
+    decorateResponseChoiceMatrix($target, values, hDataBlock, item, lang) {
+        const selected = new Set(values.flatMap(value => [...this.responseExpandedCandidates(value, hDataBlock.labels, lang)]));
+        const selectedLabelIndexes = this.choiceMatrixSelectedLabelIndexes(values, hDataBlock.labels, lang);
+        const rowMatchData = this.choiceMatrixRowMatchData(hDataBlock, item, lang);
+
+        let didDecorate = false;
+
+        this.choiceMatrixRowCells($target, hDataBlock, item, lang, rowMatchData).each((_, cell) => {
+            const $cell = $(cell);
+            const cellValueCandidates = this.choiceMatrixCellValueCandidates($cell, hDataBlock, lang);
+            const colIndex = this.choiceMatrixCellColumnIndex($cell);
+            const valueMatches = this.candidateSetsOverlap(selected, cellValueCandidates) || (colIndex !== null && selectedLabelIndexes.has(colIndex));
+            if (!valueMatches) return;
+            $cell
+                .addClass('msResponseSelectedChoice')
+                .attr('title', this.choiceMatrixCellTitle($cell, hDataBlock, lang));
+            $cell.find('.previewTag_RB, .previewTag_CB').first().addClass('msResponseChecked');
+            $cell.find('.oasysRadioButton, .oasysCheckBox').first().addClass('msResponseChecked');
+            $cell.closest('.matrixRow, .matrixChoicesRow').removeClass('ms_cmtrx_inactive').addClass('ms_cmtrx_active');
+            didDecorate = true;
+        });
+
+        return didDecorate;
+    }
+
+    decorateResponseSlider($target, value, hDataBlock) {
+        const numericValue = parseFloat(value);
+        if (Number.isNaN(numericValue)) return this.decorateResponseNoReply($target, value);
+        const displayValue = this.formatScoreNumber(numericValue);
+
+        const min = parseFloat(hDataBlock.min);
+        const max = parseFloat(hDataBlock.max);
+        const $frame = $target.find('.sliderFrame').first();
+        const $handle = $target.find('[id^="sliderHandle_"]').first();
+        if ($frame.length === 0 || $handle.length === 0 || Number.isNaN(min) || Number.isNaN(max) || max <= min) return false;
+
+        const trackLength = $frame.width() || parseFloat($frame.css('width')) || 300;
+        const r0 = 24;
+        const x = Math.round((numericValue - min) * ((trackLength - 2 * r0) / (max - min)) + r0);
+        $handle.attr('transform', `translate(${x})`).addClass('msResponseSliderHandle');
+        $target.find('.sliderTooltip').text(displayValue);
+        $target.find('.sliderTooltipFrame').css('margin-left', `${Math.max(0, x - 24)}px`);
+        this.appendResponseValueBadge($frame, displayValue, value);
+        return true;
+    }
+
+    decorateResponseSliderRange($target, range, hDataBlock) {
+        const min = parseFloat(hDataBlock.min);
+        const max = parseFloat(hDataBlock.max);
+        const $frame = $target.find('.sliderFrame').first();
+        if ($frame.length === 0 || Number.isNaN(min) || Number.isNaN(max) || max <= min) return false;
+
+        const trackLength = $frame.width() || parseFloat($frame.css('width')) || 300;
+        const r0 = 24;
+        const clampedFrom = Math.max(min, Math.min(max, range.from));
+        const clampedTo = Math.max(min, Math.min(max, range.to));
+        const xFrom = Math.round((clampedFrom - min) * ((trackLength - 2 * r0) / (max - min)) + r0);
+        const xTo = Math.round((clampedTo - min) * ((trackLength - 2 * r0) / (max - min)) + r0);
+        this.appendResponseRangeMarker($frame, xFrom, xTo, range);
+        return true;
+    }
+
+    decorateResponseSlikert($target, value, hDataBlock) {
+        const numericValue = parseFloat(value);
+        if (Number.isNaN(numericValue)) return this.decorateResponseNoReply($target, value);
+
+        const min = parseFloat(hDataBlock.min);
+        const max = parseFloat(hDataBlock.max);
+        const step = parseFloat(hDataBlock.step);
+        const $frame = $target.find('.slikertFrame').first();
+        const $handle = $target.find('[id^="slikertHandle_"]').first();
+        const $track = $target.find('.slikertTrackBack').first();
+        if ($frame.length === 0 || $handle.length === 0 || $track.length === 0 || Number.isNaN(min) || Number.isNaN(max) || Number.isNaN(step) || step <= 0) return false;
+
+        const valueCount = Math.floor((max - min) / step + 1);
+        const valueIndex = Math.max(0, Math.min(valueCount - 1, Math.round((numericValue - min) / step)));
+        const r0 = 24;
+        const trackWidth = $track.width() || parseFloat($track.css('width')) || parseFloat($track.attr('width')) || 300;
+        const x = valueCount > 1 ? Math.round(r0 + valueIndex * ((trackWidth - 2 * r0) / (valueCount - 1))) : r0;
+        const labelOffset = hDataBlock.labelPosition === 'outside' ? parseFloat(hDataBlock.labelWidth || 0) + 10 : 0;
+        $handle.attr('transform', `translate(${x})`).addClass('msResponseSliderHandle');
+        $target.find('.slikertTooltip').text(numericValue);
+        $target.find('.slikertTooltipFrame').css('margin-left', `${Math.max(0, labelOffset + x - 24)}px`);
+        this.appendResponseValueBadge($frame, numericValue, value);
+        return true;
+    }
+
+    decorateResponseSlikertRange($target, range, hDataBlock) {
+        const min = parseFloat(hDataBlock.min);
+        const max = parseFloat(hDataBlock.max);
+        const step = parseFloat(hDataBlock.step);
+        const $frame = $target.find('.slikertFrame').first();
+        const $track = $target.find('.slikertTrackBack').first();
+        if ($frame.length === 0 || $track.length === 0 || Number.isNaN(min) || Number.isNaN(max) || Number.isNaN(step) || step <= 0) return false;
+
+        const valueCount = Math.floor((max - min) / step + 1);
+        const trackWidth = $track.width() || parseFloat($track.css('width')) || parseFloat($track.attr('width')) || 300;
+        const r0 = 24;
+        const labelOffset = hDataBlock.labelPosition === 'outside' ? parseFloat(hDataBlock.labelWidth || 0) + 10 : 0;
+        const valueToX = (value) => {
+            const clampedValue = Math.max(min, Math.min(max, value));
+            const valueIndex = Math.max(0, Math.min(valueCount - 1, Math.round((clampedValue - min) / step)));
+            return valueCount > 1 ? Math.round(labelOffset + r0 + valueIndex * ((trackWidth - 2 * r0) / (valueCount - 1))) : labelOffset + r0;
+        };
+        this.appendResponseRangeMarker($frame, valueToX(range.from), valueToX(range.to), range);
+        return true;
+    }
+
+    decorateResponseNoReply($target, value) {
+        const $noReply = $target.find('.sliderNoReplyFrame, .slikertNoReplyFrame').first();
+        if ($noReply.length === 0) return false;
+        $noReply.addClass('msResponseSelectedChoice').attr('title', value);
+        $noReply.find('.previewTag_CB').first().addClass('msResponseChecked');
+        return true;
+    }
+
+    appendResponseValueBadge($frame, label, rawValue) {
+        $frame.append(/* html */ `<div class="msResponseValueBadge" title="${this.escapeHtml(rawValue)}">${this.escapeHtml(label)}</div>`);
+    }
+
+    appendResponseRangeMarker($frame, xFrom, xTo, range) {
+        const left = Math.max(0, Math.min(xFrom, xTo));
+        const width = Math.max(8, Math.abs(xTo - xFrom));
+        const label = `${range.from} - ${range.to}`;
+        $frame
+            .addClass('msResponseRangeFrame')
+            .append(/* html */ `<div class="msResponseRangeMarker" style="left:${left}px;width:${width}px;" title="${this.escapeHtml(label)}"><span>${this.escapeHtml(label)}</span></div>`);
+    }
+
+    activateManualScoringTooltips(root = '#ms_questionArea, #ms_answerArea, #scoreAssignmentContainer') {
+        if (typeof $.fn.tooltip !== 'function') return;
+        const $targets = $(root).find('[title]').filter(function() {
+            return $(this).attr('title') !== '';
+        });
+
+        if ($targets.length === 0) return;
+
+        try {
+            $targets.tooltip('destroy');
+        } catch (_e) {
+            // Some nodes may not have an initialized tooltip yet.
+        }
+
+        $targets.tooltip({
+            track: true,
+            position: {
+                my: "left+18 top+18",
+                at: "right bottom",
+                collision: "flipfit"
+            },
+            classes: {
+                "ui-tooltip-content": "uitt-upgrader"
+            }
+        });
+    }
+
     async removeComment(pdd) {
 
         let cmtRemObj = {
             pageId: parseInt(this.pageId),
             itemName: this.itemName,
             passwordId: pdd.passwordId,
-            testId: pdd.testId
+            testId: pdd.testId,
+            expectedCommentVersion: pdd.comments?.[this.itemName]?.version ?? null,
+            expectedCommentTime: pdd.comments?.[this.itemName]?.commentTime ?? null,
+            expectedCommentString: pdd.comments?.[this.itemName]?.commentString ?? null,
+            expectedCommentById: pdd.comments?.[this.itemName]?.commentById ?? null
         };
 
-        await results_startAjax('scoringRemComment', cmtRemObj).then(() => {
+        await results_startAjax('scoringRemComment', cmtRemObj).then((res) => {
+            if (res.error) {
+                if (res.reloadScoringDetail) pageLoader(true);
+                return;
+            }
             pdd.comments[this.itemName] = false;
             $('#scoringCmt').val('');
             gui.statusBar.setStatus(UILANG.m("Comment sucessfully removed!"), 1000, "green");
@@ -1226,10 +2226,18 @@ class Scoring {
             pageId: parseInt(this.pageId),
             itemName: this.itemName,
             passwordId: pdd.passwordId,
-            testId: pdd.testId
+            testId: pdd.testId,
+            expectedCommentVersion: pdd.comments?.[this.itemName]?.version ?? null,
+            expectedCommentTime: pdd.comments?.[this.itemName]?.commentTime ?? null,
+            expectedCommentString: pdd.comments?.[this.itemName]?.commentString ?? null,
+            expectedCommentById: pdd.comments?.[this.itemName]?.commentById ?? null
         };
 
         await results_startAjax('scoringAddComment', cmtSaveObj).then((res) => {
+            if (res.error) {
+                if (res.reloadScoringDetail) pageLoader(true);
+                return;
+            }
             let hexItemName = this.str2hex(this.itemName);
             gui.statusBar.setStatus(UILANG.m("Comment sucessfully added!"), 1000, "green");
             pdd.comments[this.itemName] = res.commentData;
@@ -1251,7 +2259,7 @@ class Scoring {
 
         // comment field handler for save button control on/off on text input
         $('#scoringCmt').on('input', function() {
-            if ($(this).val().length === 0) {
+            if (scoring.readOnly || $(this).val().length === 0) {
                 scoring.cmt_saveEntry.disable();
             } else {
                 scoring.cmt_saveEntry.enable();
@@ -1260,7 +2268,7 @@ class Scoring {
 
         // comment field handler for keyboard shortcut (alt+s) to save comment
         $('#scoringCmt').on('keydown', async (e) => {
-            if (e.originalEvent.altKey && (e.originalEvent.code === "KeyS" || e.originalEvent.key.toLowerCase() === "s") && $('#scoringCmt').val().length > 0) {
+            if (!scoring.readOnly && e.originalEvent.altKey && (e.originalEvent.code === "KeyS" || e.originalEvent.key.toLowerCase() === "s") && $('#scoringCmt').val().length > 0) {
                 e.preventDefault();
                 e.stopPropagation();
                 scoring.cmt_saveEntry.buttonSelected(true);
@@ -1283,6 +2291,16 @@ class Scoring {
 
 
         this.pHtml = "";
+    }
+
+    questionPaneBody() {
+        const $body = $('#ms_questionScrollBody');
+        return $body.length > 0 ? $body : $('#ms_questionArea');
+    }
+
+    answerPaneBody() {
+        const $body = $('#ms_answerScrollBody');
+        return $body.length > 0 ? $body : $('#ms_answerArea');
     }
 
     /**
@@ -1319,7 +2337,11 @@ class Scoring {
             passwordId: pdd.passwordId,
             pageId: parseInt(this.pageId),
             itemName: itemName,
-            score: this.newScore
+            score: this.newScore,
+            expectedScoreVersion: pdd.scoredByInfo?.[itemName]?.version ?? null,
+            expectedScoreTime: pdd.scoredByInfo?.[itemName]?.scoreTime ?? null,
+            expectedScoreValue: pdd.scoredByInfo?.[itemName]?.scoreValue ?? null,
+            expectedScoreById: pdd.scoredByInfo?.[itemName]?.scoreById ?? null
         }).then((res) => {
 
             window.stopNAV = false;
@@ -1414,6 +2436,9 @@ class Scoring {
      * Internal object modification when ms filtering on
      */
     msObjMod(pdd) {
+        pdd.unfilteredScoredByInfo = deepCopy(pdd.scoredByInfo ?? {});
+        pdd.unfilteredScoringInfo = deepCopy(pdd.scoringInfo ?? {});
+
         for (const [key, val] of Object.entries(pdd.scoringInfo)) {
             if (val.itemScoreType !== "manual") {
                 delete pdd.assignmentStruct[key];
@@ -1438,16 +2463,24 @@ class Scoring {
         if (typeof pdd.tl_msg === "undefined") return;
 
         // test activity status handling
+        const submittedStatusColor = 'success';
+        const normalizeStatusColor = color => ['#00008b', '#2d8db6'].includes(String(color).toLowerCase()) ? submittedStatusColor : color;
         let tl_color = Object.keys(pdd.tl_msg)[0];
         let tl_message = Object.values(pdd.tl_msg)[0];
+        const statusBarColor = normalizeStatusColor(tl_color);
 
         // set statusBar message/color
         function activityStatusBarUpdate(message, color) {
             gui.statusBar.setStatus("<strong>" + message + "</strong>", false, color);
         }
 
-        if (tl_color !== "#00008b") activityStatusBarUpdate(tl_message, tl_color);
-        this.readOnly = (tl_color === 'red');
+        activityStatusBarUpdate(tl_message, statusBarColor);
+        this.readOnly = (tl_color === 'red') || this.readOnlyByPermission;
+
+        if (tl_color === 'red' && this.readOnlyByPermission) {
+            if (this.viewType === 't') this.alreadyInRO = true;
+            return;
+        }
 
         /* routine to determine and handle tests which are not in 'submitted' status */
         if ((tl_color === 'red' && this.alreadyInRO === false) || (tl_color === 'red' && this.viewType === 'q')) {
@@ -1456,28 +2489,17 @@ class Scoring {
             await new nxDialog('submitConfirm', {
                 title: UILANG.m("Non-submitted test confirmation"),
                 contents: /* html */ `
-                            <p style="font-weight: bold;">${tl_message}</p><p>${UILANG.m("Select how you would like to proceed")}:</p>
-        
-                            <script>
-                            /*
-                                FYI: JS embedded in HTML embedded in JS embedded in PHP embedded in HTML (ツ)
-                                This is the only way to override nxdialog UI elements in while it is in
-                                "returnPromise" mode (that I could find -- NN)
-                             */
-                            $('.nxDialogButtons').css('text-align', 'left');
-                            $('.nxDialogButtons').find('div').css('text-align', 'left');
-                            // FYI: must set timeout to let jquery 'catch up' and draw the UI elements
-                            setTimeout(() => $('#submitConfirm_button_0').css('border-color', 'red'), 50);
-                            setTimeout(() => $('#submitConfirm_button_0').hover(function() {
-                                $(this).css('background-color', 'rgba(193, 66, 66, 0.1)')
-                            }, function() {
-                                $(this).css('background-color', 'transparent')
-                            }) , 50);
-                            setTimeout(() => $('#submitConfirm_button_0 > span:nth-child(1)').css('color', 'red'), 50);
-        
-                            </script>
+                            <div class="msSubmitDialog">
+                                <div class="msDialogMessage msDialogMessage-warning">
+                                    <div class="msDialogBadge">!</div>
+                                    <div class="msDialogCopy">
+                                        <strong>${tl_message}</strong>
+                                        <p>${UILANG.m("Select how you would like to proceed")}:</p>
+                                    </div>
+                                </div>
+                            </div>
                         `,
-                width: 418,
+                width: 520,
                 returnPromise: true,
                 buttons: [{
                     label: UILANG.m("SCORING MODE (LOCKS OUT TEST TAKER!)"),
@@ -1495,10 +2517,12 @@ class Scoring {
                         testId: pdd.testId,
                         passwordId: pdd.passwordId
                     }).then((res2) => {
-                        activityStatusBarUpdate(Object.values(res2.tl_msg)[0], Object.keys(res2.tl_msg)[0]);
+                        const resColor = Object.keys(res2.tl_msg)[0];
+                        const resStatusBarColor = normalizeStatusColor(resColor);
+                        activityStatusBarUpdate(Object.values(res2.tl_msg)[0], resStatusBarColor);
                         if (Object.keys(res2.tl_msg[0] === "blue")) {
                             this.alreadyInRO = false;
-                            this.readOnly = false
+                            this.readOnly = this.readOnlyByPermission;
                         }
                     });
                 } else {
@@ -1514,11 +2538,11 @@ class Scoring {
 
             /* special conceptmap processing logic */
             if (pdd.scoringInfo[item].itemType === "ConceptMap") {
-                $('#ms_answerArea').append(/* html */ `<div id='r_item_${sItem}'></div>`);
+                this.answerPaneBody().append(/* html */ `<div id='r_item_${sItem}'></div>`);
 
                 if (pdd.scoringInfo[item].givenAnswers.length === 0) { // no answer processing
                     cmResObj.data = this.cmBase[this.pageId][item];
-                    $(`#r_item_${sItem}`).append(/* html */ `<li class='ms_itemBullet'><span class="ms_badOrNoAns">${pdd.loginName} left this item blank</span></li>`);
+                    $(`#r_item_${sItem}`).append(this.responseNoAnswerHtml(pdd.loginName));
                 } else { // given answer processing
                     new nxButton($(`#r_item_${sItem}`), `lcmBtn_id_${sItem}`, {
                         disabled: false,
@@ -1533,22 +2557,11 @@ class Scoring {
                     });
                 }
             } else {
-                /* standard answer processing logic */
-                const theAnswer = () => {
-                    let theAns = scoring.answerSet[item];
-                    if (typeof theAns === "undefined") return /* html */ `<span class="ms_badOrNoAns">${pdd.loginName} did not answer this item</span>`;
-                    if (theAns === "[]") return /* html */ `<span class="ms_badOrNoAns">${pdd.loginName} left this item blank</span>`;
-                    if (typeof theAns === "object" && theAns.length === 0) return /* html */ `<span class="ms_badOrNoAns">${pdd.loginName} left this item blank</span>`;
-                    return theAns.replaceAll("\n", "<br>");
-                };
-
-                // get post-processed string friendly version of answer
-                const answers = /* html */ `<div id='r_item_${sItem}'>${scoring.ms_isJSON(theAnswer())}<br></div>`;
-
-                // add processed answer to UI
-                $('#ms_answerArea').append( /* html */ `${answers}`);
+                this.renderResponsePreview(pdd, item, pdd.htmlPreview[_i], _i);
             }
         }
+
+        this.activateManualScoringTooltips();
     }
 
     commentInit(pdd) {
@@ -1610,6 +2623,8 @@ class Scoring {
         // set initial question item label
         $('#qItemLabel').html(scoring.itemName);
         $('#rItemLabel').html(scoring.itemName);
+        const initialIdx = pdd.items.indexOf(scoring.itemName);
+        this.updateResponseLanguageLabel(pdd, scoring.itemName, pdd.htmlPreview[initialIdx]);
 
     }
 
@@ -1641,17 +2656,42 @@ class Scoring {
         }
 
         // conditional section labels
-        const qLabelStr = /* html */ `<div>${UILANG.m("QUESTION")} </div><div id="qItemLabel"></div>`;
-        const ansLabelStr = /* html */ `<div>${UILANG.m("RESPONSE")} </div><div id="rItemLabel"></div>`;
+        const qLabelStr = /* html */ `<div class="ms_qa_title"><div>${UILANG.m("QUESTION")} </div><div id="qItemLabel"></div></div>`;
+        const ansLabelStr = /* html */ `<div class="ms_qa_title"><div>${UILANG.m("RESPONSE")} </div><div id="rItemLabel"></div><div id="rItemLang"></div></div>`;
 
-        // keyboard shortcut help section + question section + answer header
-        $('#ms_questionArea').append( /* html */ `<div class="ms_qa_header" >${qLabelStr}</div>${this.pHtml}`);
-        $('#ms_answerArea').append( /* html */ `<div class="ms_qa_header">${ansLabelStr}</div>`);
+        // question + answer headers
+        $('#ms_questionArea').append( /* html */ `<div class="ms_qa_header">${qLabelStr}</div><div id="ms_questionScrollBody" class="msPaneScrollBody">${this.pHtml}</div>`);
+        $('#ms_answerArea').append( /* html */ `<div class="ms_qa_header">${ansLabelStr}</div><div id="ms_answerScrollBody" class="msPaneScrollBody"></div>`);
 
         // set double click handler to max out question box
         let this_2 = this;
         $('#ms_questionArea, #ms_answerArea').on("dblclick", function() {
             this_2.toggleFullScr(this);
+        });
+
+        this.setupPaneScrollSync();
+    }
+
+    setupPaneScrollSync() {
+        const $panes = $('#ms_questionScrollBody, #ms_answerScrollBody');
+        let syncing = false;
+
+        $panes.off('scroll.msPaneSync').on('scroll.msPaneSync', function() {
+            if (syncing) return;
+
+            const source = this;
+            const target = source.id === 'ms_questionScrollBody' ? document.getElementById('ms_answerScrollBody') : document.getElementById('ms_questionScrollBody');
+            if (!target) return;
+
+            const sourceScrollable = source.scrollHeight - source.clientHeight;
+            const targetScrollable = target.scrollHeight - target.clientHeight;
+            if (sourceScrollable <= 0 || targetScrollable <= 0) return;
+
+            syncing = true;
+            target.scrollTop = (source.scrollTop / sourceScrollable) * targetScrollable;
+            window.requestAnimationFrame(() => {
+                syncing = false;
+            });
         });
     }
 
@@ -1659,57 +2699,17 @@ class Scoring {
      * Display message in answer area when integrity violation detected between question structure and recorded answers
      */
     iFailMsg() {
-        $('#ms_answerArea').remove("#ms_ifm");
-        $('#ms_answerArea').prepend( /* html */ `
-        <div id="ms_ifm">
-            <p>
-            ${UILANG.m("Please note that an inconsistency has been detected between the answers given by this test taker and the current question structure.")}
-            <br><br>
-            <strong>${UILANG.m("This test page may have been modified after test taker responses were recorded.")}</strong>
-            </p>
+        $('#ms_ifm').remove();
+        this.answerPaneBody().prepend( /* html */ `
+        <div id="ms_ifm" class="msIntegrityWarning">
+            <div class="msIntegrityWarningIcon">!</div>
+            <div class="msIntegrityWarningText">
+                <strong>${UILANG.m("Question structure mismatch")}</strong>
+                <span>${UILANG.m("Please note that an inconsistency has been detected between the answers given by this test taker and the current question structure.")}</span>
+                <em>${UILANG.m("This test page may have been modified after test taker responses were recorded.")}</em>
+            </div>
         </div>
         `);
-    }
-
-    langSelConfig(langs) {
-        this.langSels = langs;
-    }
-
-    initLangBox(i_data) {
-        let langOpts = "";
-
-        for (const lang of scoring.langSels) {
-            langOpts += /* html */ `<div><input type='radio' name='lang_vals' id='lang_${lang}' value='${lang}'><label for='lang_${lang}'>${lang}</label></div>`;
-        }
-
-        new nxDialog("langselbox", {
-            title: UILANG.m("Page Language Display"),
-            buttons: [{
-                label: UILANG.m("OK"),
-                value: 'ok',
-                'default': true
-            }, {
-                label: UILANG.m("Cancel"),
-                value: "cancel"
-            }],
-            contents: /* html */ `
-                <div style="padding-bottom: 15px; font-weight: bold;">${UILANG.m("Select language for page display:")}</div>
-                <div>${langOpts}</div>
-            `,
-            callback: (button) => {
-                if (button === 'ok') {
-                    $("[name='lang_vals']").each(function(_i, rbObj) {
-                        if ($(rbObj).prop('checked')) {
-                            scoring.testLang = rbObj.value;
-                            return;
-                        }
-                    });
-                    ms_scoreDetailScreen(i_data, true, true);
-                }
-            }
-        });
-
-        $(`#lang_${scoring.testLang}`).prop("checked", true);
     }
 
     str2hex(str) {

@@ -2,14 +2,16 @@
 
 namespace MathPHP\Statistics\Regression\Methods;
 
+use MathPHP\Exception\BadDataException;
+use MathPHP\Exception\BadParameterException;
+use MathPHP\Exception\IncorrectTypeException;
 use MathPHP\LinearAlgebra\MatrixFactory;
 use MathPHP\Statistics\RandomVariable;
 use MathPHP\Functions\Map\Single;
 use MathPHP\Functions\Map\Multi;
 use MathPHP\Probability\Distribution\Continuous\F;
 use MathPHP\Probability\Distribution\Continuous\StudentT;
-use MathPHP\LinearAlgebra\Matrix;
-use MathPHP\LinearAlgebra\ColumnVector;
+use MathPHP\LinearAlgebra\NumericMatrix;
 use MathPHP\Exception;
 
 trait LeastSquares
@@ -18,7 +20,7 @@ trait LeastSquares
      * Regression ys
      * Since the actual xs may be translated for regression, we need to keep these
      * handy for regression statistics.
-     * @var array
+     * @var array<float>
      */
     private $reg_ys;
 
@@ -26,21 +28,22 @@ trait LeastSquares
      * Regression xs
      * Since the actual xs may be translated for regression, we need to keep these
      * handy for regression statistics.
-     * @var array
+     * @var array<float>
      */
     private $reg_xs;
 
     /**
      * Regression Yhat
      * The Yhat for the regression xs.
-     * @var array
+     * @var array<float>
      */
     private $reg_Yhat;
 
     /**
      * Projection Matrix
      * https://en.wikipedia.org/wiki/Projection_matrix
-     * @var Matrix
+     *
+     * @var NumericMatrix
      */
     private $reg_P;
 
@@ -53,7 +56,7 @@ trait LeastSquares
     /** @var int Degrees of freedom */
     private $ν;
 
-    /** @var Matrix */
+    /** @var NumericMatrix */
     private $⟮XᵀX⟯⁻¹;
 
     /**
@@ -92,16 +95,16 @@ trait LeastSquares
      *        _     __
      *       (x)² - x²
      *
-     * @param  array $ys y values
-     * @param  array $xs x values
+     * @param  array<float> $ys y values
+     * @param  array<float> $xs x values
      * @param  int   $order The order of the polynomial. 1 = linear, 2 = x², etc
      * @param  int   $fit_constant '1' if we are fitting a constant to the regression.
      *
-     * @return Matrix [[m], [b]]
+     * @return NumericMatrix [[m], [b]]
      *
      * @throws Exception\MathException
      */
-    public function leastSquares(array $ys, array $xs, int $order = 1, int $fit_constant = 1): Matrix
+    public function leastSquares(array $ys, array $xs, int $order = 1, int $fit_constant = 1): NumericMatrix
     {
         $this->reg_ys = $ys;
         $this->reg_xs = $xs;
@@ -115,7 +118,8 @@ trait LeastSquares
 
         // y = Xa
         $X = $this->createDesignMatrix($xs);
-        $y = new ColumnVector($ys);
+        /** @var NumericMatrix $y */
+        $y = MatrixFactory::createFromColumnVector($ys);
 
         // a = (XᵀX)⁻¹Xᵀy
         $Xᵀ           = $X->transpose();
@@ -136,19 +140,20 @@ trait LeastSquares
      *
      * @param mixed $xs
      *
-     * @return Matrix (Vandermonde)
+     * @return NumericMatrix (Vandermonde)
      *
      * @throws Exception\BadDataException
      * @throws Exception\IncorrectTypeException
      * @throws Exception\MathException
      * @throws Exception\MatrixException
      */
-    public function createDesignMatrix($xs): Matrix
+    public function createDesignMatrix($xs): NumericMatrix
     {
-        if (is_int($xs) || is_float($xs)) {
+        if (\is_int($xs) || \is_float($xs)) {
             $xs = [$xs];
         }
 
+        /** @var array<float> $xs */
         $X = MatrixFactory::vandermonde($xs, $this->p + 1);
         if ($this->fit_constant == 0) {
             $X = $X->columnExclude(0);
@@ -166,13 +171,13 @@ trait LeastSquares
      * H = X⟮XᵀX⟯⁻¹Xᵀ
      *   where X is the design matrix
      *
-     * @return Matrix
+     * @return NumericMatrix
      */
-    public function getProjectionMatrix(): Matrix
+    public function getProjectionMatrix(): NumericMatrix
     {
         return $this->reg_P;
     }
-    
+
     /**
      * Regression Leverages
      * A measure of how far away the independent variable values of an observation are from those of the other observations.
@@ -183,13 +188,13 @@ trait LeastSquares
      * which is the i-th diagonal element of the project matrix H,
      * where H = X⟮XᵀX⟯⁻¹Xᵀ where X is the design matrix.
      *
-     * @return array
+     * @return array<int|float>
      */
     public function leverages(): array
     {
         return $this->reg_P->getDiagonalElements();
     }
-    
+
     /**************************************************************************
      * Sum Of Squares
      *************************************************************************/
@@ -216,7 +221,7 @@ trait LeastSquares
         if ($this->fit_constant == 1) {
             return RandomVariable::sumOfSquaresDeviations($this->yHat());
         }
-        return array_sum(Single::square($this->reg_Yhat));
+        return \array_sum(Single::square($this->reg_Yhat));
     }
 
     /**
@@ -238,7 +243,7 @@ trait LeastSquares
     public function sumOfSquaresResidual(): float
     {
         $Ŷ = $this->reg_Yhat;
-        return array_sum(array_map(
+        return \array_sum(\array_map(
             function ($yᵢ, $ŷᵢ) {
                 return ($yᵢ - $ŷᵢ) ** 2;
             },
@@ -328,7 +333,7 @@ trait LeastSquares
 
         return $MSTO;
     }
-    
+
     /**
      * Error Standard Deviation
      *
@@ -338,9 +343,9 @@ trait LeastSquares
      */
     public function errorSd(): float
     {
-        return sqrt($this->meanSquareResidual());
+        return \sqrt($this->meanSquareResidual());
     }
-     
+
     /**
      * The degrees of freedom of the regression
      *
@@ -350,7 +355,7 @@ trait LeastSquares
     {
         return $this->ν;
     }
-     
+
     /**
      * Standard error of the regression parameters (coefficients)
      *
@@ -370,7 +375,7 @@ trait LeastSquares
      * se(b) = /  ----
      *        √    n
      *
-     * @return array [m => se(m), b => se(b)]
+     * @return array{m: float, b: float} [m => se(m), b => se(b)]
      *
      * @throws Exception\BadParameterException
      * @throws Exception\IncorrectTypeException
@@ -382,7 +387,7 @@ trait LeastSquares
 
         $standard_error_matrix = $⟮XᵀX⟯⁻¹->scalarMultiply($σ²);
         $standard_error_array  = Single::sqrt($standard_error_matrix->getDiagonalElements());
-        
+
         return [
             'm' => $standard_error_array[1],
             'b' => $standard_error_array[0],
@@ -407,20 +412,22 @@ trait LeastSquares
 
         return $M[0][0];
     }
-    
+
     /**
      * Get the regression residuals
      * eᵢ = yᵢ - ŷᵢ
      * or in matrix form
      * e = (I - H)y
      *
-     * @return array
+     * @return array<float>
+     *
+     * @throws BadDataException
      */
     public function residuals(): array
     {
         return Multi::subtract($this->reg_ys, $this->reg_Yhat);
     }
-    
+
     /**
      * Cook's Distance
      * A measures of the influence of each data point on the regression.
@@ -436,7 +443,9 @@ trait LeastSquares
      *   where s ≡ (n - p)⁻¹eᵀ  (mean square residuals)
      *         e is the mean square error of the residual model
      *
-     * @return array
+     * @return array<float>
+     *
+     * @throws BadDataException
      */
     public function cooksD(): array
     {
@@ -445,7 +454,7 @@ trait LeastSquares
         $mse = $this->meanSquareResidual();
         $p   = $this->p + $this->fit_constant;
 
-        return array_map(
+        return \array_map(
             function ($eᵢ, $hᵢ) use ($mse, $p) {
                 return ($eᵢ ** 2 / $mse / $p) * ($hᵢ / (1 - $hᵢ) ** 2);
             },
@@ -453,7 +462,7 @@ trait LeastSquares
             $h
         );
     }
-    
+
     /**
      * DFFITS
      * Measures the effect on the regression if each data point is excluded.
@@ -497,7 +506,9 @@ trait LeastSquares
      * DFFITS = s₍ᵢ₎  / ------
      *               √  1 - hᵢ
      *
-     * @return array
+     * @return array<float>
+     *
+     * @throws BadDataException
      */
     public function dffits(): array
     {
@@ -507,7 +518,7 @@ trait LeastSquares
         $MSₑ = $this->meanSquareResidual();
 
         // Mean square residuals with the the i-th observation removed
-        $MSₑ₍ᵢ₎ = array_map(
+        $MSₑ₍ᵢ₎ = \array_map(
             function ($eᵢ, $hᵢ) use ($MSₑ, $ν) {
                 return ($MSₑ - ($eᵢ ** 2 / ((1 - $hᵢ) * $ν))) * ($ν / ($ν - 1));
             },
@@ -516,18 +527,18 @@ trait LeastSquares
         );
 
         // Studentized residual with the i-th observation removed
-        $s = array_map(
+        $s = \array_map(
             function ($eᵢ, $mseᵢ, $hᵢ) {
-                return $eᵢ / sqrt($mseᵢ * (1 - $hᵢ));
+                return $eᵢ / \sqrt($mseᵢ * (1 - $hᵢ));
             },
             $e,
             $MSₑ₍ᵢ₎,
             $h
         );
 
-        $DFFITS = array_map(
+        $DFFITS = \array_map(
             function ($s₍ᵢ₎, $hᵢ) {
-                return $s₍ᵢ₎ * sqrt($hᵢ / (1 - $hᵢ));
+                return $s₍ᵢ₎ * \sqrt($hᵢ / (1 - $hᵢ));
             },
             $s,
             $h
@@ -535,7 +546,7 @@ trait LeastSquares
 
         return $DFFITS;
     }
-    
+
     /**
      * R - correlation coefficient (Pearson's r)
      *
@@ -549,10 +560,12 @@ trait LeastSquares
      * √［（n∑x² − ⟮∑x⟯²）（n∑y² − ⟮∑y⟯²）］
      *
      * @return float
+     *
+     * @throws BadDataException
      */
     public function correlationCoefficient(): float
     {
-        return sqrt($this->coefficientOfDetermination());
+        return \sqrt($this->coefficientOfDetermination());
     }
 
     /**
@@ -560,6 +573,8 @@ trait LeastSquares
      * Convenience wrapper for correlationCoefficient
      *
      * @return float
+     *
+     * @throws BadDataException
      */
     public function r(): float
     {
@@ -575,6 +590,8 @@ trait LeastSquares
      * https://en.wikipedia.org/wiki/Coefficient_of_determination
      *
      * @return float
+     *
+     * @throws BadDataException
      */
     public function coefficientOfDetermination(): float
     {
@@ -586,12 +603,14 @@ trait LeastSquares
      * Convenience wrapper for coefficientOfDetermination
      *
      * @return float
+     *
+     * @throws BadDataException
      */
     public function r2(): float
     {
         return $this->coefficientOfDetermination();
     }
-    
+
     /**
      * The t values associated with each of the regression parameters (coefficients)
      *
@@ -603,7 +622,10 @@ trait LeastSquares
      *    β     = regression parameter (coefficient)
      *    se(β) = standard error of the regression parameter (coefficient)
      *
-     * @return  array [m => t, b => t]
+     * @return array{m: float, b: float} [m => t, b => t]
+     *
+     * @throws BadParameterException
+     * @throws IncorrectTypeException
      */
     public function tValues(): array
     {
@@ -628,7 +650,10 @@ trait LeastSquares
      *
      *  alpha = 1 if the regression includes a constant term
      *
-     * @return array [m => p, b => p]
+     * @return array{m: float, b: float} [m => p, b => p]
+     *
+     * @throws BadParameterException
+     * @throws IncorrectTypeException
      */
     public function tProbability(): array
     {
@@ -659,6 +684,8 @@ trait LeastSquares
      *    SSₑ = sum of squares of residuals
      *
      * @return float
+     *
+     * @throws BadDataException
      */
     public function fStatistic(): float
     {
@@ -679,6 +706,8 @@ trait LeastSquares
      *    ν  = degrees of freedom
      *
      * @return float
+     *
+     * @throws BadDataException
      */
     public function fProbability(): float
     {
@@ -724,12 +753,12 @@ trait LeastSquares
     {
         $V  = $this->regressionVariance($x);
         $σ² = $this->meanSquareResidual();
-        
+
         // The t-value
         $studentT = new StudentT($this->ν);
         $t = $studentT->inverse2Tails($p);
-        
-        return $t * sqrt($σ² * $V);
+
+        return $t * \sqrt($σ² * $V);
     }
 
     /**
@@ -763,11 +792,11 @@ trait LeastSquares
     {
         $V  = $this->regressionVariance($x) + 1 / $q;
         $σ² = $this->meanSquareResidual();
-     
+
         // The t-value
         $studentT = new StudentT($this->ν);
         $t = $studentT->inverse2Tails($p);
-        
-        return $t * sqrt($σ² * $V);
+
+        return $t * \sqrt($σ² * $V);
     }
 }

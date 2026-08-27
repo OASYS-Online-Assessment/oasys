@@ -1,10 +1,6 @@
 <?php
 
-	global $filterSettings;
-	$filterSettings = true;
-
-	require_once 'inc/php/database.php';
-	require_once 'inc/php/settings.php';
+	require_once 'inc/php/initSettings.php';
 	require_once 'inc/php/OasysFrontendState.php';
 	require_once 'inc/php/exceptions/StateExpiredException.php';
 

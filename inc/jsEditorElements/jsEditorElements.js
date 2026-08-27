@@ -1028,31 +1028,15 @@ class editorList {
 			setup: (ed) => {
 				this.inlineEditor = ed; //save instance of editor as property of editorList instance
 				ed.on('keydown', (e) => {
-					if (e.key === 'Tab') {
+					if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
 						e.preventDefault();
-						let parent = $(ed.targetElm).closest('.editorListItem');
-						let groupId = parent.data('groupid');
-						let itemId = parent.data('itemid');
-						let nextItem = $(`#editorList_${groupId} .editorListItem[data-itemid="${++itemId}"]`);
-						if (nextItem.length === 0) {
-							//if we are at the last item of the group, move to the next group
-							while (groupId < editorList.counter && nextItem.length === 0) {
-								//if group does not exist, skip and move to next group until we find an item or reach the last group
-								nextItem = $(`#editorList_${++groupId} .editorListItem[data-itemid="0"]`);
-							}
-							//if we are at the last group, move to the first group
-							if (groupId === editorList.counter && nextItem.length === 0) {
-								groupId = 0;
-								//repeat from the beginning and skip any missing groups
-								while (groupId < editorList.counter && nextItem.length === 0) {
-									nextItem = $(`#editorList_${++groupId} .editorListItem[data-itemid="0"]`);
-								}
-							}
-							//when we arrive here we are bound to have found a new item … in the worst case it is the one we started from
-						}
-						let nextEditor = nextItem.find('.editorListLabelText');
-						nextEditor.trigger('focus');
-						tinyMCE.activeEditor.execCommand('SelectAll');
+						e.stopImmediatePropagation();
+						const valueField = $(ed.targetElm)
+							.closest('.editorListItem')
+							.find('input.editorListValue')
+							.get(0);
+						valueField?.focus();
+						valueField?.select();
 					}
 				});
 				ed.on('ExecCommand', (e) => {
@@ -1134,6 +1118,10 @@ class editorList {
 			};
 			this.addButton = new nxButton(this.buttons, `editorList_${this.id}_importButton`, buttonData);
 		}
+		this.copyLabelsButton = new nxButton(this.buttons, `editorList_${this.id}_copyLabels`, {
+			label: settings.copyLabelsLabel ?? UILANG.m('copy labels to values'),
+			callback: () => this.copyLabelsToValues()
+		});
 		this.controller = settings.controller;
 		this.path = settings.path;
 		this.items = this.controller.getData(...this.path);
@@ -1239,7 +1227,7 @@ class editorList {
 				}
 				let value = $(el).find('.editorListValue').val();
 				if ((item.value ?? '') !== value) {
-					$(el).find('.editorListValue').val(item.value?.replace(/"/g, '&quot;'));
+					$(el).find('.editorListValue').val(item.value ?? '');
 				}
 				let label;
 				if (this.plainText) {
@@ -1403,6 +1391,16 @@ class editorList {
 		let value = target.val();
 		let id = target.parent().data('itemid');
 		this.items[id].value = value;
+		this.storeItems();
+	}
+
+	copyLabelsToValues() {
+		this.db(1, "copyLabelsToValues");
+		for (let item of this.items) {
+			let label = item.label?.[selectedLanguage] ?? '';
+			item.value = he.decode(stripHTMLTags(label));
+		}
+		this.renderItems();
 		this.storeItems();
 	}
 
@@ -1681,6 +1679,7 @@ class editorList {
 		this.db(1, "destroy");
 		jsph.clear(this.element.find(`#editorList_${this.id}_dz div.editorListHandle`));
 		$(`#editorList_${this.id} input`).off('input');
+		this.copyLabelsButton.destroy();
 	}
 
 	db(level,...args) {
@@ -2364,6 +2363,7 @@ class editorDropDown {
 			elements: [{value: "", label: ""}],
 			listTitle: '',
 			initialValue: this.data,
+			theme: 'backend',
 			onChange: (sender, value) => this.onChange(value)
 		};
 
@@ -2468,6 +2468,7 @@ class editorPreview {
 			],
 			listTitle: '',
 			initialValue: '1024px',
+			theme: 'backend',
 			onChange: (sender, value) => this.onChange(sender, value)
 		};
 
@@ -2836,6 +2837,7 @@ class propsDropDown {
 			listTitle: '',
 			width: settings.width ? settings.width : '100%',
 			initialValue: this.controller.getData(...this.path),
+			theme: 'backend',
 			onChange: (sender, value) => this.onChange(sender, value)
 		};
 

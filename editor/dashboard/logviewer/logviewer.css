@@ -1,0 +1,266 @@
+/* ===== LOG VIEWER WIDGET ===== */
+
+.logviewer .logv-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    color: #333;
+    font-size: 14px;
+    padding:4px;
+}
+
+/* Toolbar */
+.logviewer .logv-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 0 0 6px 0;
+}
+.logviewer .logv-filter {
+    flex: 1 1 auto;
+    box-sizing: border-box;
+    height: 30px;
+    min-width: 140px;
+    padding: 5px 10px;
+    border: 1px solid #cbd6e2;
+    border-radius: 6px;
+    background: #fff;
+    color: #1f2933;
+    font-size: 13px;
+    line-height: 18px;
+    outline: none;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, .04);
+    transition: border-color .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+.logviewer .logv-filter::placeholder {
+    color: #8b98a7;
+    font-size: 12px;
+    opacity: 1;
+}
+.logviewer .logv-filter:focus {
+    border-color: #227DAA;
+    box-shadow: 0 0 0 2px rgba(34, 125, 170, .14), inset 0 1px 2px rgba(15, 23, 42, .04);
+}
+.logviewer .logv-btn {
+    box-sizing: border-box;
+    min-height: 30px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid #cfcfcf;
+    background: #f7f7f7;
+    cursor: pointer;
+}
+.logviewer .logv-btn:hover { background: #efefef; }
+
+/* Table wrapper: scrolls rows only */
+.logv-tableWrap {
+    position: relative;
+    overflow: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* Table */
+.logv-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    color: #333333;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+}
+.logv-table thead {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    flex: 0 0 auto;
+}
+.logv-table tbody {
+    display: block;
+    overflow: auto;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+.logv-table tbody tr {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+}
+
+/* Header */
+.logv-table thead th {
+    background: #227DAA;
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 12px;
+    text-align: left;
+    padding: 6px 8px;
+    line-height: 18px;
+    white-space: nowrap;
+    border-bottom: 1px solid #1b6486;
+}
+
+/* Sort indicators */
+.logv-table thead th[data-sort] {
+    cursor: pointer;
+    user-select: none;
+}
+.logv-table thead th.logv-sort-asc::after,
+.logv-table thead th.logv-sort-desc::after {
+    content: '';
+    display: inline-block;
+    margin-left: 6px;
+    border: 5px solid transparent;
+    transform: translateY(-1px);
+}
+.logv-table thead th.logv-sort-asc::after {
+    border-bottom-color: #fff; /* up arrow */
+}
+.logv-table thead th.logv-sort-desc::after {
+    border-top-color: #fff;    /* down arrow */
+}
+
+.logv-table tbody td {
+    padding: 1px 8px;
+    line-height: 18px;
+    white-space: nowrap;
+    border-bottom: 1px solid #e9e9e9;
+    vertical-align: middle;
+}
+.logv-table tbody tr:hover td { background-color: #f4f8fb; }
+
+.logv-name {
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.logv-num {
+    text-align: right;
+}
+
+/* Empty row */
+.logv-empty td {
+    text-align: center;
+    color: #9b9b9b;
+    font-weight: 600;
+    padding: 16px 8px;
+}
+
+.logv-table th:nth-child(2),
+.logv-table td:nth-child(2) {
+    width: 180px;
+}
+
+.logv-table th:nth-child(3),
+.logv-table td:nth-child(3) {   /* Size */
+    width: 100px;
+    text-align: right;
+}
+
+
+.logv-name {
+    max-width: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.logv-table th:last-child,
+.logv-table td:last-child{
+    padding-right: 22px; /* adjust to taste: 18–24 usually works across OSes */
+}
+/* Clickable name link */
+.logv-link {
+    color: #1b6486;
+    text-decoration: none;
+}
+.logv-link:hover { text-decoration: underline; }
+
+/* Dialog content */
+.logv-dialogPath {
+    font-weight: 600;
+    margin-bottom: 4px;
+    word-break: break-all;
+}
+.logv-dialogMeta {
+    color: #666;
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+.logv-pre {
+    max-height: 70vh;
+    overflow: auto;
+    background: #f7f7f7;
+    border: 1px solid #e1e1e1;
+    border-radius: 6px;
+    padding: 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre; /* keep original line breaks and spacing */
+}
+/* Disabled “link” for empty files */
+.logv-link.logv-disabled {
+    color: #9b9b9b;
+    cursor: not-allowed;
+    text-decoration: none;
+}
+/* Name-Zelle: Text + kleine Action rechts */
+.logv-name { white-space: nowrap; }
+.logv-nameWrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0; /* wichtig für Ellipsis */
+}
+.logv-nameWrap .logv-link {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Download-Icon */
+.logv-dl {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    text-decoration: none;
+    opacity: .6;
+    outline: none;
+}
+.logv-dl:hover, .logv-dl:focus { opacity: 1; background: #f0f0f0; }
+.logv-ico { fill: currentColor; color: #227DAA; }
+
+/* logviewer.css */
+.logv-dialogMeta .logv-hint a { text-decoration: underline; }
+
+/* Highlight rows whose mtime is newer than user's lastLogin */
+.logv-table tbody tr.logv-newSinceLogin td {
+    background-color: #fff0f0;   /* light red */
+}
+/* Optional: slight change on hover but remain red-ish */
+.logv-table tbody tr.logv-newSinceLogin td {
+    font-weight: 700 ;
+}
+
+.logv-dialog { display: flex; flex-direction: column; gap: 6px; }
+.logv-dialogMeta { opacity: 0.8; font-size: 0.9em; }
+.logv-pre {
+    overflow: auto;              /* enables internal scrolling */
+    max-height: 66vh;            /* or a fixed px if you prefer */
+    white-space: pre;            /* or pre-wrap if you want wrapping */
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    line-height: 1.3;
+    padding: 8px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+}

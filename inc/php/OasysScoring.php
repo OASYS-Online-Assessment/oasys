@@ -18,6 +18,7 @@
 
 require_once __DIR__ . "/parser.php";
 require_once __DIR__ . "/helperRoutines.php";
+require_once __DIR__ . "/OasysTest.php";
 require_once __DIR__ . "/../../editor/inc/php/testsCommonFunctions.php";
 require_once __DIR__ . "/../../editor/interactions/InteractionCompiler.php";
 
@@ -37,7 +38,7 @@ class OasysScoring
 	private string $testType = '';
 	private array $structure = [];
 	private array $headers;
-	private int $headerColumnOffset = 6;
+	private int $headerColumnOffset = 7;
 	private array $processing;
 	private array $corrections;
 	private array $scoringModel;
@@ -87,8 +88,8 @@ class OasysScoring
 		$this->saveResults = $settings->saveResults ?? true;
 		$this->adhocAnswers = $settings->adhocAnswers ?? [];
 		$this->adhocActivity = $settings->activity ?? [];
-		//get test data from testsCommonFunctions.php with support for fluid and mutation tests
-		buildTestData($this->testId, $this->db, $this->testData, $this->testType, $this->structure);
+		//get test data with support for fluid and mutation tests
+		OasysTest::buildTestData($this->testId, $this->db, $this->testData, $this->testType, $this->structure);
 		$this->buildCorrections();
 	}
 
@@ -97,7 +98,7 @@ class OasysScoring
 	 */
 	function buildCorrections(): void
 	{
-		$this->headers = ['legend' => ['', 'login', 'tag', 'metainfo', 'lastActivity', 'total'], 'itemId' => ['page id', '', '', '', '', ''], 'itemName' => ['page name', '', '', '', '', ''], 'itemCode' => ['page code', '', '', '', '', ''], 'field' => ['variable', '', '', '', '', ''], 'type' => ['type', '', '', '', '', '']];
+		$this->headers = ['legend' => ['', 'login', 'tag', 'name', 'metainfo', 'lastActivity', 'total'], 'itemId' => ['page id', '', '', '', '', '', ''], 'itemName' => ['page name', '', '', '', '', '', ''], 'itemCode' => ['page code', '', '', '', '', '', ''], 'field' => ['variable', '', '', '', '', '', ''], 'type' => ['type', '', '', '', '', '', '']];
 		$this->corrections = [];
 
 		foreach ($this->structure as $itemId) {
@@ -214,9 +215,9 @@ class OasysScoring
 			}
 			$gsd = json_decode($gsdQ, true);
 
-			$set = ['', $this->activity[$passwordId]['login'], $this->activity[$passwordId]['tag'], '', $this->activity[$passwordId]['tsActiveServer'], '']; //6 columns for the legend
+			$set = ['', $this->activity[$passwordId]['login'], $this->activity[$passwordId]['tag'], ($this->activity[$passwordId]['name'] ?? ''), '', $this->activity[$passwordId]['tsActiveServer'], '']; //6 columns for the legend
 			if (!empty($this->activity[$passwordId]['info'])) {
-				$set[3] = json_encode(json_decode($this->activity[$passwordId]['info'] ?? '', true), JSON_UNESCAPED_UNICODE);
+				$set[4] = json_encode(json_decode($this->activity[$passwordId]['info'] ?? '', true), JSON_UNESCAPED_UNICODE);
 			}
 
 			$totalScore = 0;
@@ -247,7 +248,7 @@ class OasysScoring
 				$totalScore += $set[$i];
 			}
 
-			$set[5] = $totalScore;
+			$set[6] = $totalScore;
 			foreach ($set as $k => $v) {
 				$set[$k] = $this->escapeValue($v);
 			}
@@ -358,6 +359,8 @@ class OasysScoring
 							return is_string($value) ? mb_strtolower($value) : $value;
 						}, $correction['data']))) {
 							$correct++;
+						} else {
+							$wrong++;
 						}
 					} elseif (mb_strtolower($answer) === mb_strtolower($correction['data'])) {
 						$correct++;
@@ -371,6 +374,8 @@ class OasysScoring
 					} elseif (is_array($correction['data'])) {
 						if (in_array($answer, $correction['data'])) {
 							$correct++;
+						} else {
+							$wrong++;
 						}
 					} elseif ($answer === $correction['data']) {
 						$correct++;
@@ -448,16 +453,10 @@ class OasysScoring
 
 	function escapeValue($v): string
 	{
-		if ($this->fmt !== 'csv') {
-			return $v;
+		if (is_array($v) || is_object($v)) {
+			return json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 		}
-		$pattern = "/[$this->quotes$this->delimiter\\n]/";
-		if (preg_match($pattern, $v)) {
-			$quotePattern = "/$this->quotes/";
-			$v = preg_replace($quotePattern, $this->quotes . $this->quotes, $v);
-			$v = $this->quotes . $v . $this->quotes;
-		}
-		return $v;
+		return (string)($v ?? '');
 	}
 
 
@@ -681,8 +680,11 @@ class OasysScoring
 			$gsd_to_load = json_encode($gsd_to_load, JSON_PRETTY_PRINT);
 
 			$this->db->startTransaction();
-			/* Get associated loginId for the particular password */
-			$loginId = $this->db->fetchValue("SELECT `loginID` FROM `passwords` WHERE `id` = ?", [$passwordId])['data'];
+			/* Get associated loginId for the particular password/test run. Cloned datasets use activity.loginId. */
+			$loginId = $this->activity[$passwordId]["loginId"] ?? null;
+			if (empty($loginId)) {
+				$loginId = $this->db->fetchValue("SELECT `loginID` FROM `passwords` WHERE `id` = ?", [$passwordId])['data'];
+			}
 
 			/* Get associated loginName for the particular loginId */
 			$loginName = $this->db->fetchValue("SELECT `name` FROM `logins` WHERE `id` = ?", [$loginId])['data'];
@@ -805,7 +807,8 @@ class OasysScoring
 
 	public function getTlistSummary($startPos)
 	{
-		$loginsList = $this->db->fetchTable("SELECT * FROM `view_tt_list` WHERE `testId` = ? OR JSON_SEARCH(`testIdAll`, 'one', ?) IS NOT NULL AND `status` = 'NOT STARTED' LIMIT ?, 100", [$this->testId, $this->testId, $startPos])['data'];
+		$startPos = max(0, (int)$startPos);
+		$loginsList = $this->db->fetchTable("SELECT * FROM `view_tt_list` WHERE `testId` = ? OR JSON_SEARCH(`testIdAll`, 'one', ?) IS NOT NULL AND `status` = 'NOT STARTED' LIMIT $startPos, 100", [$this->testId, $this->testId])['data'];
 
 		foreach ($loginsList as $key => &$lVals) {
 			$lVals['msLeft'] = 0;
@@ -849,8 +852,8 @@ class OasysScoring
 
 		$masterPageList = $this->getMPL();
 		$qMarks = substr(str_repeat("?,", count($masterPageList)), 0, -1);
-		$masterPageList[] = $startPos;
-		$pagesList = $this->db->fetchTable("SELECT * FROM `view_q_list` WHERE `id` IN ($qMarks) LIMIT ?, 100", $masterPageList)['data'];
+		$startPos = max(0, (int)$startPos);
+		$pagesList = $this->db->fetchTable("SELECT * FROM `view_q_list` WHERE `id` IN ($qMarks) LIMIT $startPos, 100", $masterPageList)['data'];
 
 		array_walk($pagesList, function (&$val, $idx) {
 			$val['languages'] = json_decode($val['languages'] ?? '', true);
@@ -1076,7 +1079,10 @@ class OasysScoring
 		$loginId = null;
 		$passId = null;
 		foreach ($pwdSub as $passId => $passVals) {
-			$loginId = $this->db->fetchValue("SELECT `id` FROM `logins` WHERE `name` = ?", [$passVals['login']])['data'];
+			$loginId = $passVals['loginId'] ?? null;
+			if (empty($loginId)) {
+				$loginId = $this->db->fetchValue("SELECT `id` FROM `logins` WHERE `name` = ?", [$passVals['login']])['data'];
+			}
 
 			$scoringTableData = $this->db->fetchRow("SELECT `scoringData`, `givenScoringData` FROM `scoring` WHERE `passwordId` = ? AND `testId` = ?", [$passId, $this->testId])['data'];
 			$scoringDataArr[$pageId] = json_decode($scoringTableData['scoringData'] ?? '', true)["scoringAnswerList"][$pageId] ?? [];
@@ -1143,6 +1149,12 @@ class OasysScoring
 		$blocks = $pageData['blocks'];
 		$pageFields = $pageData['fields'];
 		$scoringInfo = json_decode($this->db->fetchValue("SELECT JSON_QUERY(`scoringData`, '$.scoringAnswerList.$pageId') FROM `scoring` WHERE passwordId = ? AND testId = ?", [$passwordId, $testId])['data'] ?? '', true);
+		if (!is_array($scoringInfo)) $scoringInfo = [];
+		$answerLanguages = $this->db->fetchColumn(
+			"SELECT fieldId, language FROM answers WHERE passwordId = ? AND testId = ? AND itemId = ?",
+			[$passwordId, $testId, $pageId],
+			'fieldId'
+		)['data'] ?? [];
 
 		// run autoscoring builder routine if any auto processed items are found
 		if (in_array('auto', array_column($pageFields, 'processing'))) {
@@ -1161,7 +1173,8 @@ class OasysScoring
 					'itemParent' => $this->headers['itemName'][array_search($pageId, $this->headers['itemId'])],
 					'earned' => $this->aggregatedScore[$passwordId][$pageId]["fields"][$itemName]["achieved"]/*  ?? 999999 */,
 					'touched' => 1,
-					'pointData' => $this->scoringModel[$pageId][$itemName]
+					'pointData' => $this->scoringModel[$pageId][$itemName],
+					'givenAnswerLanguage' => $answerLanguages[$itemName] ?? null
 				];
 			}
 		}
@@ -1181,6 +1194,8 @@ class OasysScoring
 			}
 
 			$detailData['items'][] = $page;
+			if (!isset($scoringInfo[$page]) || !is_array($scoringInfo[$page])) $scoringInfo[$page] = [];
+			$scoringInfo[$page]['givenAnswerLanguage'] = $answerLanguages[$page] ?? ($scoringInfo[$page]['givenAnswerLanguage'] ?? null);
 			$detailData['scoringInfo'][$page] = $scoringInfo[$page];
 			$detailData['itemType'][] = $pkeys['type'];
 		}
@@ -1400,38 +1415,42 @@ class OasysScoring
 
 		if ($passwordId === null) {
 			$query = "SELECT
-				passwordId,
+				activity.passwordId AS passwordId,
+				activity.loginId,
 				logins.NAME AS login,
 				passwords.tag,
+				logins.displayname AS name,
 				progress,
 				logins.info,
 				activity.tsActiveServer
 			FROM
 				activity
-				JOIN logins ON logins.id = loginID
-				JOIN passwords ON passwords.id = passwordId 
+				JOIN logins ON logins.id = activity.loginId
+				JOIN passwords ON passwords.id = activity.passwordId
 			WHERE
-				testId =? 
-				AND activity.tsActiveServer > ? 
+				testId =?
+				AND activity.tsActiveServer > ?
 				AND activity.tsActiveServer < DATE_ADD(?, INTERVAL 1 DAY)";
 
 			$results = $db->fetchTable($query, [$testId, $s_date, $e_date], 'passwordId');
 		} else {
 			$query = "SELECT
-				passwordId,
+				activity.passwordId AS passwordId,
+				activity.loginId,
 				logins.NAME AS login,
 				passwords.tag,
+				logins.displayname AS name,
 				progress,
 				logins.info,
 				activity.tsActiveServer
 			FROM
 				activity
-				JOIN logins ON logins.id = loginID
-				JOIN passwords ON passwords.id = passwordId 
+				JOIN logins ON logins.id = activity.loginId
+				JOIN passwords ON passwords.id = activity.passwordId
 			WHERE
-				testId =? 
-				AND passwordId =? 
-				AND activity.tsActiveServer > ? 
+				testId =?
+				AND activity.passwordId =?
+				AND activity.tsActiveServer > ?
 				AND activity.tsActiveServer < ?";
 
 			$results = $db->fetchTable($query, [$testId, $passwordId, $s_date, $e_date], 'passwordId');

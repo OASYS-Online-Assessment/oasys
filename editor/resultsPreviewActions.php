@@ -7,7 +7,9 @@
 	$pageName = "activityTracker"; // set to the related 'editor button' string name (e.g., 'items')
 	$isSubMod = false; // set true if a module page in a subdirectory
 	$isActionFile = false; // set true if an "xxxActions.php" file
+    require_once __DIR__ . "/inc/php/initBackend.php";
 	require_once 'inc/php/authCommonFunctions.php'; // required for authentication inclusion
+	require_once 'inc/php/activityTrackerPermissions.php';
 ?>
 
 <html lang="en">
@@ -23,14 +25,13 @@
 
 	register_shutdown_function('outputError');
 
-	require_once 'inc/php/database.php';
-	require_once '../inc/php/rixPDO.php';
+	require_once 'inc/php/initBackend.php';
 	require_once '../inc/php/rixTools.php';
 	require_once '../inc/php/OasysCredentials.php';
 
-	$loginId = filter_input(INPUT_GET, 'loginId', FILTER_SANITIZE_NUMBER_INT);
-	$testId = filter_input(INPUT_GET, 'testId', FILTER_SANITIZE_NUMBER_INT);
-	$passwordId = filter_input(INPUT_GET, 'passwordId', FILTER_SANITIZE_NUMBER_INT);
+	$loginId = filter_input(INPUT_GET, 'loginId', FILTER_VALIDATE_INT) ?: null;
+	$testId = filter_input(INPUT_GET, 'testId', FILTER_VALIDATE_INT) ?: null;
+	$passwordId = filter_input(INPUT_GET, 'passwordId', FILTER_VALIDATE_INT) ?: null;
 
 	//if neither loginId nor passwordId is set, then we can't proceed
 	if (empty($loginId) && empty($passwordId)) {
@@ -38,12 +39,20 @@
 		exit;
 	}
 
-	$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/../logs/resultPreview_errors.txt', 2);
 	$credentials = new OasysCredentials();
 
 	//if loginId is not set, then we need to get it from the passwordId
 	if (empty($loginId)) {
 		$loginId = $credentials->getLoginIdFromPasswordId($passwordId);
+	}
+
+	$allowed = !empty($passwordId) && !empty($testId)
+		? activityTrackerCanAccessObject((int)$passwordId, (int)$testId, $db)
+		: activityTrackerCanAccessLogin((int)$loginId, $db);
+	if (!$allowed) {
+		http_response_code(403);
+		echo '<p>You do not have permission to view this activity.</p>';
+		exit;
 	}
 
 	$loginName = $credentials->getLoginNameFromLoginId($loginId);
@@ -84,13 +93,17 @@
 		}
 	}
 
+	if (count($testIds) === 0) {
+		echo '<p>No activity data is available.</p>';
+		exit;
+	}
 	$query = "SELECT id, name FROM tests WHERE id IN " . $db->variableString(count($testIds));
 	$res = $db->fetchColumn($query, $testIds, 'id');
 	$testNames = $res['data'];
 
 	//fill in the test names
 	foreach ($sections as $key => $section) {
-		$sections[$key]['testName'] = $testNames[$section['testId']];
+		$sections[$key]['testName'] = $testNames[$section['testId']] ?? '';
 	}
 
 	$sectionCounter = 0;
@@ -116,17 +129,17 @@
 		$res = $db->fetchTable($query, [$section['loginId'], $section['testId'], $section['passwordId']]);
 
 		if ($sectionCounter++ === 0) {
-			echo "<h1>Login: {$section['loginName']}</h1>";
+			tag('h1', 'Login: ' . $section['loginName']);
 		} else {
 			echo "<hr>";
 		}
 		if (!empty($section['tag'])) {
-			echo "<h2>Test: {$section['testName']} – Tag: {$section['tag']}</h2>";
+			tag('h2', 'Test: ' . $section['testName'] . ' – Tag: ' . $section['tag']);
 		} else {
-			echo "<h2>Test: {$section['testName']}</h2>";
+			tag('h2', 'Test: ' . $section['testName']);
 		}
 		echo "<table>";
-		outputData($res['data']);
+		outputData($res['data'] ?? []);
 		echo "</table>";
 	}
 
@@ -155,10 +168,14 @@
 
 
 		foreach ($data as $row) {
-			$dtc = new DateTime($row['tsClient']);
+			try {
+				$dtc = new DateTime($row['tsClient']);
+				$dts = new DateTime($row['tsServer']);
+			} catch (Throwable $error) {
+				continue;
+			}
 			$date = $dtc->format("Y-m-d");
 			$clientTime = $dtc->format("H:i:s");
-			$dts = new DateTime($row['tsServer']);
 			$serverTime = $dts->format("H:i:s");
 
 			startRow();
@@ -182,20 +199,20 @@
 			switch ($subType) {
 				case 'login':
 					$firstLine = true;
-					foreach ($data as $k => $v) {
+					foreach ((array)$data as $k => $v) {
 						if (!$firstLine) newRow(9);
-						td($v);
+						td(is_scalar($v) || $v === null ? (string)$v : json_encode($v));
 						$firstLine = false;
 					}
 					break;
 				case 'navigation':
-					td("{$data['previousItem']} ➠ {$data['currentItem']}");
+					td(($data['previousItem'] ?? '') . ' ➠ ' . ($data['currentItem'] ?? ''));
 					break;
 				default:
 					td(json_encode($data));
 			}
 		} elseif ($type == 'answer') {
-			td("<div style='width: 80px; display: inline-block'></div><b>{$data['fieldId']}:</b>&nbsp;&nbsp;&nbsp;{$data['value']}");
+			td(($data['fieldId'] ?? '') . ': ' . (is_scalar($data['value'] ?? null) ? (string)$data['value'] : json_encode($data['value'] ?? null)));
 		} else {
 			td(json_encode($data));
 		}
@@ -217,9 +234,10 @@
 			if (is_array($attributes) && count($attributes) > 0) {
 				echo "<$name ";
 				foreach ($attributes as $k => $v) {
-					echo $k;
-					echo "=";
-					echo addslashes($v);
+					echo htmlspecialchars((string)$k, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+					echo '="';
+					echo htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+					echo '"';
 					echo " ";
 				}
 				echo ">";
@@ -227,7 +245,7 @@
 				echo "<$name>";
 			}
 		}
-		echo $contents;
+		echo htmlspecialchars((string)$contents, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 		if ($close) echo "</$name>";
 	}
 
@@ -262,8 +280,9 @@
 	function outputError(): void
 	{
 		$error = error_get_last();
-		if (!empty($error)) {
-			echo "<p>Fatal error [type {$error['type']}] on line {$error['line']}</p><p>{$error['message']}</p>";
+		$fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+		if (!empty($error) && in_array($error['type'] ?? null, $fatalTypes, true)) {
+			echo '<p>The activity preview encountered an internal server error.</p>';
 		}
 	}
 

@@ -11,8 +11,8 @@ use MathPHP\Exception;
  */
 class Descriptive
 {
-    const POPULATION = true;
-    const SAMPLE     = false;
+    public const POPULATION = true;
+    public const SAMPLE     = false;
 
     /**
      * Range - the difference between the largest and smallest values
@@ -33,7 +33,7 @@ class Descriptive
         if (empty($numbers)) {
             throw new Exception\BadDataException('Cannot find the range of an empty list of numbers');
         }
-        return max($numbers) - min($numbers);
+        return \max($numbers) - \min($numbers);
     }
 
     /**
@@ -56,7 +56,7 @@ class Descriptive
         if (empty($numbers)) {
             throw new Exception\BadDataException('Cannot find the midrange of an empty list of numbers');
         }
-        return Average::mean([min($numbers), max($numbers)]);
+        return Average::mean([\min($numbers), \max($numbers)]);
     }
 
     /**
@@ -100,9 +100,9 @@ class Descriptive
             throw new Exception\OutOfBoundsException('Degrees of freedom must be > 0');
         }
 
-        $∑⟮xᵢ − μ⟯² = RandomVariable::sumOfSquaresDeviations($numbers);
-    
-        return $∑⟮xᵢ − μ⟯² / $ν;
+        $∑⟮xᵢ−μ⟯² = RandomVariable::sumOfSquaresDeviations($numbers);
+
+        return $∑⟮xᵢ−μ⟯² / $ν;
     }
 
     /**
@@ -125,7 +125,7 @@ class Descriptive
      */
     public static function populationVariance(array $numbers): float
     {
-        $N = count($numbers);
+        $N = \count($numbers);
         return self::variance($numbers, $N);
     }
 
@@ -149,11 +149,11 @@ class Descriptive
      */
     public static function sampleVariance(array $numbers): float
     {
-        if (count($numbers) == 1) {
+        if (\count($numbers) == 1) {
             return 0;
         }
 
-        $n = count($numbers);
+        $n = \count($numbers);
         return self::variance($numbers, $n - 1);
     }
 
@@ -186,27 +186,27 @@ class Descriptive
      */
     public static function weightedSampleVariance(array $numbers, array $weights, bool $biased = false): float
     {
-        if (count($numbers) === 1) {
+        if (\count($numbers) === 1) {
             return 0;
         }
-        if (count($numbers) !== count($weights)) {
+        if (\count($numbers) !== \count($weights)) {
             throw new Exception\BadDataException('Numbers and weights must have the same number of elements.');
         }
 
         $μw           = Average::weightedMean($numbers, $weights);
-        $∑wᵢ⟮xᵢ − μw⟯² = array_sum(array_map(
+        $∑wᵢ⟮xᵢ−μw⟯² = \array_sum(\array_map(
             function ($xᵢ, $wᵢ) use ($μw) {
-                return $wᵢ * pow(($xᵢ - $μw), 2);
+                return $wᵢ * \pow(($xᵢ - $μw), 2);
             },
             $numbers,
             $weights
         ));
 
         $∑wᵢ = $biased
-            ? array_sum($weights)
-            : array_sum($weights) - 1;
+            ? \array_sum($weights)
+            : \array_sum($weights) - 1;
 
-        return $∑wᵢ⟮xᵢ − μw⟯² / $∑wᵢ;
+        return $∑wᵢ⟮xᵢ−μw⟯² / $∑wᵢ;
     }
 
     /**
@@ -237,8 +237,8 @@ class Descriptive
         }
 
         return $SD＋
-            ? sqrt(self::populationVariance($numbers))
-            : sqrt(self::sampleVariance($numbers));
+            ? \sqrt(self::populationVariance($numbers))
+            : \sqrt(self::sampleVariance($numbers));
     }
 
     /**
@@ -286,15 +286,15 @@ class Descriptive
         }
 
         $x         = Average::mean($numbers);
-        $∑│xᵢ − x│ = array_sum(array_map(
+        $∑│xᵢ−x│ = \array_sum(\array_map(
             function ($xᵢ) use ($x) {
-                return abs($xᵢ - $x);
+                return \abs($xᵢ - $x);
             },
             $numbers
         ));
-        $N = count($numbers);
+        $N = \count($numbers);
 
-        return $∑│xᵢ − x│ / $N;
+        return $∑│xᵢ−x│ / $N;
     }
 
     /**
@@ -322,9 +322,9 @@ class Descriptive
         }
 
         $x = Average::median($numbers);
-        return Average::median(array_map(
+        return Average::median(\array_map(
             function ($xᵢ) use ($x) {
-                return abs($xᵢ - $x);
+                return \abs($xᵢ - $x);
             },
             $numbers
         ));
@@ -381,10 +381,18 @@ class Descriptive
      *
      * This rule is employed by the TI-83 calculator boxplot and "1-Var Stats" functions.
      * This is the most basic method that is commonly taught in math textbooks.
+     * It is "method 1" from Wikipedia.
      *
      * @param float[] $numbers
      *
-     * @return array (0%, Q1, Q2, Q3, 100%, IQR)
+     * @return array{
+     *     "0%":    float,
+     *     "Q1":    float,
+     *     "Q2":    float,
+     *     "Q3":    float,
+     *     "100%":  float,
+     *     "IQR":   float,
+     * }
      *
      * @throws Exception\BadDataException if the input array of numbers is empty
      */
@@ -393,8 +401,8 @@ class Descriptive
         if (empty($numbers)) {
             throw new Exception\BadDataException('Cannot find the quartiles of an empty list of numbers');
         }
-        if (count($numbers) === 1) {
-            $number = array_pop($numbers);
+        if (\count($numbers) === 1) {
+            $number = \array_pop($numbers);
             return [
                 '0%'   => $number,
                 'Q1'   => $number,
@@ -405,26 +413,26 @@ class Descriptive
             ];
         }
 
-        sort($numbers);
-        $length = count($numbers);
+        \sort($numbers);
+        $length = \count($numbers);
 
         if ($length % 2 == 0) {
-            $lower_half = array_slice($numbers, 0, $length / 2);
-            $upper_half = array_slice($numbers, $length / 2);
+            $lower_half = \array_slice($numbers, 0, (int)($length / 2));
+            $upper_half = \array_slice($numbers, (int)($length / 2));
         } else {
-            $lower_half = array_slice($numbers, 0, intdiv($length, 2));
-            $upper_half = array_slice($numbers, intdiv($length, 2) + 1);
+            $lower_half = \array_slice($numbers, 0, \intdiv($length, 2));
+            $upper_half = \array_slice($numbers, \intdiv($length, 2) + 1);
         }
 
         $lower_quartile = Average::median($lower_half);
         $upper_quartile = Average::median($upper_half);
 
         return [
-            '0%'   => min($numbers),
+            '0%'   => \min($numbers),
             'Q1'   => $lower_quartile,
             'Q2'   => Average::median($numbers),
             'Q3'   => $upper_quartile,
-            '100%' => max($numbers),
+            '100%' => \max($numbers),
             'IQR'  => $upper_quartile - $lower_quartile,
         ];
     }
@@ -451,11 +459,18 @@ class Descriptive
      *    The upper quartile value is the median of the upper half of the data.
      *
      * The values found by this method are also known as "Tukey's hinges".
-     * This is the method that the programming language R uses by default.
+     * This is the "method 2" from Wikipedia.
      *
      * @param float[] $numbers
      *
-     * @return array (0%, Q1, Q2, Q3, 100%, IQR)
+     * @return array{
+     *     "0%":    float,
+     *     "Q1":    float,
+     *     "Q2":    float,
+     *     "Q3":    float,
+     *     "100%":  float,
+     *     "IQR":   float,
+     * }
      *
      * @throws Exception\BadDataException if the input array of numbers is empty
      */
@@ -465,31 +480,31 @@ class Descriptive
             throw new Exception\BadDataException('Cannot find the quartiles of an empty list of numbers');
         }
 
-        sort($numbers);
-        $length = count($numbers);
+        \sort($numbers);
+        $length = \count($numbers);
 
         if ($length % 2 == 0) {
-            $lower_half = array_slice($numbers, 0, $length / 2);
-            $upper_half = array_slice($numbers, $length / 2);
+            $lower_half = \array_slice($numbers, 0, (int)($length / 2));
+            $upper_half = \array_slice($numbers, (int)($length / 2));
         } else {
-            $lower_half = array_slice($numbers, 0, intdiv($length, 2));
-            $upper_half = array_slice($numbers, intdiv($length, 2) + 1);
+            $lower_half = \array_slice($numbers, 0, \intdiv($length, 2));
+            $upper_half = \array_slice($numbers, \intdiv($length, 2) + 1);
 
             // Add median to both halves
             $median = Average::median($numbers);
-            array_push($lower_half, $median);
-            array_unshift($upper_half, $median);
+            \array_push($lower_half, $median);
+            \array_unshift($upper_half, $median);
         }
 
         $lower_quartile = Average::median($lower_half);
         $upper_quartile = Average::median($upper_half);
 
         return [
-            '0%'   => min($numbers),
+            '0%'   => \min($numbers),
             'Q1'   => $lower_quartile,
             'Q2'   => Average::median($numbers),
             'Q3'   => $upper_quartile,
-            '100%' => max($numbers),
+            '100%' => \max($numbers),
             'IQR'  => $upper_quartile - $lower_quartile,
         ];
     }
@@ -569,19 +584,19 @@ class Descriptive
             throw new Exception\OutOfBoundsException('Percentile P must be between 0 and 100.');
         }
 
-        $N = count($numbers);
+        $N = \count($numbers);
         if ($N === 1) {
-            return array_shift($numbers);
+            return \array_shift($numbers);
         }
 
-        sort($numbers);
+        \sort($numbers);
 
         if ($P == 100) {
             return  $numbers[$N - 1];
         }
 
         $x    = ($P / 100) * ($N - 1) + 1;
-        $⌊x⌋  = intval($x);
+        $⌊x⌋  = \intval($x);
         $x％1 = $x - $⌊x⌋;
         $νₓ   = $numbers[$⌊x⌋ - 1];
         $νₓ₊₁ = $numbers[$⌊x⌋];
@@ -607,9 +622,9 @@ class Descriptive
     {
         $quartiles = self::quartiles($numbers);
         $Q1        = $quartiles['Q1'];
-        $Q2        = $quartiles['Q3'];
+        $Q3        = $quartiles['Q3'];
 
-        return Average::mean([$Q1, $Q2]);
+        return Average::mean([$Q1, $Q3]);
     }
 
     /**
@@ -627,7 +642,7 @@ class Descriptive
      *
      * @param float[] $numbers
      *
-     * @return float
+     * @return float (returns NAN if mean is zero)
      *
      * @throws Exception\BadDataException if the input array of numbers is empty
      * @throws Exception\OutOfBoundsException if degrees of freedom is ≤ 0
@@ -637,7 +652,7 @@ class Descriptive
         $σ = self::standardDeviation($numbers);
         $μ = Average::mean($numbers);
 
-        return $σ / $μ;
+        return $μ != 0 ? $σ / $μ : \NAN;
     }
 
     /**
@@ -648,22 +663,44 @@ class Descriptive
      * @param bool    $population : true means all possible observations of the system are present;
      *                           false means a sample is used.
      *
-     * @return array [n, mean, median, mode, range, midrange, variance, sd, CV, mean_mad,
-     *                median_mad, quartiles, skewness, kurtosis, sem, ci_95, ci_99]
+     * @return array{
+     *     n:           int<0, max>,
+     *     min:         float|false,
+     *     max:         float|false,
+     *     mean:        float,
+     *     median:      float,
+     *     mode:        float[],
+     *     range:       float,
+     *     midrange:    float,
+     *     variance:    float,
+     *     sd:          float,
+     *     cv:          float,
+     *     mean_mad:    float,
+     *     median_mad:  float,
+     *     quartiles:   float[],
+     *     midhinge:    float,
+     *     skewness:    float|null,
+     *     ses:         float|null,
+     *     kurtosis:    float|null,
+     *     sek:         float|null,
+     *     sem:         float,
+     *     ci_95:       array{ci: float|null, lower_bound: float|null, upper_bound: float|null},
+     *     ci_99:       array{ci: float|null, lower_bound: float|null, upper_bound: float|null},
+     * }
      *
      * @throws Exception\OutOfBoundsException
      * @throws Exception\BadDataException
      */
     public static function describe(array $numbers, bool $population = false): array
     {
-        $n = count($numbers);
+        $n = \count($numbers);
         $μ = Average::mean($numbers);
         $σ = self::standardDeviation($numbers, $population);
 
         return [
             'n'                  => $n,
-            'min'                => min($numbers),
-            'max'                => max($numbers),
+            'min'                => \min($numbers),
+            'max'                => \max($numbers),
             'mean'               => $μ,
             'median'             => Average::median($numbers),
             'mode'               => Average::mode($numbers),
@@ -702,9 +739,15 @@ class Descriptive
      *
      * https://en.wikipedia.org/wiki/Five-number_summary
      *
-     * @param  array  $numbers
+     * @param  array<int|float>  $numbers
      *
-     * @return array [min, Q1, median, Q3, max]
+     * @return array{
+     *     min:     float|int|false,
+     *     Q1:      float,
+     *     median:  float,
+     *     Q3:      float,
+     *     max:     float|int|false,
+     * }
      *
      * @throws Exception\BadDataException
      */
@@ -713,11 +756,11 @@ class Descriptive
         $quartiles = self::quartiles($numbers);
 
         return [
-            'min'    => min($numbers),
+            'min'    => \min($numbers),
             'Q1'     => $quartiles['Q1'],
             'median' => Average::median($numbers),
             'Q3'     => $quartiles['Q3'],
-            'max'    => max($numbers),
+            'max'    => \max($numbers),
         ];
     }
 }

@@ -139,6 +139,7 @@ function remExclusions() {
 # MacOS requires a different expression formulation for the sed 'in place' option since it uses BSD 'sed'
 if [[ "$OSTYPE" == *"linux"* ]]; then
         sed -i -E "/\/\.git\//d" "$rfTarg"
+        sed -i -E "/\/landingPages\/.+\/.*/d" "$rfTarg"
         sed -i -E "/\/media\//d" "$rfTarg"
 		sed -i -E "/\/conf\//d" "$rfTarg"
         sed -i -E "/\\.\.\/\.\.\/modules\/.+\//d" "$rfTarg"
@@ -146,6 +147,7 @@ if [[ "$OSTYPE" == *"linux"* ]]; then
         sed -i -E "/\/\.[a-zA-Z0-9]+\//d" "$rfTarg"
     else
         sed -i '' -E "/\/\.git\//d" "$rfTarg"
+        sed -i '' -E "/\/landingPages\/.+\/.*/d" "$rfTarg"
         sed -i '' -E "/\/media\//d" "$rfTarg"
 		sed -i '' -E "/\/conf\//d" "$rfTarg"
         sed -i '' -E "/\\.\.\/\.\.\/modules\/.+\//d" "$rfTarg"

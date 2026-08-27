@@ -267,7 +267,7 @@
 
 		function coordinateValue(x) {
 			/* get closest value for specific coordinate */
-			return Math.round((x - xMin) / dxStep) * step + min;
+			return Math.round(options.subDivisions * (x - xMin) / dxStep) * step / options.subDivisions + min;
 		}
 
 		function trackClicked(e) {
@@ -324,7 +324,9 @@
 			if (handleCoords.v === null || options.showValue === false) {
 				return;
 			}
-			tooltip.text(handleCoords.v);
+			const numericValue = Number(handleCoords.v);
+			const tooltipValue = Number.isFinite(numericValue) ? Math.round(numericValue * 100) / 100 : handleCoords.v;
+			tooltip.text(tooltipValue);
 			const w = tooltip.outerWidth();
 			const x = handleCoords.x - w / 2;
 			tooltip.css('margin-left', x);

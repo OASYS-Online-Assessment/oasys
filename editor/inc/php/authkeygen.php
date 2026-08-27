@@ -19,9 +19,9 @@ header("Cache-Control: no-cache, no-store, must-revalidate");
  */
 function failKick(String $msg): void
 {
-	global $uiLang;
+	global $uiLang, $backendState;
 	if ($msg === "") $msg = $uiLang->translate("Unauthorized access attempt logged.");
-	unset($_SESSION['smt']);
+	unset($backendState->smt);
 	echo "<script>window.history.replaceState(null, null, window.location.href);</script>\n"; // prevent data repost
 	echo "<script>window.rview = 'm';</script>\n"; // set return to be a message display
 	echo "<script>window.errmsg = \"$msg\";</script>\n"; // set return to be a message display
@@ -35,27 +35,37 @@ function failKick(String $msg): void
  */
 function getOasysRoot(): String
 {
-	// Windows file system slash fix
-	$fullOAroot = str_replace("\\", "/", realpath(__DIR__ . "/../../../"));
-	$fullOAroot = (substr($fullOAroot, -1, 1) != "/") ? $fullOAroot . "/" : $fullOAroot;
-	$webRoot = ($_SERVER['CONTEXT_DOCUMENT_ROOT'] ?? $_SERVER['DOCUMENT_ROOT']);
+	$curPath = str_replace("\\", "/", realpath(__DIR__ . "/../../../"));
+	if (empty($_SERVER['SCRIPT_FILENAME']) || empty($_SERVER['SCRIPT_NAME'])) {
+		return "/";
+	}
+	$scriptFilename = str_replace("\\", "/", realpath($_SERVER['SCRIPT_FILENAME']));
+	if ($scriptFilename === false) {
+		$scriptFilename = str_replace("\\", "/", $_SERVER['SCRIPT_FILENAME']);
+	}
+	$scriptName = $_SERVER['SCRIPT_NAME'];
+	if (str_starts_with($scriptFilename, $curPath)) {
+		$relPath = substr($scriptFilename, strlen($curPath));
+		if (str_ends_with($scriptName, $relPath)) {
+			$rootUrl = substr($scriptName, 0, strlen($scriptName) - strlen($relPath));
+		} else {
+			$rootUrl = dirname($scriptName);
+		}
+	} else {
+		$rootUrl = dirname($scriptName);
+	}
+	$rootUrl = trim($rootUrl);
+	$rootUrl = (!str_starts_with($rootUrl, "/")) ? "/" . $rootUrl : $rootUrl;
+	$rootUrl = (!str_ends_with($rootUrl, "/")) ? $rootUrl . "/" : $rootUrl;
 
-	// if the app root is the same as server root, we want '/' to be the rootURL value in settings, otherwise, the diff between the two
-	$updatedRootURL = ($fullOAroot == $webRoot) ? "/" : str_split($fullOAroot, strlen($webRoot));
-	$updatedRootURL = $updatedRootURL[1] ?? $updatedRootURL[0];
-
-	// string checks and fixes
-	$updatedRootURL = trim($updatedRootURL);
-	$updatedRootURL = (substr($updatedRootURL, 0, 1) != "/") ? "/" . $updatedRootURL : $updatedRootURL;
-	$updatedRootURL = (substr($updatedRootURL, -1, 1) != "/") ? $updatedRootURL . "/" : $updatedRootURL;
-
-	return $updatedRootURL;
+	return $rootUrl;
 }
 
 /**
  * Function to generate cryptographically secure 6 digit code (with possible leading zero)
  *
  * @return String
+ * @throws \Random\RandomException
  */
 function genSecCode(): String
 {
@@ -64,30 +74,32 @@ function genSecCode(): String
 		$code .= random_int(0, 9);
 	}
 	return $code;
-};
+}
 
 /**
  * initialize SMTP connection values prior to email transmission
  *
- * @param  String $oru
- * @param  PHPMailer $mail
- * @param  String $email
- * @param  rixPDO $db
+ * @param String $oru
+ * @param PHPMailer $mail
+ * @param String $email
+ * @param rixPDO $db
  * @return void
+ * @throws Exception
+ * @throws Exception
  */
 function initSMTP(String $oru, PHPMailer &$mail, String $email, rixPDO &$db): void
 {
 	global $emSysData, $uiLang;
-	require_once "../inc/php/Crypt.php";
+	require_once __DIR__ . "/../../../inc/php/Crypt.php";
 	$mail->isSMTP();
 
-	$emHost = $db->fetchValue("SELECT `value` FROM `settings` WHERE `option`='SMTP_Host'", [])['data'];
-	$emPort = $db->fetchValue("SELECT `value` FROM `settings` WHERE `option`='SMTP_Port'", [])['data'];
-	$emFrom = $db->fetchValue("SELECT `value` FROM `settings` WHERE `option`='SMTP_From'", [])['data'];
-	$emUser = in_array("SMTP_Username", $emSysData) ? $db->fetchValue("SELECT `value` FROM `settings` WHERE `option`='SMTP_Username'", [])['data'] : "";
-	$emPass = in_array("SMTP_Password", $emSysData) ? $db->fetchValue("SELECT `value` FROM `settings` WHERE `option`='SMTP_Password'", [])['data'] : "";
+	$emHost = $db->fetchValue("SELECT `value` FROM `settings` WHERE `option`='SMTP_Host'")['data'];
+	$emPort = $db->fetchValue("SELECT `value` FROM `settings` WHERE `option`='SMTP_Port'")['data'];
+	$emFrom = $db->fetchValue("SELECT `value` FROM `settings` WHERE `option`='SMTP_From'")['data'];
+	$emUser = in_array("SMTP_Username", $emSysData) ? $db->fetchValue("SELECT `value` FROM `settings` WHERE `option`='SMTP_Username'")['data'] : "";
+	$emPass = in_array("SMTP_Password", $emSysData) ? $db->fetchValue("SELECT `value` FROM `settings` WHERE `option`='SMTP_Password'")['data'] : "";
 	$emPass = Crypt::decryptString($emPass);
-	$emEnc = $db->fetchValue("SELECT `value` FROM `settings` WHERE `option`='SMTP_Encryption'", [])['data'];
+	$emEnc = $db->fetchValue("SELECT `value` FROM `settings` WHERE `option`='SMTP_Encryption'")['data'];
 	if (empty($emEnc)) $emEnc = 0;
 
 	switch ($emEnc) {
@@ -131,9 +143,12 @@ function initSMTP(String $oru, PHPMailer &$mail, String $email, rixPDO &$db): vo
 	$mail->Encoding = "base64"; // use with utf-8, otherwise it could be problematic
 }
 
+/**
+ * @throws Exception
+ */
 function doCodeMail($oru, String $email, String $sendcode, rixPDO &$db): ?bool
 {
-	global $login, $uiLang;
+	global $login, $uiLang, $backendState;
 	$mail = new PHPMailer(true);
 	initSMTP($oru, $mail, $email, $db); // initialize SMTP vars in preparation to send message
 
@@ -146,7 +161,7 @@ function doCodeMail($oru, String $email, String $sendcode, rixPDO &$db): ?bool
 	try {
 		$mail->send();
 	} catch (Exception $e) {
-		session_destroy();
+		$backendState->eraseState();
 		failKick($uiLang->translate("Sorry, message could not be sent! Please try again later, or notify the Oasys System Administrator."));
 		return false;
 	}
@@ -154,19 +169,15 @@ function doCodeMail($oru, String $email, String $sendcode, rixPDO &$db): ?bool
 }
 
 $oasysRootURL = getOasysRoot();
-$rs_count = $_SESSION['emr_resend_count'] ?? 0; // set default resend count (non-reset mode) for login page
+$rs_count = $backendState->emr_resend_count ?? 0; // set default resend count (non-reset mode) for login page
 
 if (
-	!(isset($_POST['emr_active'])
-		&& isset($_POST['emr_active'])
-		// && !empty($_COOKIE['PHPSESSID']) // check for normal phpsessid being set first from the index page
-		&& str_ends_with($_SERVER['REQUEST_URI'], "editor/index.php"))
+	!(isset($_POST['emr_active']) && str_ends_with($_SERVER['REQUEST_URI'], "editor/index.php"))
 ) {
 	# --------------------------------------- #
 	# normal mode start (standard login page) #
 	# --------------------------------------- #
 	echo "<script>window.rview = 1;</script>\n";
-	// setcookie("PHPSESSID_EMR", "", time() - 3600, $oasysRootURL); // revoke any previously set sessions on the client from recovery mode attempts
 	return;
 }
 
@@ -175,25 +186,17 @@ if (
 # ---------------- #
 
 # standard includes #
-require_once("../inc/php/dbSessionHandler.php");
-require_once "../inc/php/database.php";
-require_once "../inc/php/rixPDO.php";
-require_once 'uiLang.php'; // required for translation inclusion
+require_once __DIR__ . "/../../../inc/php/OasysApp.php";
+use Oasys\OasysApp;
+require_once __DIR__ . '/uiLang.php'; // required for translation inclusion
 
 $lang = substr($_POST['lang'], 0, 2) ?? "EN"; // no matter if this field is hacked/modified/attempting to use injection, we only care about the first 2 chars!
 $settings['rootURL'] = getOasysRoot(); // fake-ass settings key so that the uiLang class will initalize
 $uiLang = new uiLang($lang);
 
 // init DB class
-$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, '../logs/acctreset_errors.log', 1, $returnData, 'error');
-
-// custom db session handling
-$sessionHandler = new dbSessionHandler($sql_db, $sql_user, $sql_password, $sql_host, '../logs/sessionHandler_acctreset_errors.log', 'authKeyGen');
-session_set_save_handler($sessionHandler, true);
-
-// start session if an actual reset request (or resend code)
-session_name("PHPSESSID_EMR");
-session_start(['cookie_path' => $oasysRootURL, 'cookie_httponly' => true]);
+$app = OasysApp::getInstance();
+$db = $app->getDatabaseInstance();
 
 # email system active check (skips 'settings' include -- just an absolute headache) #
 $emSysData = $db->fetchColumn("select option from settings", [])['data'];
@@ -211,7 +214,7 @@ if (!isset($_POST['emr_active'])) {
 }
 
 # email validation/sanitation #
-$email = emCheck($_POST['emr_addr'] ?? $_SESSION['email'] ?? "bad_session");
+$email = emCheck($_POST['emr_addr'] ?? $backendState->email ?? "bad_session");
 if ($email === false) {
 	failKick($uiLang->translate("Malformed request."));
 	return;
@@ -226,10 +229,10 @@ $dbdata = $db->fetchValue("SELECT `resetdata` FROM `users` WHERE `email` = ?", [
 $dbdata = json_decode($dbdata, true);
 
 # catch if previous submission flag is active (used in timestamp validation to prevent hammering) #
-$prevsub = $_SESSION['prevsub'] ?? $dbdata['prevsub'] ?? false;
+$prevsub = $backendState->prevsub ?? $dbdata['prevsub'] ?? false;
 
 # get the timestamp value for comparison usage #
-$ts_val = $dbdata['timestamp'] ?? $_SESSION['ts'] ?? 9999999999;
+$ts_val = $dbdata['timestamp'] ?? $backendState->ts ?? 9999999999;
 
 # kick out if trying to reset same email within 10 minutes, and the post request is NOT a request to re-send code #
 if (isUnder10mins($ts_val) && $_POST['emr_active'] === "0" && $prevsub === true) {
@@ -237,8 +240,8 @@ if (isUnder10mins($ts_val) && $_POST['emr_active'] === "0" && $prevsub === true)
 	return;
 }
 
-$_SESSION['ts'] = time();
-$_SESSION['email'] = $email;
+$backendState->ts = time();
+$backendState->email = $email;
 
 // precheck for duplicates, bail if found
 if (emDupCheck($email, $db) !== true) {
@@ -250,12 +253,20 @@ if (emDupCheck($email, $db) !== true) {
 switch ($_POST['emr_active']) {
 	case '0':
 		# initial request; code generation and send email routine #
-		geninitcode($oasysRootURL, $db, $login, $email, $realUser);
+		try {
+			geninitcode($oasysRootURL, $db, $login, $email, $realUser);
+		} catch (Exception|\Random\RandomException $e) {
+			//do nothing
+		}
 		break;
 
 	case '1':
 		# resend code email routine #
-		resendcode($oasysRootURL, $db, $dbdata, $realUser);
+		try {
+			resendcode($oasysRootURL, $db, $dbdata, $realUser);
+		} catch (Exception|\Random\RandomException $e) {
+			//do nothing
+		}
 		break;
 
 	case '2':
@@ -274,38 +285,40 @@ switch ($_POST['emr_active']) {
 
 /**
  * Regenerate a new code and resend through email
+ * @throws Exception
+ * @throws \Random\RandomException
  */
-function resendcode($oru, rixPDO &$db, $dbdata, $realUser)
+function resendcode($oru, rixPDO &$db, $dbdata, $realUser): void
 {
-	global $rs_count, $uiLang;
+	global $rs_count, $uiLang, $backendState;
 	echo "<script>window.rview = 2;</script>\n";
 
 	// validate post source
 	secCheck($oru, 2);
-	$_SESSION['smt'] = 1;
-	$email = $_SESSION["email"];
+	$backendState->smt = 1;
+	$email = $backendState->email;
 
 	// validate user is within time constraint
 	if (passcodeTimeChecker($oru, $db, $realUser, $dbdata, $email) === false) return;
 
 	// create counter for how many times user tried to resend code (limit to 3)
-	if (!isset($_SESSION['emr_resend_count'])) {
-		$_SESSION['emr_resend_count'] = 1;
+	if (!isset($backendState->emr_resend_count)) {
+		$backendState->emr_resend_count = 1;
 	} else {
-		$_SESSION['emr_resend_count']++;
-		if ($_SESSION['emr_resend_count'] === 3) echo "<script>let rs_over = true;</script>\n";
-		if ($_SESSION['emr_resend_count'] > 3) {
+		$backendState->emr_resend_count++;
+		if ($backendState->emr_resend_count === 3) echo "<script>let rs_over = true;</script>\n";
+		if ($backendState->emr_resend_count > 3) {
 			failKick($uiLang->translate("Exceeded code resend limit. Aborting reset request and logging action."));
 			return;
 		}
-		if ($realUser && ($_SESSION['emr_resend_count'] !== ($dbdata['resends'] + 1))) {
+		if ($realUser && ($backendState->emr_resend_count !== ($dbdata['resends'] + 1))) {
 			failKick($uiLang->translate("Malformed request."));
 			return;
 		}
 	}
 
-	$rs_count = 3 - $_SESSION['emr_resend_count'];
-	$resends = $_SESSION['emr_resend_count'];
+	$rs_count = 3 - $backendState->emr_resend_count;
+	$resends = $backendState->emr_resend_count;
 	echo "<script>\n";
 	echo "window.rs_count = $rs_count;\n";
 	echo "</script>\n";
@@ -321,16 +334,18 @@ function resendcode($oru, rixPDO &$db, $dbdata, $realUser)
 		failKick($uiLang->translate("Something went wrong. Please try again later."));
 		return;
 	}
-	$_SESSION['prevsub'] = true;
+	$backendState->prevsub = true;
 	doCodeMail($oru, $email, $newcode, $db);
 }
 
 /**
  * Generate initial reset code for requesting user and send via email
+ * @throws Exception
+ * @throws \Random\RandomException
  */
-function geninitcode(String $oru, rixPDO &$db, String|null $login, String $email, bool $realUser)
+function geninitcode(String $oru, rixPDO &$db, String|null $login, String $email, bool $realUser): void
 {
-	global $uiLang;
+	global $uiLang, $backendState;
 	secCheck($oru, 0); // generic security check; SMT step validation and incrementation
 
 	# IFF username was forgotten, do an email without any codes/etc., notify, and exit #
@@ -350,8 +365,8 @@ function geninitcode(String $oru, rixPDO &$db, String|null $login, String $email
 
 			echo "<script>window.history.replaceState(null, null, window.location.href);</script>\n"; // prevent data repost client-side
 
-			$sCols = $db->fetchColumn("select option from settings", [])['data'];
-			$urlRedir = (in_array("reset_LDAP_Redirect", $sCols)) ? $db->fetchValue("SELECT `value` FROM `settings` WHERE `option` = 'reset_LDAP_Redirect'", [])['data'] : null;
+			$sCols = $db->fetchColumn("select `option` from settings")['data'];
+			$urlRedir = (in_array("reset_LDAP_Redirect", $sCols)) ? $db->fetchValue("SELECT `value` FROM `settings` WHERE `option` = 'reset_LDAP_Redirect'")['data'] : null;
 
 			// url redirect info not configured
 			if (is_null($urlRedir)) {
@@ -385,9 +400,9 @@ function geninitcode(String $oru, rixPDO &$db, String|null $login, String $email
 		$hashedCode = password_hash($secCode, PASSWORD_DEFAULT);
 		$resetUpdateData = [
 			"secCode" => $hashedCode,
-			"timestamp" => $_SESSION['ts'],
+			"timestamp" => $backendState->ts,
 			"resends" => 0,
-			"sid" => session_id(),
+			"sid" => $backendState->getStateId(),
 			"prevsub" => true
 		];
 
@@ -395,7 +410,7 @@ function geninitcode(String $oru, rixPDO &$db, String|null $login, String $email
 		$db->update("users", ["resetdata" => $dbInsJSON], "email = ?", [$email]);
 		if (doCodeMail($oru, $email, $secCode, $db) === false) return;
 	}
-	$_SESSION['prevsub'] = true;
+	$backendState->prevsub = true;
 	echo "<script>window.rview = 2;</script>\n";
 	echo "<script>window.rs_count = 3;</script>\n";
 }
@@ -409,11 +424,11 @@ function geninitcode(String $oru, rixPDO &$db, String|null $login, String $email
  */
 function codecheck(String $oru, rixPDO &$db): void
 {
-	global $rs_count, $uiLang;
+	global $rs_count, $uiLang, $backendState;
 	echo "<script>window.rview = 2;</script>\n";
 
 	secCheck($oru, 3);
-	$email = $_SESSION['email'];
+	$email = $backendState->email;
 	$realUser = true;
 
 	# get reset JSON data #
@@ -429,18 +444,18 @@ function codecheck(String $oru, rixPDO &$db): void
 	if (passcodeTimeChecker($oru, $db, $realUser, $dbdata, $email) === false) return;
 
 	# init code submission attempt counter #
-	if (!isset($_SESSION['codesubs'])) $_SESSION['codesubs'] = 0;
-	$_SESSION['codesubs']++;
+	if (!isset($backendState->codesubs)) $backendState->codesubs = 0;
+	$backendState->codesubs++;
 
 	# check for exceeded code submission limit #
-	if ($_SESSION['codesubs'] > 3) {
+	if ($backendState->codesubs > 3) {
 		failKick($uiLang->translate("Exceeded code attempts. Please try again after 10 minutes."));
 		return;
 	}
 
 	# no more processing for non-real users #
 	if (!$realUser) {
-		$_SESSION['smt'] = 2;
+		$backendState->smt = 2;
 		return;
 	}
 
@@ -448,7 +463,7 @@ function codecheck(String $oru, rixPDO &$db): void
 
 	# validate input #
 	if (preg_match("/^[0-9]{6}$/", $submitted) !== 1) {
-		failKick($uiLang->translate($uiLang->translate("Malformed request.")));
+		failKick($uiLang->translate("Malformed request."));
 		return;
 	}
 
@@ -458,9 +473,8 @@ function codecheck(String $oru, rixPDO &$db): void
 		$count = 3 - $rs_count;
 		printf('<script>window.rs_count = %d;</script>' . "\n", $count);
 
-		$_SESSION['smt'] = 1;
+		$backendState->smt = 1;
 		echo "<script>window.bcta = true;</script>\n";
-		return;
 	} else {
 		# CODE SUCCESS! -- set the next view variable for the page reload #
 		echo "<script>window.rview = 3;</script>\n";
@@ -489,28 +503,28 @@ function isUnder10mins(Int $entryTime): Bool
  */
 function secCheck(String $oru, Int $smt): void
 {
-	global $uiLang;
+	global $uiLang, $backendState;
 	if (!str_ends_with(get_required_files()[0], "editor/index.php")) {
 		failKick("");
 		return;
 	}
 
 	if ($smt === 0) {
-		if (isset($_SESSION['smt'])) {
+		if (isset($backendState->smt)) {
 			failKick($uiLang->translate("Something went wrong. Please clear your cookies, reload the page, and try again."));
 			return;
 		}
-		$_SESSION['smt'] = 1;
+		$backendState->smt = 1;
 	} else {
-		if (!isset($_SESSION['smt'])) {
+		if (!isset($backendState->smt)) {
 			failKick("");
 			return;
 		}
-		if ($_SESSION['smt'] === $smt) {
+		if ($backendState->smt === $smt) {
 			failKick($uiLang->translate("Something went wrong. Please clear your cookies, reload the page, and try again."));
 			return;
 		}
-		$_SESSION['smt'] = $smt;
+		$backendState->smt = $smt;
 	}
 }
 
@@ -536,9 +550,9 @@ function emCheck(String $emaddr): String|Bool
  */
 function newpwdset(string $oru, rixPDO &$db): void
 {
-	global $uiLang;
+	global $uiLang, $backendState;
 	// set email value as primary key to perform password update
-	$email = $_SESSION['email'];
+	$email = $backendState->email;
 
 	// validate pwd inputs
 
@@ -548,16 +562,19 @@ function newpwdset(string $oru, rixPDO &$db): void
 		return;
 	}
 
-	// re-check hidden session params
+	// re-check hidden state params
 	secCheck($oru, 4);
 
 	// update password in users table
 	$db->update("users", ["password" => $p1], "email = ?", [$email]);
 
 
-	// session, table resetdata, and cookie cleanup
-	setcookie("PHPSESSID_EMR", "", time() - 3600, $oru);
-	session_destroy();
+	// state, table resetdata, and cookie cleanup
+	unset($backendState->prevsub);
+	unset($backendState->ts);
+	unset($backendState->smt);
+	unset($backendState->emr_resend_count);
+	unset($backendState->codesubs);
 	$db->update("users", ["resetdata" => null], "email = ?", [$email]);
 
 	// redirect back to login page with header (and refresh delay with message to try new password)
@@ -570,17 +587,19 @@ function newpwdset(string $oru, rixPDO &$db): void
 /**
  * send only the login value when requested w/out password reset
  *
- * @param  String $oru
- * @param  String $email
- * @param  rixPDO $db
- * @param  Bool $realUser
- * @param  Bool $bypassMsg
+ * @param String $oru
+ * @param String $email
+ * @param rixPDO $db
+ * @param Bool $realUser
+ * @param String|null $uname
+ * @param Bool $bypassMsg
  * @return void
+ * @throws Exception
  */
 function onlyLoginMail(String $oru, String $email, rixPDO &$db, bool $realUser, String|null $uname, bool $bypassMsg = false): void
 {
-	global $uiLang;
-	unset($_SESSION['smt']);
+	global $uiLang, $backendState;
+	unset($backendState->smt);
 
 	if ($realUser) {
 		# send out mail #
@@ -588,20 +607,25 @@ function onlyLoginMail(String $oru, String $email, rixPDO &$db, bool $realUser, 
 		initSMTP($oru, $mail, $email, $db); // initialize SMTP vars in preparation to send message
 		$mail->Subject = $uiLang->translate("Requested Account Information from Oasys");
 		$emLidStr = $uiLang->translate("Your login ID is");
-		$mail->Body .= "<code style='font-size: 14pt;'>{$emLidStr}: <strong>$uname</strong></code>";
+		$mail->Body .= "<code style='font-size: 14pt;'>$emLidStr: <strong>$uname</strong></code>";
 
 		try {
 			$mail->send();
 		} catch (Exception $e) {
-			session_destroy();
+			unset($backendState->prevsub);
+			unset($backendState->ts);
+			unset($backendState->smt);
+			unset($backendState->emr_resend_count);
+			unset($backendState->codesubs);
 			failKick($uiLang->translate("Sorry, message could not be sent! Please try again later, or notify the Oasys System Administrator."));
 			return;
 		}
 
 		// set timestamp in DB to prevent hammering from a different session cookie
+		// TODO: check if this is still necessary with backendState instead of sessions
 		$dbInsJSON = json_encode(["timestamp" => time(), "prevsub" => true]);
 		$db->update("users", ["resetdata" => $dbInsJSON], "name = ?", [$uname]);
-		$_SESSION['prevsub'] = true;
+		$backendState->prevsub = true;
 	}
 
 	if ($bypassMsg === false) {
@@ -614,9 +638,9 @@ function onlyLoginMail(String $oru, String $email, rixPDO &$db, bool $realUser, 
 
 function passcodeTimeChecker($oru, &$db, $realUser, $dbdata, $email): Bool
 {
-	global $uiLang;
+	global $uiLang, $backendState;
 	# check for exceeding 10 min timeout #
-	$time2use = $realUser ? $dbdata['timestamp'] : $_SESSION['ts'];
+	$time2use = $realUser ? $dbdata['timestamp'] : $backendState->ts;
 
 	if (isUnder10mins($time2use) === false) {
 		# reset the resetdata column for the user when code timeout expired, when an actual user! #
@@ -628,9 +652,9 @@ function passcodeTimeChecker($oru, &$db, $realUser, $dbdata, $email): Bool
 	}
 }
 
-function emDupCheck(String $email, rixPDO &$db)
+function emDupCheck(String $email, rixPDO &$db): bool
 {
-	$dupres = $db->fetchColumn("SELECT `email`, count(`email`) FROM `users` GROUP BY `email` HAVING count(`email`) > 1", [])['data'];
+	$dupres = $db->fetchColumn("SELECT `email`, count(`email`) FROM `users` GROUP BY `email` HAVING count(`email`) > 1")['data'];
 
 	// check for 2 or more email accounts associated with an account
 	if (in_array($email, $dupres)) return false;

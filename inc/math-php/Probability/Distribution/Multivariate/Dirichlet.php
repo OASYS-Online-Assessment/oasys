@@ -16,18 +16,18 @@ class Dirichlet
     /**
      * Distribution parameter bounds limits
      * α ∈ (0,∞)
-     * @var array
+     * @var array{"α": string}
      */
-    const PARAMETER_LIMITS = [
+    public const PARAMETER_LIMITS = [
         'α' => '(0,∞)',
     ];
 
     /**
-     * Distribution parameter bounds limits
+     * Distribution support bounds limits
      * x ∈ (0,1)
-     * @var array
+     * @var array{x: string}
      */
-    const SUPPORT_LIMITS = [
+    public const SUPPORT_LIMITS = [
         'x' => '(0,1)',
     ];
 
@@ -41,7 +41,7 @@ class Dirichlet
      */
     public function __construct(array $αs)
     {
-        $n = count($αs);
+        $n = \count($αs);
         for ($i = 0; $i < $n; $i++) {
             Support::checkLimits(self::PARAMETER_LIMITS, ['α' => $αs[$i]]);
         }
@@ -65,11 +65,11 @@ class Dirichlet
      */
     public function pdf(array $xs): float
     {
-        if (count($xs) !== count($this->αs)) {
+        if (\count($xs) !== \count($this->αs)) {
             throw new Exception\BadDataException('xs and αs must have the same number of elements');
         }
 
-        $n = count($xs);
+        $n = \count($xs);
         for ($i = 0; $i < $n; $i++) {
             Support::checkLimits(self::SUPPORT_LIMITS, ['x' => $xs[$i]]);
         }
@@ -77,10 +77,10 @@ class Dirichlet
         /*
          *  K   αᵢ-1
          *  ∏ xᵢ
-         * ⁱ⁼ⁱ
+         * ⁱ⁼¹
          */
-        $∏xᵢ = array_product(
-            array_map(
+        $∏xᵢ = \array_product(
+            \array_map(
                 function ($xᵢ, $αᵢ) {
                     return $xᵢ ** ($αᵢ - 1);
                 },

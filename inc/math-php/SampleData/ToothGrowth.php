@@ -16,9 +16,9 @@ namespace MathPHP\SampleData;
  */
 class ToothGrowth
 {
-    const LABELS = ['len', 'supp', 'dose'];
+    private const LABELS = ['len', 'supp', 'dose'];
 
-    const DATA = [
+    private const DATA = [
         [4.2, 'VC', 0.5],
         [11.5, 'VC', 0.5],
         [7.3, 'VC', 0.5],
@@ -83,26 +83,26 @@ class ToothGrowth
 
     /**
      * Raw data without labels
-     * [[4.2, 'VC', 0.5], [11.5, 'VC', '0.5], ... ]
+     * [[4.2, 'VC', 0.5], [11.5, 'VC', 0.5], ... ]
      *
      * @return mixed[]
      */
     public function getData(): array
     {
-        return array_values(self::DATA);
+        return \array_values(self::DATA);
     }
 
     /**
      * Raw data with each observation labeled
      * [['len' => 4.2, 'supp' => 'VC', 'dose' => 0.5], ... ]
      *
-     * @return number[]
+     * @return array<array<string, float|string>>
      */
     public function getLabeledData(): array
     {
-        return array_map(
+        return \array_map(
             function (array $data) {
-                return array_combine(self::LABELS, $data);
+                return \array_combine(self::LABELS, $data);
             },
             self::DATA
         );
@@ -111,11 +111,11 @@ class ToothGrowth
     /**
      * Tooth length observations
      *
-     * @return number[]
+     * @return float[]
      */
     public function getLen(): array
     {
-        return array_column(self::DATA, 0);
+        return \array_column(self::DATA, 0);
     }
 
     /**
@@ -125,16 +125,16 @@ class ToothGrowth
      */
     public function getSupp(): array
     {
-        return array_column(self::DATA, 0);
+        return \array_column(self::DATA, 1);
     }
 
     /**
      * Dose in milligrams/day observations
      *
-     * @return number[]
+     * @return float[]
      */
     public function getDose(): array
     {
-        return array_column(self::DATA, 0);
+        return \array_column(self::DATA, 2);
     }
 }

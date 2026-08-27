@@ -26,12 +26,12 @@ class BisectionMethod
     /**
      * Use the Bisection Method to find the x which produces $function(x) = 0.
      *
-     * @param callable $function f(x) callback function
-     * @param number   $a        The start of the interval which contains a root
-     * @param number   $b        The end of the interval which contains a root
-     * @param number   $tol      Tolerance; How close to the actual solution we would like.
+     * @param callable  $function f(x) callback function
+     * @param int|float $a        The start of the interval which contains a root
+     * @param int|float $b        The end of the interval which contains a root
+     * @param int|float $tol      Tolerance; How close to the actual solution we would like.
 
-     * @return number
+     * @return int|float
      *
      * @throws Exception\OutOfBoundsException
      * @throws Exception\BadDataException
@@ -45,7 +45,7 @@ class BisectionMethod
             $f⟮a⟯ = $function($a);
             $p   = ($a + $b) / 2;     // construct the midpoint
             $f⟮p⟯ = $function($p);
-            $dif = abs($f⟮p⟯);       // the magnitude of our function at the midpoint
+            $dif = \abs($f⟮p⟯);       // the magnitude of our function at the midpoint
             if (Special::sgn($f⟮p⟯) !== Special::sgn($f⟮a⟯)) {
                 $b = $p;            // the new endpoint is our original midpoint
             } else {
@@ -65,16 +65,16 @@ class BisectionMethod
      * we cannot run our loop as $a and $b will themselves be the midpoint, so we
      * throw an Exception.
      *
-     * @param Callable $function f(x) callback function
-     * @param number   $a        The start of the interval which contains a root
-     * @param number   $b        The end of the interval which contains a root
-     * @param number   $tol      Tolerance; How close to the actual solution we would like.
+     * @param Callable  $function f(x) callback function
+     * @param int|float $a        The start of the interval which contains a root
+     * @param int|float $b        The end of the interval which contains a root
+     * @param int|float $tol      Tolerance; How close to the actual solution we would like.
      *
      * @throws Exception\OutOfBoundsException if $tol (the tolerance) is negative
      * @throws Exception\BadDataException if $a = $b
      * @throws Exception\BadDataException if f($a) and f($b) share the same sign
      */
-    private static function validate(callable $function, $a, $b, $tol)
+    private static function validate(callable $function, $a, $b, $tol): void
     {
         Validation::tolerance($tol);
         Validation::interval($a, $b);

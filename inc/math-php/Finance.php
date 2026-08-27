@@ -2,6 +2,8 @@
 
 namespace MathPHP;
 
+use MathPHP\Exception\OutOfBoundsException;
+
 /**
   * General references on financial functions and formulas:
   * - Open Document Format for Office Applications (OpenDocument) Version 1.2 Part 2:
@@ -14,7 +16,7 @@ class Finance
     /**
      * Floating-point range near zero to consider insignificant.
      */
-    const EPSILON = 1e-6;
+    public const EPSILON = 1e-6;
 
     /**
      * Consider any floating-point value less than epsilon from zero as zero,
@@ -28,7 +30,7 @@ class Finance
      */
     private static function checkZero(float $value, float $epsilon = self::EPSILON): float
     {
-        return abs($value) < $epsilon ? 0.0 : $value;
+        return \abs($value) < $epsilon ? 0.0 : $value;
     }
 
     /**
@@ -89,9 +91,9 @@ class Finance
             return - ($future_value + $present_value) / $periods;
         }
 
-        return - ($future_value + ($present_value * pow(1 + $rate, $periods)))
+        return - ($future_value + ($present_value * \pow(1 + $rate, $periods)))
             /
-            ((1 + $rate * $when) / $rate * (pow(1 + $rate, $periods) - 1));
+            ((1 + $rate * $when) / $rate * (\pow(1 + $rate, $periods) - 1));
     }
 
     /**
@@ -253,7 +255,7 @@ class Finance
         }
 
         $initial = $payment * (1.0 + $rate * $when);
-        return log(($initial - $future_value * $rate) / ($initial + $present_value * $rate)) / log(1.0 + $rate);
+        return \log(($initial - $future_value * $rate) / ($initial + $present_value * $rate)) / \log(1.0 + $rate);
     }
 
     /**
@@ -285,7 +287,7 @@ class Finance
             return $nominal;
         }
 
-        return pow(1 + ($nominal / $periods), $periods) - 1;
+        return \pow(1 + ($nominal / $periods), $periods) - 1;
     }
 
     /**
@@ -317,7 +319,7 @@ class Finance
             return $aer;
         }
 
-        return (pow($aer + 1, 1 / $periods) - 1) * $periods;
+        return (\pow($aer + 1, 1 / $periods) - 1) * $periods;
     }
 
     /**
@@ -365,7 +367,7 @@ class Finance
         }
 
         $initial  = 1 + ($rate * $when);
-        $compound = pow(1 + $rate, $periods);
+        $compound = \pow(1 + $rate, $periods);
         $fv       = - (($present_value * $compound) + (($payment * $initial * ($compound - 1)) / $rate));
 
         return self::checkZero($fv);
@@ -391,13 +393,13 @@ class Finance
      * an "annuity due" with an immediate payment.
      *
      * Examples:
-     * The present value of a band's $1000 face value paid in 5 year's time
+     * The present value of a bond's $1000 face value paid in 5 year's time
      * with a constant discount rate of 3.5% compounded monthly:
      *   pv(0.035/12, 5*12, 0, -1000, false)
      *
      * The present value of a $1000 5-year bond that pays a fixed 7% ($70)
      * coupon at the end of each year with a discount rate of 5%:
-     *   pv(0.5, 5, -70, -1000, false)
+     *   pv(0.05, 5, -70, -1000, false)
      *
      * The payment and future_value is negative indicating money paid out.
      *
@@ -419,7 +421,7 @@ class Finance
         }
 
         $initial  = 1 + ($rate * $when);
-        $compound = pow(1 + $rate, $periods);
+        $compound = \pow(1 + $rate, $periods);
         $pv       = (-$future_value - (($payment * $initial * ($compound - 1)) / $rate)) / $compound;
 
         return self::checkZero($pv);
@@ -449,7 +451,7 @@ class Finance
      *  npv(0.03, [-1000, 100, 500, 300, 700, 700])
      *
      * @param  float $rate
-     * @param  array $values
+     * @param  array<float> $values
      *
      * @return float
      */
@@ -457,7 +459,7 @@ class Finance
     {
         $result = 0.0;
 
-        for ($i = 0; $i < count($values); ++$i) {
+        for ($i = 0; $i < \count($values); ++$i) {
             $result += $values[$i] / (1 + $rate) ** $i;
         }
 
@@ -519,13 +521,15 @@ class Finance
      *  irr([-100, 50, 40, 30])
      *
      * Solves for NPV=0 using Newton's Method.
-     * @todo: Use eigenvalues to find the roots of a characteristic polynomial.
-     * This will allow finding all solutions and eliminate the need of the initial_guess.
-     *
-     * @param  array $values
-     * @param  float $initial_guess
+     * @param array<float> $values
+     * @param float $initial_guess
      *
      * @return float
+     *
+     * @throws OutOfBoundsException
+     *
+     * @todo: Use eigenvalues to find the roots of a characteristic polynomial.
+     * This will allow finding all solutions and eliminate the need of the initial_guess.
      */
     public static function irr(array $values, float $initial_guess = 0.1): float
     {
@@ -533,7 +537,57 @@ class Finance
             return Finance::npv($x, $values);
         };
 
-        return self::checkZero(NumericalAnalysis\RootFinding\NewtonsMethod::solve($func, [$initial_guess, $values], 0, self::EPSILON, 0));
+        if (\count($values) <= 1) {
+            return \NAN;
+        }
+
+        $root = NumericalAnalysis\RootFinding\NewtonsMethod::solve($func, [$initial_guess, $values], 0, self::EPSILON, 0);
+        if (!\is_nan($root)) {
+            return self::checkZero($root);
+        }
+        return self::checkZero(self::alternateIrr($values));
+    }
+
+    /**
+     * Alternate IRR implementation.
+     *
+     * A more numerically stable implementation that converges to only one value.
+     *
+     * Based off of Better: https://github.com/better/irr
+     *
+     * @param  array<float> $values
+     *
+     * @return float
+     */
+    private static function alternateIrr(array $values): float
+    {
+        $rate = 0.0;
+        for ($iter = 0; $iter < 100; $iter++) {
+            $m = -1000;
+            for ($i = 0; $i < \count($values); $i++) {
+                $m = \max($m, -$rate * $i);
+            }
+            $f = [];
+            for ($i = 0; $i < \count($values); $i++) {
+                $f[$i] = \exp(-$rate * $i - $m);
+            }
+            $t = 0;
+            for ($i = 0; $i < \count($values); $i++) {
+                $t += $f[$i] * $values[$i];
+            }
+            if (\abs($t) < (self::EPSILON * \exp($m))) {
+                break;
+            }
+            $u = 0;
+            for ($i = 0; $i < \count($values); $i++) {
+                $u += $f[$i] * $i * $values[$i];
+            }
+            if ($u == 0) {
+                return \NAN;
+            }
+            $rate += $t / $u;
+        }
+        return \exp($rate) - 1;
     }
 
     /**
@@ -556,7 +610,7 @@ class Finance
      * with returns of $50, $40, and $30 reinvested at 10%:
      *  mirr([-100, 50, 40, 30], 0.05, 0.10)
      *
-     * @param  array $values
+     * @param  array<float> $values
      * @param  float $finance_rate
      * @param  float $reinvestment_rate
      *
@@ -567,7 +621,7 @@ class Finance
         $inflows  = array();
         $outflows = array();
 
-        for ($i = 0; $i < sizeof($values); $i++) {
+        for ($i = 0; $i < \count($values); $i++) {
             if ($values[$i] >= 0) {
                 $inflows[]  = $values[$i];
                 $outflows[] = 0;
@@ -581,16 +635,16 @@ class Finance
             return $x != 0;
         };
 
-        if (sizeof(array_filter($inflows, $nonzero)) == 0 || sizeof(array_filter($outflows, $nonzero)) == 0) {
+        if (\count(\array_filter($inflows, $nonzero)) == 0 || \count(\array_filter($outflows, $nonzero)) == 0) {
             return \NAN;
         }
 
-        $root        = sizeof($values) - 1;
+        $root        = \count($values) - 1;
         $pv_inflows  = self::npv($reinvestment_rate, $inflows);
         $fv_inflows  = self::fv($reinvestment_rate, $root, 0, -$pv_inflows);
         $pv_outflows = self::npv($finance_rate, $outflows);
 
-        return self::checkZero(pow($fv_inflows / -$pv_outflows, 1 / $root) - 1);
+        return self::checkZero(\pow($fv_inflows / -$pv_outflows, 1 / $root) - 1);
     }
 
     /**
@@ -624,7 +678,7 @@ class Finance
      * of $100, $200, $300, $400, $500, and a discount rate of 0.10:
      *  payback([-1000, 100, 200, 300, 400, 500], 0.1)
      *
-     * @param  array $values
+     * @param  array<float> $values
      * @param  float $rate
      *
      * @return float
@@ -632,7 +686,7 @@ class Finance
     public static function payback(array $values, float $rate = 0.0): float
     {
         $last_outflow = -1;
-        for ($i = 0; $i < sizeof($values); $i++) {
+        for ($i = 0; $i < \count($values); $i++) {
             if ($values[$i] < 0) {
                 $last_outflow = $i;
             }
@@ -645,7 +699,7 @@ class Finance
         $sum            = $values[0];
         $payback_period = -1;
 
-        for ($i = 1; $i < sizeof($values); $i++) {
+        for ($i = 1; $i < \count($values); $i++) {
             $prevsum         = $sum;
             $discounted_flow = $values[$i] / (1 + $rate) ** $i;
             $sum            += $discounted_flow;
@@ -690,7 +744,7 @@ class Finance
      * returns of $50, $50, $50 with a 10% discount rate:
      *  profitabilityIndex([-100, 50, 50, 50], 0.10)
      *
-     * @param  array $values
+     * @param  array<float> $values
      * @param  float $rate
      *
      * @return float
@@ -700,7 +754,7 @@ class Finance
         $inflows  = array();
         $outflows = array();
 
-        for ($i = 0; $i < sizeof($values); $i++) {
+        for ($i = 0; $i < \count($values); $i++) {
             if ($values[$i] >= 0) {
                 $inflows[]  = $values[$i];
                 $outflows[] = 0;
@@ -714,7 +768,7 @@ class Finance
             return $x != 0;
         };
 
-        if (sizeof(array_filter($outflows, $nonzero)) == 0) {
+        if (\count(\array_filter($outflows, $nonzero)) == 0) {
             return \NAN;
         }
 

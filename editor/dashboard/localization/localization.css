@@ -1,0 +1,200 @@
+/* ===== Localization Widget ===== */
+
+.locz-body { display:flex; flex-direction:column; height:100%; color:#333; font-size:14px; padding:4px; }
+
+/* Section head */
+.locz-sectionHead {
+    margin: 0px 2px 6px;
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #50657a;
+}
+
+/* ===== Default language tiles ===== */
+.locz-tiles {
+    display: grid;
+    /* was: grid-template-columns: repeat(4, minmax(180px, 1fr)); */
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); /* much narrower tiles */
+    gap: 8px;                     /* a bit tighter */
+    margin-bottom: 8px;
+}
+
+.locz-tile {
+    background: #F1F7FC;
+    border: 1px solid #e6ebf1;
+    border-radius: 10px;          /* was 12px */
+    padding: 8px;                 /* was 10px */
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03);
+}
+
+.locz-tileHead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.locz-flag {
+    display: inline-flex;
+    width: 22px;                  /* was 26px */
+    height: 22px;                 /* was 26px */
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;              /* was 18px */
+}
+
+.locz-titles { display: flex; flex-direction: column; line-height: 1.15; }
+.locz-langName { font-weight: 700; }
+.locz-langMeta { font-size: 12px; color: #6b7b8a; }
+
+.locz-tileRow {
+    display: grid;
+    /* was: grid-template-columns: 80px 1fr; */
+    grid-template-columns: 64px 1fr;   /* slimmer key column */
+    align-items: center;
+    gap: 6px;
+}
+.locz-k { font-size: 12px; color:#6b7b8a; }
+.locz-v { display:flex; align-items:center; gap:6px; }
+
+.locz-tileFoot {
+    margin-top: 4px;
+    text-align:center;
+}
+.locz-totalHint {
+    font-size: 11px;
+    color:#8394a3;
+}
+
+/* ===== Pill buttons (shared) ===== */
+.locz-pill {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width: 28px;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 18px;
+    text-decoration: none;
+    border: 1px solid transparent;
+    user-select: none;
+}
+
+/* Green (0, not clickable) */
+.locz-pill.ok {
+    background: #e7f6ee;
+    color: #176b3a;
+    border-color: #c3e8d3;
+    cursor: default;
+}
+
+/* Red (N, clickable) */
+.locz-pill.danger {
+    background: #fdecec;
+    color: #8a1f1f;
+    border-color: #f6c9c9;
+    cursor: pointer;
+}
+a.locz-pill.danger:hover,
+a.locz-pill.danger:focus {
+    filter: brightness(0.97);
+    box-shadow: 0 0 0 2px rgba(245, 170, 170, 0.35);
+    text-decoration: none;
+}
+
+/* ===== Additionals table ===== */
+.locz-tableWrap { position:relative; overflow:hidden; flex:1 1 auto; min-height:0; }
+.locz-table {
+    width:100%; border-collapse:collapse; table-layout:fixed; color:#333;
+    display:flex; flex-direction:column; min-height:0; height:100%;
+}
+.locz-table thead {
+    display:table; width:100%; table-layout:fixed; flex:0 0 auto;
+}
+.locz-table tbody {
+    display:block; overflow:auto; min-height:0; flex:1 1 auto;
+}
+.locz-table tbody tr {
+    display:table; width:100%; table-layout:fixed;
+}
+
+.locz-table thead th {
+    background:#227DAA; color:#fff; font-weight:700; font-size:12px;
+    padding:6px 8px; line-height:18px; white-space:nowrap; border-bottom:1px solid #1b6486;
+    text-align:center; /* center all headers by default */
+}
+.locz-table thead th:first-child { text-align:left; } /* Name left-aligned */
+
+.locz-table tbody td {
+    padding:4px 8px; line-height:18px; white-space:nowrap; border-bottom:1px solid #e9e9e9; vertical-align:middle;
+    text-align:center; /* center all body cells */
+}
+.locz-table tbody td.locz-nameCol { text-align:left; } /* Name column left-aligned */
+.locz-table tbody tr:hover td { background:#f4f8fb; }
+
+.locz-empty td { text-align:center; color:#9b9b9b; font-weight:600; padding:16px 8px; }
+
+/* ===== Dialogs ===== */
+.locz-dialog { display:flex; flex-direction:column; gap:8px; max-height:66vh; min-height:0; overflow:hidden; }
+.locz-dialogMeta { opacity:.8; font-size:.9em; }
+.locz-dialogTblWrap { overflow:hidden; min-height:0; }
+.locz-dialogTbl {
+    width:100%; border-collapse:collapse;
+    display:flex; flex-direction:column; min-height:0; max-height:58vh;
+}
+.locz-dialogTbl thead {
+    display:table; width:100%; table-layout:fixed; flex:0 0 auto;
+}
+.locz-dialogTbl tbody {
+    display:block; overflow:auto; min-height:0; flex:1 1 auto;
+}
+.locz-dialogTbl tbody tr {
+    display:table; width:100%; table-layout:fixed;
+}
+.locz-dialogTbl thead th {
+    background:#f3f7fb; border-bottom:1px solid #e2e8f0; padding:6px; font-size:12px;
+    text-align:left;
+}
+.locz-dialogTbl tbody td {
+    border-bottom:1px solid #f0f0f0; padding:6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size:12px;
+}
+/* Top name line */
+.locz-nameTop {
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 2px;
+    /* truncate long names gracefully */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-bottom: 5px;
+    text-align: center;
+}
+
+/* Flag + code on one tight row */
+.locz-flagRow {
+    text-align: center;
+    gap: 6px;
+    margin-bottom: 2px;
+}
+
+/* keep the smaller flag you already use */
+.locz-langCode { font-size: 12px; color: #6b7b8a; }
+
+/* Modified row: label and pill close together */
+.locz-modRow {
+    text-align: center;
+    gap: 4px;          /* tighter than before */
+    margin-top: 2px;
+}
+
+/* optional: slightly smaller pill on tiles to feel snug */
+.locz-modRow .locz-pill { min-width: 24px; padding: 1px 8px; }

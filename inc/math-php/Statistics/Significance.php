@@ -18,8 +18,8 @@ use MathPHP\Exception;
  */
 class Significance
 {
-    const Z_TABLE_VALUE = true;
-    const Z_RAW_VALUE   = false;
+    public const Z_TABLE_VALUE = true;
+    public const Z_RAW_VALUE   = false;
 
     /**
      * One-sample Z-test
@@ -28,9 +28,13 @@ class Significance
      * @param float $Hₐ Alternate hypothesis (M Sample mean)
      * @param int   $n  Sample size
      * @param float $H₀ Null hypothesis (μ Population mean)
-     * @param float $σ  SD of population (Standard error of the mean)
+     * @param float $σ  SD of population
      *
-     * @return array [
+     * @return array{
+     *   z: float,
+     *   p1: float,
+     *   p2: float,
+     * } [
      *   z  => z score
      *   p1 => one-tailed p value (left or right tail depends on how Hₐ differs from H₀)
      *   p2 => two-tailed p value
@@ -57,9 +61,13 @@ class Significance
      * @param float $Hₐ Alternate hypothesis (M Sample mean)
      * @param int   $n  Sample size
      * @param float $H₀ Null hypothesis (μ Population mean)
-     * @param float $σ  SD of population (Standard error of the mean)
+     * @param float $σ  SD of population
      *
-     * @return array [
+     * @return array{
+     *   z: float,
+     *   p1: float,
+     *   p2: float,
+     * } [
      *   z  => z score
      *   p1 => one-tailed p value (left or right tail depends on how Hₐ differs from H₀)
      *   p2 => two-tailed p value
@@ -78,7 +86,7 @@ class Significance
         } else {
             $p1 = $standardNormal->above($z);
         }
-        $p2 = $standardNormal->outside(-abs($z), abs($z));
+        $p2 = $standardNormal->outside(-\abs($z), \abs($z));
 
         return [
             'z'  => $z,
@@ -118,12 +126,16 @@ class Significance
      * @param float $μ₁ Sample mean of population 1
      * @param float $μ₂ Sample mean of population 2
      * @param int   $n₁ Sample size of population 1
-     * @param int   $n₂ Sample size of population 1
+     * @param int   $n₂ Sample size of population 2
      * @param float $σ₁ Standard deviation of sample mean 1
      * @param float $σ₂ Standard deviation of sample mean 2
      * @param float $Δ  (Optional) hypothesized difference between the population means (0 if testing for equal means)
      *
-     * @return array [
+     * @return array{
+     *   z: float,
+     *   p1: float,
+     *   p2: float,
+     * } [
      *   z  => z score
      *   p1 => one-tailed p value
      *   p2 => two-tailed p value
@@ -132,12 +144,12 @@ class Significance
     public static function zTestTwoSample(float $μ₁, float $μ₂, int $n₁, int $n₂, float $σ₁, float $σ₂, float $Δ = 0.0): array
     {
         // Calculate z score (test statistic)
-        $z = ($μ₁ - $μ₂ - $Δ) / sqrt((($σ₁ ** 2) / $n₁) + (($σ₂ ** 2) / $n₂));
+        $z = ($μ₁ - $μ₂ - $Δ) / \sqrt((($σ₁ ** 2) / $n₁) + (($σ₂ ** 2) / $n₂));
 
         $standardNormal = new StandardNormal();
         // One- and two-tailed P values
-        $p1 = $standardNormal->above(abs($z));
-        $p2 = $standardNormal->outside(-abs($z), abs($z));
+        $p1 = $standardNormal->above(\abs($z));
+        $p2 = $standardNormal->outside(-\abs($z), \abs($z));
 
         return [
             'z'  => $z,
@@ -166,7 +178,7 @@ class Significance
         $z = ($M - $μ) / $σ;
 
         return $table_value
-            ? round($z, 2)
+            ? \round($z, 2)
             : $z;
     }
 
@@ -174,20 +186,36 @@ class Significance
      * t-test - one sample or two sample tests
      * https://en.wikipedia.org/wiki/Student%27s_t-test
      *
-     * @param array $a sample set 1
-     * @param float|array $b population mean for one sample t test; sample set 2 for two sample t-test
+     * @param array<float> $a sample set 1
+     * @param float|array<float> $b population mean for one sample t test; sample set 2 for two sample t-test
      *
-     * @return array
+     * @return array{
+     *   t: float,
+     *   df: float,
+     *   p1: float,
+     *   p2: float,
+     *   mean: float,
+     *   sd: float,
+     * }|array{
+     *   t: float,
+     *   df: float,
+     *   p1: float,
+     *   p2: float,
+     *   mean1: float,
+     *   mean2: float,
+     *   sd1: float,
+     *   sd2: float,
+     * }
      *
      * @throws Exception\BadParameterException
      * @throws Exception\OutOfBoundsException
      */
     public static function tTest(array $a, $b): array
     {
-        if (is_numeric($b)) {
+        if (\is_numeric($b)) {
             return self::tTestOneSample($a, $b);
         }
-        if (is_array($b)) {
+        if (\is_array($b)) {
             return self::tTestTwoSample($a, $b);
         }
 
@@ -207,10 +235,17 @@ class Significance
      *    = CDF above if right tailed
      * p2 = CDF outside
      *
-     * @param array $a Sample set
+     * @param array<float> $a Sample set
      * @param float $H₀ Null hypothesis (μ₀ Population mean)
      *
-     * @return array [
+     * @return array{
+     *   t: float,
+     *   df: float,
+     *   p1: float,
+     *   p2: float,
+     *   mean: float,
+     *   sd: float,
+     * } [
      *   t    => t score
      *   df   => degrees of freedom
      *   p1   => one-tailed p value (left or right tail depends on how Hₐ differs from H₀)
@@ -223,7 +258,7 @@ class Significance
      */
     public static function tTestOneSample(array $a, float $H₀): array
     {
-        $n  = count($a);
+        $n  = \count($a);
         $Hₐ = Average::mean($a);
         $σ  = Descriptive::standardDeviation($a, Descriptive::SAMPLE);
 
@@ -245,10 +280,17 @@ class Significance
      *
      * @param float $Hₐ Alternate hypothesis (M Sample mean)
      * @param float $s  SD of sample
-     * @param int    $n  Sample size
+     * @param int   $n  Sample size
      * @param float $H₀ Null hypothesis (μ₀ Population mean)
      *
-     * @return array [
+     * @return array{
+     *   t: float,
+     *   df: int,
+     *   p1: float,
+     *   p2: float,
+     *   mean: float,
+     *   sd: float,
+     * } [
      *   t    => t score
      *   df   => degrees of freedom
      *   p1   => one-tailed p value (left or right tail depends on how Hₐ differs from H₀)
@@ -259,6 +301,11 @@ class Significance
      */
     public static function tTestOneSampleFromSummaryData(float $Hₐ, float $s, int $n, float $H₀): array
     {
+        // Check for zero standard deviation - t-test requires non-zero variance
+        if ($s == 0) {
+            throw new Exception\BadDataException('T-test requires non-zero variance. Sample has zero standard deviation.');
+        }
+
         // Calculate test statistic t
         $t = self::tScore($Hₐ, $s, $n, $H₀);
 
@@ -272,7 +319,7 @@ class Significance
         } else {
             $p1 = $studentT->above($t);
         }
-        $p2 = $studentT->outside(-abs($t), abs($t));
+        $p2 = $studentT->outside(-\abs($t), \abs($t));
 
         return [
             't'    => $t,
@@ -318,10 +365,19 @@ class Significance
      * p1 = CDF above
      * p2 = CDF outside
      *
-     * @param array $x₁ sample set 1
-     * @param array $x₂ sample set 2
+     * @param array<float> $x₁ sample set 1
+     * @param array<float> $x₂ sample set 2
      *
-     * @return array [
+     * @return array{
+     *   t: float,
+     *   df: float,
+     *   p1: float,
+     *   p2: float,
+     *   mean1: float,
+     *   mean2: float,
+     *   sd1: float,
+     *   sd2: float,
+     * } [
      *   t     => t score
      *   df    => degrees of freedom
      *   p1    => one-tailed p value
@@ -336,8 +392,8 @@ class Significance
      */
     public static function tTestTwoSample(array $x₁, array $x₂): array
     {
-        $n₁ = count($x₁);
-        $n₂ = count($x₂);
+        $n₁ = \count($x₁);
+        $n₂ = \count($x₂);
 
         $μ₁ = Average::mean($x₁);
         $μ₂ = Average::mean($x₂);
@@ -385,11 +441,20 @@ class Significance
      * @param float $μ₁ Sample mean of population 1
      * @param float $μ₂ Sample mean of population 2
      * @param int   $n₁ Sample size of population 1
-     * @param int   $n₂ Sample size of population 1
+     * @param int   $n₂ Sample size of population 2
      * @param float $σ₁ Standard deviation of sample mean 1
      * @param float $σ₂ Standard deviation of sample mean 2
      *
-     * @return array [
+     * @return array{
+     *   t: float,
+     *   df: float,
+     *   p1: float,
+     *   p2: float,
+     *   mean1: float,
+     *   mean2: float,
+     *   sd1: float,
+     *   sd2: float,
+     * } [
      *   t     => t score
      *   df    => degrees of freedom
      *   p1    => one-tailed p value
@@ -402,8 +467,13 @@ class Significance
      */
     public static function tTestTwoSampleFromSummaryData(float $μ₁, float $μ₂, int $n₁, int $n₂, float $σ₁, float $σ₂): array
     {
+        // Check for zero variance in both samples - t-test requires at least one sample with variation
+        if ($σ₁ == 0 && $σ₂ == 0) {
+            throw new Exception\BadDataException('T-test requires at least one sample with non-zero variance. Both samples have zero standard deviation.');
+        }
+
         // Calculate t score (test statistic)
-        $t = ($μ₁ - $μ₂) / sqrt((($σ₁ ** 2) / $n₁) + (($σ₂ ** 2) / $n₂));
+        $t = ($μ₁ - $μ₂) / \sqrt((($σ₁ ** 2) / $n₁) + (($σ₂ ** 2) / $n₂));
 
         // Degrees of freedom
         $ν = ((($σ₁ ** 2) / $n₁) + (($σ₂ ** 2) / $n₂)) ** 2
@@ -412,8 +482,8 @@ class Significance
 
         // One- and two-tailed P values
         $studentT = new StudentT($ν);
-        $p1 = $studentT->above(abs($t));
-        $p2 = $studentT->outside(-abs($t), abs($t));
+        $p1 = $studentT->above(\abs($t));
+        $p2 = $studentT->outside(-\abs($t), \abs($t));
 
         return [
             't'  => $t,
@@ -443,7 +513,7 @@ class Significance
      */
     public static function tScore(float $Hₐ, float $s, int $n, float $H₀): float
     {
-        return ($Hₐ - $H₀) / ($s / sqrt($n));
+        return ($Hₐ - $H₀) / ($s / \sqrt($n));
     }
 
     /**
@@ -463,25 +533,28 @@ class Significance
      *
      * p = χ² distribution CDF(χ², k)
      *
-     * @param  array  $observed
-     * @param  array  $expected
+     * @param  array<float>  $observed
+     * @param  array<float>  $expected
      *
-     * @return array [chi-square, p]
+     * @return array{
+     *     "chi-square": float,
+     *     "p": float,
+     * } [chi-square, p]
      *
      * @throws Exception\BadDataException if count of observed does not equal count of expected
      */
     public static function chiSquaredTest(array $observed, array $expected): array
     {
         // Arrays must have the same number of elements
-        if (count($observed) !== count($expected)) {
+        if (\count($observed) !== \count($expected)) {
             throw new Exception\BadDataException('Observed and expected must have the same number of elements');
         }
 
         // Reset array indexes and initialize
-        $O  = array_values($observed);
-        $E  = array_values($expected);
-        $n  = count($observed);        // number of terms
-        $k  = $n - 1;                  // degrees of freedom
+        $O  = \array_values($observed);
+        $E  = \array_values($expected);
+        $n  = \count($observed);        // number of terms
+        $k  = $n - 1;                   // degrees of freedom
         $χ² = 0;
 
         /*
@@ -519,6 +592,6 @@ class Significance
      */
     public static function sem(float $σ, int $n): float
     {
-        return $σ / sqrt($n);
+        return $σ / \sqrt($n);
     }
 }

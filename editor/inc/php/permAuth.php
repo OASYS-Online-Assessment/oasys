@@ -1,6 +1,8 @@
 <?php
 
-/** @noinspection SqlResolve */
+	use Oasys\OasysApp;
+
+	require_once __DIR__ . "/../../../inc/php/OasysApp.php";
 
 /**
  * Permission allowance checking for Oasys backend operations.
@@ -14,39 +16,68 @@ class permAuth
 	# --------------------------- #
 
 	private rixPDO $db; // DB object for use in class
-	private $action  = null; // external action being checked
-	private $data = null; // data related to action being checked
+	private ?string $action  = null; // external action being checked
+	private ?array $data = null; // data related to action being checked
 	public userAuth $myAuth; // userauth class
-	public $returnData = null; // return info for client or further processing
-	private $permType = null;
-	public $folder_id = null;
-	public $itemPerms = null; // item permissions pairs
-	public $itemPermsFlat = null; // flattened item permissions
-	public $srcRef = null; // source reference (page from which request was made)
-	private $uiLang = null; // translation class instance
-	private $pi_path = ""; // permission items file path
-	private $pig_path = ""; // permisison items generic flie path
+	public ?array $returnData = null; // return info for client or further processing
+	private ?string $permType = null;
+	public ?array $folder_id = null;
+	public mixed $itemPerms = null; // item permissions pairs
+	public ?array $itemPermsFlat = null; // flattened item permissions
+	public ?string $srcRef = null; // source reference (page from which request was made)
+	private ?uiLang $uiLang = null; // translation class instance
+	private string $pi_path = ""; // permission items file path
+	private string $pig_path = ""; // permisison items generic flie path
 
 	public function __construct(string $action, array $data, userAuth $myAuth)
 	{
 		if (!(isset($_SERVER['HTTP_REFERER']))) {
-			$this->myAuth->writeLogEntry("BAD REFERRER: Page referrer token not found (SERVER['HTTP_REFERER'] not set). [" . basename(__FILE__) . "▶{$this->action}]");
+			if (!empty($this->myAuth)) {
+				$this->myAuth->writeLogEntry("BAD REFERRER: Page referrer token not found (SERVER['HTTP_REFERER'] not set). [" . basename(__FILE__) . "▶{$this->action}]");
+			}
 			$this->returnData['error'] = $this->uiLang->translate("Page referrer token not found.");
 			return;
 		}
 
-		global $sql_db, $sql_user, $sql_password, $sql_host, $settings;
+		global $app, $settings;
 
 		// define DOCROOT constant
-		if (!defined("DOCROOT")) define("DOCROOT", str_replace("//", "/", ($_SERVER['CONTEXT_DOCUMENT_ROOT'] ?? $_SERVER['DOCUMENT_ROOT']) . $settings['rootURL']));
+		if (!defined("DOCROOT")) {
+			define("DOCROOT", realpath(__DIR__ . '/../../../') . '/');
+		}
 
 		$this->action = $action;
 		$this->data = $data;
 		$this->myAuth = $myAuth;
 		$this->returnData['error'] = false;
 
+		// Test Journey is read-only. Use the established folder read permission for
+		// the generic gate; the action itself filters test takers by read access.
+		if (in_array($action, ['fetchTestJourneySummary', 'fetchTestJourneyDetail'], true)) {
+			$this->action = 'fetchLibrary';
+		}
+
+		// Time-spent exports require the same established test read permission as
+		// answer exports. Existing permission records do not have a separate
+		// fetchBehaviourTiming key, so reusing fetchTestResults keeps them compatible.
+		if ($action === 'fetchBehaviourTiming') {
+			$this->action = 'fetchTestResults';
+		}
+
+		// Bulk modification uses the established Apply-to-selected permission.
+		// Keeping this as an alias avoids requiring a permission migration.
+		if ($action === 'bulkModifyExisting') {
+			$this->action = 'addToSelected';
+			$action = 'addToSelected';
+		}
+
 		// init rixPDO DB object
-		$this->db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, DOCROOT . "logs/permauth_db_err.log", 1, $this->returnData, 'error');
+		$this->db = OasysApp::createDatabaseInstance('permAuth', [
+			'logFile' => DOCROOT . "logs/permauth_db_err.log",
+			'errorHandling' => 1,
+			'errorVar' => &$this->returnData,
+			'errorVarKey' => 'error'
+		]);
 
 		# ------------------- #
 		# Translation Include #
@@ -57,7 +88,7 @@ class permAuth
 		# ------------------------------------------------------------------------------------------ #
 		# Determine referring page and set vars based on it, or exit with error code on bad referral #
 		# ------------------------------------------------------------------------------------------ #
-		$allowedSources = ['dashboard', 'backup', 'upgrader', 'systemSettings', 'l10n', 'users', 'content', 'tests', 'items', 'testTakers', 'results', 'accountProp', 'activityTracker'];
+		$allowedSources = ['dashboard', 'backup', 'upgrader', 'systemSettings', 'l10n', 'users', 'content', 'tests', 'items', 'pages', 'testTakers', 'results', 'accountProp', 'activityTracker'];
 
 		switch ($action) {
 			case 'previewItem':
@@ -89,6 +120,9 @@ class permAuth
 			$this->returnData['error'] = $this->uiLang->translate("Could not determine section referral source.");
 			return;
 		}
+		// The attached page editor is part of the Content Manager and uses the
+		// same item-folder permission tables as items.php.
+		if ($this->srcRef === 'pages') $this->srcRef = 'items';
 
 		# --------------------------------- #
 		# Load JSON permission schema files #
@@ -163,7 +197,8 @@ class permAuth
 			'newFolder',
 			'newTest',
 			'fetchItemLibrary',
-			'fetchTestLibrary'
+			'fetchTestLibrary',
+			'fetchTestLibraryInt'
 		])) {
 			$this->folder_id['folders'] = [];
 			array_push($this->folder_id['folders'], $data['location']);
@@ -183,6 +218,22 @@ class permAuth
 			array_push($this->folder_id['folders'], $data['i_id']);
 		}
 		# --------------------------------------------------------- #
+		# Test Manager folder modification permission handler       #
+		# --------------------------------------------------------- #
+		elseif ($action === 'saveTestFolder') {
+			$this->folder_id['folders'] = [];
+			array_push($this->folder_id['folders'], $data['id'] ?? null);
+		}
+		# --------------------------------------------------------- #
+		# Test Manager bulk modification permission handler         #
+		# --------------------------------------------------------- #
+		elseif ($action === 'saveTestBulk') {
+			$this->folder_id['files'] = array_values(array_filter(
+				array_map('intval', is_array($data['targets'] ?? null) ? $data['targets'] : []),
+				static fn(int $id): bool => $id > 0
+			));
+		}
+		# --------------------------------------------------------- #
 		# Single itemGroup (file) handling or library folder access #
 		# --------------------------------------------------------- #
 		elseif (isset($data['type']) && $data['type'] === 'folder') {
@@ -192,14 +243,14 @@ class permAuth
 		# --------------------------------------------------------------------------------------------------------------------------------------------- #
 		# Item editing (file) handling - we are not using 'location' value of item # because that value can be spoofed and not locked to actual item id #
 		# --------------------------------------------------------------------------------------------------------------------------------------------- #
-		elseif (in_array($action, ['checkItem', 'fetchStimulus', 'deleteItem', 'renameItem', 'saveItem', 'duplicateItem'])) {
+		elseif (in_array($action, ['checkItem', 'fetchStimulus', 'deleteItem', 'renameItem', 'saveItem', 'duplicateItem', 'lockItem', 'fetchPage', 'savePage'])) {
 			$this->folder_id['files'] = [];
 			array_push($this->folder_id['files'], $data['item'] ?? $data['link'] ?? $data['id']);
 		}
 		# --------------------------- #
 		# Test Takers action handling #
 		# --------------------------- #
-		elseif (in_array($action, ['saveTestAssignmentsLibrary', 'fetchTestStructure', 'saveMetaTagsChange', 'saveOverrides'])) {
+		elseif (in_array($action, ['saveTestAssignmentsLibrary', 'fetchTestStructure', 'saveMetaTagsChange', 'saveOverrides', 'deleteTemplateClone'])) {
 			$this->folder_id['files'] = [];
 
 			switch ($action) {
@@ -215,6 +266,10 @@ class permAuth
 					array_push($this->folder_id['files'], $data['dbId'] ?? $data['deleteId']);
 					break;
 				case 'saveOverrides':
+					array_push($this->folder_id['files'], $data['id']);
+					break;
+
+				case 'deleteTemplateClone':
 					array_push($this->folder_id['files'], $data['id']);
 					break;
 			}
@@ -292,7 +347,6 @@ class permAuth
 							$this->myAuth->writeLogEntry("BAD INPUT: Value type unable to be determined amongst testee, folder, test, or itemgroup. [" . basename(__FILE__) . "▶{$this->action}]");
 							$this->returnData['error'] = $this->uiLang->translate("Bad input detected!");
 							return;
-							break;
 					}
 				}
 			}
@@ -336,15 +390,18 @@ class permAuth
 		}
 	}
 
-	/**
-	 * Primary function request permission checking method.
+	/*
+	 * Checks if the current user has permission to perform an action.
 	 *
-	 * @param array $data
-	 * 
+	 * Verifies the user's authentication status and validates their access rights
+	 * against the required permissions for the requested operation.
+	 *
+	 * @return bool|null Returns true if the user has permission, false if denied,
+	 *                   or null if the permission check cannot be determined
+	 *
 	 * @return bool|null
-	 * 
 	 */
-	public function permCheck(array $data): ?bool
+	public function permCheck(array $data, string $xrefOverride = ""): ?bool
 	{
 		/*
 			##########################################################################################
@@ -385,7 +442,7 @@ class permAuth
 		# ------------------------------------------------------ #
 		# Special skip for initial igSearch and testsSearch call #
 		# ------------------------------------------------------ #
-		if (!isset($data['remCall']) && (in_array($this->action, ['search', 'igSearch', 'testsSearch']))) return true;
+		if (!isset($data['remCall']) && (in_array($this->action, ['search', 'metaSearch', 'fetchMetaTagSuggestions', 'igSearch', 'testsSearch']))) return true;
 
 		# ------------------------------------------------ #
 		# ADMIN/SUPERADMIN BYPASS FOR ANY REQUESTED ACTION #
@@ -425,6 +482,29 @@ class permAuth
 
 				case 'updatePerms':
 					# elevated admins can update admins, but not superadmins; a standard admin cannot change any elevation level #
+					$updateType = $data['updateType'] ?? '';
+					$fieldName = $data['fieldName'] ?? '';
+
+					if ($updateType === 'permission' && ($data['perm'] ?? '') === 'Elevated Administrator') {
+						$this->returnData['error'] = $this->uiLang->translate("Only superadmins may change elevated-administrator status.");
+						return false;
+					}
+
+					if ($updateType === 'account' && $fieldName === 'userGroups') {
+						$newGroups = $data['newVal'] ?? [];
+						if (!is_array($newGroups)) {
+							$this->returnData['error'] = $this->uiLang->translate("Invalid user-group data.");
+							return false;
+						}
+						if (array_key_exists((string)$saGroupId, $newGroups) || array_key_exists($saGroupId, $newGroups)) {
+							$this->returnData['error'] = $this->uiLang->translate("Only superadmins may change superadmin membership.");
+							return false;
+						}
+						if ($this->myAuth->checkElevatedAdmin() === false && (array_key_exists((string)$aId, $newGroups) || array_key_exists($aId, $newGroups))) {
+							$this->returnData['error'] = $this->uiLang->translate("Only elevated administrators and superadmins may change admin membership.");
+							return false;
+						}
+					}
 
 					// get list of groups to which the target belongs
 					$targGroupList = $this->db->fetchColumn("SELECT `usergroupId` FROM `userGroupAccess` WHERE `userId` = ?", [$data['userId']])['data'];
@@ -436,7 +516,7 @@ class permAuth
 					if ($this->myAuth->checkElevatedAdmin() === false && $isAdminUpdate && $data['userId'] !== $this->myAuth->userid) {
 						$this->returnData['error'] = $this->uiLang->translate("Unauthorized action on admin user without elevated privileges.");
 						return false;
-					};
+					}
 
 					// prevent any admin from changing any superadmin values
 					if ($isSAUpdate) {
@@ -444,21 +524,15 @@ class permAuth
 						return false;
 					}
 
-					// prevent standard admin from elevating themselves
-					if ($data['perm'] === 'Elevated Administrator' && $data['userId'] === $this->myAuth->userid) {
-						$this->returnData['error'] = $this->uiLang->translate("Unauthorized action on own account.");
-						return false;
-					}
-
 					break;
 
-					// block group editor access editing/fetching for all admins regardless of elevation level
+				// block group editor access editing/fetching for all admins regardless of elevation level
 				case 'fetchGroupSettings':
 					$theAdminGroupId = $this->db->fetchValue("SELECT `id` FROM `userGroups` WHERE `name` = 'admin'")['data'];
 					if ($data['groupId'] === $theAdminGroupId) {
 						$this->returnData['error'] = $this->uiLang->translate("Unauthorized operation. You may not edit the admin editor access list.");
 						return false;
-					};
+					}
 
 					break;
 
@@ -506,7 +580,7 @@ class permAuth
 						if ($this->myAuth->checkElevatedAdmin() === false && $isAdminUpdate) {
 							$this->returnData['error'] = $this->uiLang->translate("Unauthorized action on admin user without elevated privileges.");
 							return null;
-						};
+						}
 
 						// prevent admin from changing any superadmin values
 						if ($isSAUpdate) {
@@ -592,34 +666,9 @@ class permAuth
 
 		if ($this->srcRef === 'upgrader') {
 
-			if ($this->myAuth->checkAdmin() !== true) {
+			if ($this->myAuth->checkSA() !== true) {
 				$this->returnData['error'] = $this->uiLang->translate("Unauthorized operation attempted.");
 				return false;
-			}
-
-			switch ($this->action) {
-					// allow downloading of archives except for baseline unless elevated admin
-				case 'getFileDlInstall':
-					if (($this->data['fileDlName'] === '_BASELINE_') && ($this->myAuth->checkElevatedAdmin() !== true)) {
-						$this->returnData['error'] = $this->uiLang->translate("Unauthorized operation attempted.");
-						return false;
-					}
-
-					break;
-
-				case 'changePwd':
-					if ($this->myAuth->checkElevatedAdmin() !== true) {
-						$this->returnData['error'] = $this->uiLang->translate("Unauthorized operation attempted.");
-						return false;
-					}
-
-					break;
-
-				default:
-					if ($this->myAuth->checkAdmin() !== true) {
-						$this->returnData['error'] = $this->uiLang->translate("Unauthorized operation attempted.");
-						return false;
-					}
 			}
 
 			return true;
@@ -639,6 +688,7 @@ class permAuth
 				return false;
 			}
 
+			$this->srcRef = $xrefOverride ?: $this->srcRef;
 			$it_vars = $this->setTypeVars($this->srcRef);
 
 			# -------------------------------------------------------- #
@@ -653,7 +703,7 @@ class permAuth
 						$parentFolderId = $this->db->fetchValue("SELECT `parent` FROM `tests` WHERE `id` = ?", [$fileItemId])['data']; // special condition to switch to an it_var value not currently in the varset definintion list
 						$it_vars['i_rootFldTblName'] = $it_vars['i_xrefFldLink'];
 					} elseif (
-						in_array($this->action, ['checkItem', 'fetchStimulus', 'deleteItem', 'renameItem', 'saveItem', 'duplicateItem']) || ($this->action === 'preview' && $data['previewMode'] === 'item')
+						in_array($this->action, ['checkItem', 'fetchStimulus', 'deleteItem', 'renameItem', 'saveItem', 'duplicateItem', 'lockItem', 'fetchPage', 'savePage']) || ($this->action === 'preview' && $data['previewMode'] === 'item')
 					) {
 						if ($this->action === 'fetchStimulus' && $fileItemId === -1) continue; // special condition where stimulus is being unselected, and thus does not have a linked parent folder ID to compare action against
 						$parentFolderId = $this->db->fetchValue("SELECT `parent` FROM {$it_vars['i_rootObjTblName']} WHERE id = (SELECT `groupId` FROM `items` WHERE `id` = ?)", [$fileItemId])['data'];
@@ -665,8 +715,8 @@ class permAuth
 						$folderTargetId = $data['target'];
 
 						// COPY/MOVEOBJECTS OWNER CHECK
-						$sourceOwner = $this->db->fetchValue("SELECT `owner` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$parentFolderId])['data'] === $this->myAuth->userid;
-						$targetOwner = $this->db->fetchValue("SELECT `owner` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$folderTargetId])['data'] === $this->myAuth->userid;
+						$sourceOwner = (int)($this->db->fetchValue("SELECT `owner` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$parentFolderId])['data'] ?? 0) === $this->myAuth->userid;
+						$targetOwner = (int)($this->db->fetchValue("SELECT `owner` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$folderTargetId])['data'] ?? 0) === $this->myAuth->userid;
 						if (($sourceOwner === true) && ($targetOwner === true)) {
 							continue;
 						}
@@ -756,7 +806,7 @@ class permAuth
 						foreach ($testIds as $tidItem) {
 							$testParentId = $this->db->fetchValue("SELECT `parent` FROM `tests` WHERE `id` = ?", [$tidItem])['data'];
 
-							if ($this->db->fetchValue("SELECT `owner` FROM `testFolders` WHERE `id` = ?", [$testParentId])['data'] === $this->myAuth->userid) {
+							if ((int)($this->db->fetchValue("SELECT `owner` FROM `testFolders` WHERE `id` = ?", [$testParentId])['data'] ?? 0) === $this->myAuth->userid) {
 								$finalPerm[] = true;
 							} elseif ($this->getAccessVal("items", $this->action, $this->permType, $testParentId)) {
 								$finalPerm[] = true;
@@ -819,7 +869,7 @@ class permAuth
 
 
 						// OWNER CHECK
-						if ($this->db->fetchValue("SELECT `owner` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$parIds])['data'] === $this->myAuth->userid) {
+						if ((int)($this->db->fetchValue("SELECT `owner` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$parIds])['data'] ?? 0) === $this->myAuth->userid) {
 							continue;
 						}
 
@@ -836,11 +886,12 @@ class permAuth
 					// OWNER CHECK
 					else {
 						if (empty($parentFolderId)) continue;
-						$oCheck = $this->db->fetchValue("SELECT `owner` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$parentFolderId])['data'] === $this->myAuth->userid;
+						$oCheck = (int)($this->db->fetchValue("SELECT `owner` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$parentFolderId])['data'] ?? 0) === $this->myAuth->userid;
 						if ($oCheck) continue;
 
 						// PERMISSION ENTRY CHECK
-						$peCheck = $this->getAccessVal(('folders'), $this->action, $this->permType, $parentFolderId) === true;
+						$folderAction = ($this->action === 'deleteTemplateClone') ? 'deleteSelection' : $this->action;
+						$peCheck = $this->getAccessVal(('folders'), $folderAction, $this->permType, $parentFolderId) === true;
 						if ($peCheck) continue;
 					}
 
@@ -860,8 +911,12 @@ class permAuth
 
 				foreach ($this->folder_id['folders'] as $key => $folderId) {
 
-					// Special allowances in root folder for all users - fetch contents of root
-					if ((intval($folderId) === 1) && (in_array($this->action, ['fetchTestLibrary', 'fetchLibrary', 'fetchItemLibrary']))) { //@phan-suppress-current-line PhanSuspiciousWeakTypeComparisonInLoop
+					# ------------------------------------------------------------------------------------ #
+					# Special allowances in root folder for all users - all users can "see" the entry exists,
+					# but have no view into any properties other than the label. Consider this a "below read"
+					# access type setting for these specific actions. #
+					# ------------------------------------------------------------------------------------ #
+					if ((intval($folderId) === 1) && (in_array($this->action, ['fetchTestLibrary', 'fetchTestLibraryInt', 'fetchLibrary', 'fetchItemLibrary']))) { //@phan-suppress-current-line PhanSuspiciousWeakTypeComparisonInLoop
 						continue;
 					}
 
@@ -885,8 +940,8 @@ class permAuth
 						$folderTargetId = intval($data['target']);
 
 						// MOVEOBJECTS OWNER CHECK
-						$sourceOwner = $this->db->fetchValue("SELECT `owner` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$parentFolderId])['data'] === $this->myAuth->userid;
-						$targetOwner = $this->db->fetchValue("SELECT `owner` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$folderTargetId])['data'] === $this->myAuth->userid;
+						$sourceOwner = (int)($this->db->fetchValue("SELECT `owner` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$parentFolderId])['data'] ?? 0) === $this->myAuth->userid;
+						$targetOwner = (int)($this->db->fetchValue("SELECT `owner` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$folderTargetId])['data'] ?? 0) === $this->myAuth->userid;
 						if (($sourceOwner === true) && ($targetOwner === true)) {
 							continue;
 						}
@@ -1002,7 +1057,7 @@ class permAuth
 					else {
 						$tbl_source = (in_array($this->action, ['testsSearch', 'igSearch', 'fetchItemLibrary', 'fetchTestLibrary'])) ? $it_vars['i_xrefFldLink'] : $it_vars['i_rootFldTblName']; //@phan-suppress-current-line PhanSuspiciousWeakTypeComparisonInLoop
 
-						$oCheck = $this->db->fetchValue("SELECT `owner` FROM {$tbl_source} WHERE `id` = ?", [$folderId['id'] ?? $folderId])['data'] === $this->myAuth->userid;
+						$oCheck = (int)($this->db->fetchValue("SELECT `owner` FROM {$tbl_source} WHERE `id` = ?", [$folderId['id'] ?? $folderId])['data'] ?? 0) === $this->myAuth->userid;
 						if ($oCheck) continue;
 
 						$peCheck = $this->getAccessVal(('folders'), $this->action, $this->permType, $folderId['id'] ?? $folderId);
@@ -1123,7 +1178,7 @@ class permAuth
 		$suffixClause = ($subSelect) ? "(SELECT `{$it_vars['i_colName']}` FROM `{$it_vars['i_xrefTblName']}` WHERE `id` = ?)" : "?";
 		$oid = $db->fetchValue("SELECT `owner` FROM `{$it_vars['i_rootFldTblName']}` WHERE `id` = {$suffixClause}", [$i_id])['data'];
 
-		if ($oid !== $authObj->userid) {
+		if ((int)$oid !== $authObj->userid) {
 			$this->myAuth->writeLogEntry("ACCOUNT RESTRICTION: Attempted owner-only operation without rights on entry: [" . basename(__FILE__) . "▶{$this->action}]");
 			$this->returnData['error'] = $this->uiLang->translate("You are not allowed to perform this operation on this item.");
 			return false;
@@ -1145,7 +1200,7 @@ class permAuth
 
 		// Determine table names based on object type
 		switch ($itemType) {
-			case 'itemGroup':
+			case 'itemGroup': // future placeholder for more granular item checking -- is not currently used1
 				$it_vars['i_colName'] = 'itemgroupId';
 				$it_vars['i_xrefTblName'] = 'itemGroupAccess';
 				$it_vars['i_rootFldTblName'] = 'itemGroups';
@@ -1191,7 +1246,7 @@ class permAuth
 	/**
 	 * Fetch active permission values for single or multi-selected folders
 	 */
-	public function fetchIgPerm(array $data, rixPDO &$db, array &$returnData, userAuth &$authObj)
+	public function fetchIgPerm(array $data, rixPDO &$db, array &$returnData, userAuth &$authObj): void
 	{
 		/* @var $db rixPDO */
 		checkParams($data, ['i_id']);
@@ -1264,6 +1319,20 @@ class permAuth
 		// permission structure
 		$this->returnData['data']['permStruct'] = array_keys(json_decode(file_get_contents($this->pi_path) ?? '', true));
 
+		// Recursive actions are only useful when at least one target folder has children.
+		$hasSubfolders = false;
+		$targetFolderIds = is_array($i_id) ? $i_id : [$i_id];
+		foreach ($targetFolderIds as $targetFolderId) {
+			$childCount = $db->fetchValue(
+				"SELECT COUNT(*) FROM `{$it_vars['i_rootFldTblName']}` WHERE `parent` = ?",
+				[$targetFolderId]
+			)['data'];
+			if ((int)$childCount > 0) {
+				$hasSubfolders = true;
+				break;
+			}
+		}
+
 		# ---------------------------------------------- #
 		# Get full owner list and retrieve current owner #
 		# ---------------------------------------------- #
@@ -1314,6 +1383,12 @@ class permAuth
 		# Generate full usergroup list #
 		# ---------------------------- #
 		$ugList = $this->db->fetchColumn("SELECT `name` FROM `userGroups` WHERE `name` NOT IN ('superadmin', 'admin')", [])['data'];
+		$currentUserGroupIds = array_map('intval', (array)$authObj->usergroup);
+		$currentUserIsOwner = !is_array($i_id) && (int)$owner_id === $authObj->userid;
+		$currentUserCanEditPermissionsWithoutOwnership = $authObj->checkSA()
+			|| $authObj->checkAdmin()
+			|| $authObj->checkElevatedAdmin()
+			|| (!is_array($i_id) && $this->getAccessVal('items', 'fetchIgPerm', 'itemObject', (int)$i_id));
 
 		# ------------- #
 		# Return values #
@@ -1324,7 +1399,12 @@ class permAuth
 		$this->returnData['data']['ig_targets'] = $permResults;
 		$this->returnData['data']['loadGroup'] = ($loadGroup);
 		$this->returnData['data']['mode'] = ($inherit) ? 'inherit' : 'normal';
-		$this->returnData['data']['ihActive'] = ($ihActive > 0) ? true : false;
+		$this->returnData['data']['ihActive'] = $ihActive > 0;
+		$this->returnData['data']['hasSubfolders'] = $hasSubfolders;
+		$this->returnData['data']['currentUserId'] = $authObj->userid;
+		$this->returnData['data']['currentUserIsOwner'] = $currentUserIsOwner;
+		$this->returnData['data']['currentUserGroupIds'] = $currentUserGroupIds;
+		$this->returnData['data']['currentUserCanEditPermissionsWithoutOwnership'] = $currentUserCanEditPermissionsWithoutOwnership;
 	}
 
 	/**
@@ -1360,7 +1440,7 @@ class permAuth
 		$this->folder_id = (is_array($data['i_id'])) ? $data['i_id'] : [$data['i_id']];
 
 		// recursive folder id list build
-		function recurs_folder_build($fList, $it_vars, rixPDO &$db)
+		function recurs_folder_build($fList, $it_vars, rixPDO &$db): array
 		{
 			static $recLocalFlds = [];
 			foreach ($fList as $key => $fId) {
@@ -1641,7 +1721,7 @@ class permAuth
 
 				break;
 
-				// Apply parent folder permissions to the new folder by usergroup row
+			// Apply parent folder permissions to the new folder by usergroup row
 			default:
 				$c_section = "c_items";
 				$g_section = substr($c_section, 2); // the substring of the section input gives us the actual granular permission tree on which we want to do our updates
@@ -1705,23 +1785,19 @@ class permAuth
 
 		switch ($permType) {
 
-				// standard function is an always permittable function (e.g., fetchLibrary, etc.). The definition of what's 'standard' may fluctuate
+			// standard function is an always permittable function (e.g., fetchLibrary, etc.). The definition of what's 'standard' may fluctuate
 			case 'standard':
 				return true;
 
-				break;
-
-				// FYI: not in use as we cannot determine any 'global' level permissions requiring implementation at the moment
-				// generic case is when a function is not linked to an owner ID but still requires explicit rights (e.g., create new folder, new groupitem, etc.)
+			// FYI: not in use as we cannot determine any 'global' level permissions requiring implementation at the moment
+			// generic case is when a function is not linked to an owner ID but still requires explicit rights (e.g., create new folder, new groupitem, etc.)
 			case 'generic':
 
 				$query = "SELECT JSON_EXTRACT(`accessDef`, '$.$acDefModule.$fnName') FROM `users` WHERE `id` = ?";
 				$res = $this->db->fetchValue($query, [$this->myAuth->userid]);
-				return (($res['data'] === true) || ($res['data'] === "true")) ? true : false;
+				return ($res['data'] === true) || ($res['data'] === "true");
 
-				break;
-
-				// itemgroup specific function linked to a group ID value
+			// itemgroup specific function linked to a group ID value
 
 			case 'itemObject':
 
@@ -1751,13 +1827,29 @@ class permAuth
 				# -------------------------------------------------- #
 				# PRIMARY GRANULAR PERMISSION CHECKING QUERY ROUTINE #
 				# -------------------------------------------------- #
+				$conceptPermission = null;
+				foreach ($this->itemPerms as $concept => $actions) {
+					if (in_array($fnName, $actions, true)) {
+						$conceptPermission = $concept;
+						break;
+					}
+				}
+
 				foreach ($this->myAuth->usergroup as $ugEntry => $ugItem) {
 					$query = "SELECT JSON_EXTRACT(`accessDef`, '$.{$acDefModule}.{$fnName}') FROM `{$tbl_source}` WHERE (`userGroupId` = ? AND `{$tbl_col_clause}` = ?)";
 					$res = $this->db->fetchValue($query, [$ugItem, $folderParentId]);
+					$accessValue = $res['data'];
 
-					array_push($accessArr, ($res['data'] === "true" ? true : false));
+					// Permission schemas grow over time. For an older access row that does not
+					// yet contain this granular action, retain the row's conceptual setting.
+					// An explicitly stored granular false value remains false.
+					if ($accessValue === null && $conceptPermission !== null) {
+						$query = "SELECT JSON_EXTRACT(`accessDef`, '$.c_items.\"{$conceptPermission}\"') FROM `{$tbl_source}` WHERE (`userGroupId` = ? AND `{$tbl_col_clause}` = ?)";
+						$res = $this->db->fetchValue($query, [$ugItem, $folderParentId]);
+						$accessValue = $res['data'];
+					}
 
-					// if (($res['data'] === true) || ($res['data'] === "true")) { }
+					array_push($accessArr, $accessValue === true || $accessValue === "true");
 				}
 
 				// FYI: PERMISSIVE access allowance
@@ -1777,12 +1869,8 @@ class permAuth
 				// return false;
 				// return (($res['data'] === true) || ($res['data'] === "true")) ? true : false;
 
-				break;
-
 			default:
 				return false;
-
-				break;
 		}
 	}
 }

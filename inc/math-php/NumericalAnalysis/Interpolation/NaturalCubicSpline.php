@@ -3,8 +3,8 @@
 namespace MathPHP\NumericalAnalysis\Interpolation;
 
 use MathPHP\Exception;
-use MathPHP\Functions\Polynomial;
-use MathPHP\Functions\Piecewise;
+use MathPHP\Expression\Polynomial;
+use MathPHP\Expression\Piecewise;
 
 /**
  * Natural Cubic Spline Interpolating Polynomial
@@ -34,18 +34,21 @@ class NaturalCubicSpline extends Interpolation
     /**
      * Interpolate
      *
-     * @param callable|array $source The source of our approximation. Should be either
-     *                           a callback function or a set of arrays. Each array
-     *                           (point) contains precisely two numbers, an x and y.
-     *                           Example array: [[1,2], [2,3], [3,4]].
-     *                           Example callback: function($x) {return $x**2;}
-     * @param number   ...$args  The arguments of our callback function: start,
-     *                           end, and n. Example: approximate($source, 0, 8, 5).
-     *                           If $source is a set of points, do not input any
-     *                           $args. Example: approximate($source).
+     * @param callable|array<array{int|float, int|float}> $source
+     *      The source of our approximation. Should be either
+     *      a callback function or a set of arrays. Each array
+     *      (point) contains precisely two numbers, an x and y.
+     *      Example array: [[1,2], [2,3], [3,4]].
+     *      Example callback: function($x) {return $x**2;}
+     * @param int|float ...$args
+     *      The arguments of our callback function: start,
+     *      end, and n. Example: approximate($source, 0, 8, 5).
+     *      If $source is a set of points, do not input any
+     *      $args. Example: approximate($source).
      *
-     * @return Piecewise         The interpolating (piecewise) polynomial, as an
-     *                           instance of Piecewise.
+     * @return Piecewise
+     *      The interpolating (piecewise) polynomial, as an
+     *      instance of Piecewise.
      *
      * @throws Exception\BadDataException
      */
@@ -63,7 +66,7 @@ class NaturalCubicSpline extends Interpolation
         $y = self::Y;
 
         // Initialize
-        $n     = count($sorted);
+        $n     = \count($sorted);
         $k     = $n - 1;
         $h     = [];
         $a     = [];

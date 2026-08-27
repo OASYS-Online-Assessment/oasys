@@ -1,8 +1,13 @@
 <?php
 
 require_once __DIR__ . "/../../../inc/php/OasysFrontendState.php";
+require_once __DIR__ . "/../../inc/php/OasysBackendState.php";
+require_once __DIR__ . "/../../../inc/php/OasysSettings.php";
+require_once __DIR__ . "/../../../inc/php/OasysLdapAuthenticator.php";
 
-use \OASYS\Frontend\OasysFrontendState;
+use OASYS\Backend\OasysBackendState;
+use OASYS\OasysLdapAuthenticator;
+use OASYS\OasysSettings;
 
 /**
  * User authentication operations for Oasys editor (backend) system.
@@ -14,24 +19,29 @@ class userAuth
 	# Standard class declarations #
 	# --------------------------- #
 
-	public $sid = null;
-	private $db = null;
-	public $authResult = null;
-	public $username = "";
-	public $userid = -999;
-	public $usergroup = [];
-	public $roles = [];
-	public $email = "";
-	public $returnData = null;
-	private $echoSuppress = null;
-	private $cookiePath = "";
-	private const schemaFiles = ['inc/js/perm_items.json', 'inc/js/perm_items_generic.json']; // list of file based schema definitions used for permission structures
+	public ?string $sid = null;
+	private ?rixPDO $db;
+	private ?OasysBackendState $backendState;
+	private ?OasysSettings $config;
+	private array $settings;
+	public string|bool|null $authResult = null;
+	public string $username = "";
+	public int $userid = -999;
+	public mixed $usergroup = [];
+	public mixed $roles = [];
+	public mixed $email = "";
+	public ?array $returnData = null;
+	private ?bool $echoSuppress;
+	private mixed $cookiePath;
+	private const array schemaFiles = ['inc/js/perm_items.json', 'inc/js/perm_items_generic.json']; // list of file based schema definitions used for permission structures
 
-	private $uiLang = null; // translation class instance
+	private ?uiLang $uiLang; // translation class instance
 
 	// constant declaration for bad password threshold checking
-	const MAX_BADPWD_COUNT = 20;
-	const MAX_TIME4_BADPWD = 300; // definition value is in seconds; 300 = 5 mins
+	const int MAX_BADPWD_COUNT = 20;
+	const int MAX_TIME4_BADPWD = 300; // definition value is in seconds; 300 = 5 mins
+	const int BADPWD_LOCKOUT_TIME = 900; // temporary lockout in seconds; 900 = 15 mins
+	private const string SECURE_COOKIE_HTTP_ERROR = 'Secure cookies are enabled, but OASYS is being accessed over HTTP. Please use HTTPS or disable secure cookies.';
 
 	public function __construct(bool $noOutput = false)
 	{
@@ -41,7 +51,10 @@ class userAuth
 		register_shutdown_function([$this, 'responseAndExit']);
 		$this->returnData['error'] = false; //if there is an error, this will contain a string with the error message
 
-		global $settings;
+		$this->config = OasysSettings::getInstance();
+		$this->backendState = OasysBackendState::getInstance();
+		$this->settings = &$this->config->getSettingsArray();
+
 		// if using output buffer, uncomment line below and line at end of file
 		// ob_start();
 
@@ -49,67 +62,39 @@ class userAuth
 		$this->echoSuppress = $noOutput;
 
 		// define DOCROOT constant
-		if (!defined("DOCROOT")) define("DOCROOT", str_replace("//", "/", ($_SERVER['CONTEXT_DOCUMENT_ROOT'] ?? $_SERVER['DOCUMENT_ROOT']) . $settings['rootURL']));
+		if (!defined("DOCROOT")) {
+			define("DOCROOT", realpath(__DIR__ . '/../../../') . '/');
+		}
 
-		// This will also make avilable database credentials, settings and language information
-		global $sql_db, $sql_user, $sql_password, $sql_host;
+		// This will also make available database credentials, settings and language information
 
 		// define master cookie path for class
-		$this->cookiePath = $settings['JSrootURL'];
+		$this->cookiePath = $this->settings['JSrootURL'];
 
-		// init db class object - sql login vars populated from settings.php call
-		$this->db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, DOCROOT . "logs/userauth_db_err.log", 1, $this->returnData, 'error');
+		// init db class object
+		$this->db = $this->config->getDatabaseInstance();
 
 		# ------------------- #
 		# Translation Include #
 		# ------------------- #
 		require_once DOCROOT . "editor/inc/php/uiLang.php"; // required for translation inclusion
-		$this->uiLang = new uiLang($settings['interfaceLanguage']);
+		$this->uiLang = new uiLang($this->settings['interfaceLanguage']);
 
 		# ------------- #
-		# Session Inits #
+		# State Inits   #
 		# ------------- #
 
-		// check if cookie is set yet, and if not, assign a value
-		if (!isset($_COOKIE['PHPSESSID'])) {
-			try {
-				$rndb = random_bytes(16);
-			} catch (Error $e) {
-				$this->killSession($this->uiLang->translate("Unable to generate random session ID string:") . " " . $e->getMessage(), true);
-				$this->echoSuppress = true;
-				return;
-			} catch (Exception $ex) {
-				$this->killSession($this->uiLang->translate("Unable to generate random session ID string:") . " " . $ex->getMessage(), true);
-				$this->echoSuppress = true;
-				return;
-			}
-
-			if (session_status() !== PHP_SESSION_ACTIVE) {
-				session_id(bin2hex($rndb));
-			}
-		}
-
-		if (session_status() !== PHP_SESSION_ACTIVE) {
-
-			// main session start after clearing conditions above
-			if (session_status() === 1) $prevSesh = $_SESSION;
-			$sessionHandler = new dbSessionHandler($sql_db, $sql_user, $sql_password, $sql_host, DOCROOT . 'logs/sessionHandler_errors.txt', 'userAuth');
-			session_set_save_handler($sessionHandler, true);
-			session_start(['cookie_path' => $this->cookiePath, 'cookie_httponly' => true]);
-			if (isset($prevSesh)) $_SESSION = $prevSesh;
-		}
-		$this->sid = session_id();
+		$this->sid = $this->backendState->getStateId();
 
 		# --------------------------------------------- #
 		# Set class scoped user variables if they exist #
 		# --------------------------------------------- #
 
-		// $this->username = $_SESSION['username'] ?? "";
-		$this->userid = $_SESSION['userid'] ?? -999;
+		$this->userid = (int)($this->backendState->userid ?? -999);
 		$this->username = $this->getUsername($this->userid) ?? "";
-		$this->usergroup = $_SESSION['usergroup'] ?? [];
-		$this->roles = $_SESSION['roles'] ?? [];
-		$this->email = $_SESSION['email'] ?? "";
+		$this->usergroup = $this->backendState->usergroup ?? [];
+		$this->roles = $this->backendState->roles ?? [];
+		$this->email = $this->backendState->email ?? "";
 
 		# --------------- #
 		# Action routines #
@@ -118,7 +103,7 @@ class userAuth
 		// set action value in our data return array
 		$this->returnData['action'] = $_POST['action'] ?? '';
 
-		if (isset($_SESSION['SSOloginTrigger']) && ($_SESSION['SSOloginTrigger'] === true)) $this->returnData['action'] = "login";
+		if (isset($this->backendState->SSOloginTrigger) && ($this->backendState->SSOloginTrigger === true)) $this->returnData['action'] = "login";
 
 		if (!in_array($this->returnData['action'], ['login', 'check', 'logout'])) {
 			$this->echoSuppress = true;
@@ -126,17 +111,24 @@ class userAuth
 
 		// determine functions to call baesd on sent action request value
 		switch ($this->returnData['action']) {
-				# --------------------- #
-				# JS Login Call Handler #
-				# --------------------- #
+			# --------------------- #
+			# JS Login Call Handler #
+			# --------------------- #
 			case 'login':
+				if (($this->settings['cookieSecure'] ?? false) && !$this->requestUsesHttps()) {
+					$message = $this->uiLang->translate(self::SECURE_COOKIE_HTTP_ERROR);
+					$this->returnData['error'] = $message;
+					$this->returnData['returnMsg'] = $message;
+					return;
+				}
+
 				/** @var array|bool $loginInputs Array containing username/password when submission is valid, otherwise boolean 'false' if non-conforming */
 				$loginInputs = $this->loginPrecheck();
 
 				// validate and parse all of our input data from client AJAX call
 				if ($loginInputs === false) {
 					// if parser returns false, the JSON structure was bad or user inputs did not conform to restrictions
-					$this->killSession($this->uiLang->translate("Incorrect credentials."), true);
+					$this->killBackendState($this->uiLang->translate("Incorrect credentials."), true);
 					return;
 				}
 
@@ -146,10 +138,12 @@ class userAuth
 
 				break;
 
-				# ----------------------- #
-				# JS access check handler #
-				# ----------------------- #
+			# ----------------------- #
+			# JS access check handler #
+			# ----------------------- #
 			case 'check':
+				$uid = $this->db->fetchValue("SELECT `id` FROM `users` WHERE `name` = ?", [$this->username])['data'];
+				$this->check_mmode($uid, true);
 				$this->check();
 				break;
 
@@ -160,28 +154,51 @@ class userAuth
 	}
 
 	/**
-	 * Validate some basic assumptions for user/pass and system state prior to starting actual real login routine.
-	 *
-	 * @param string|null $username Submitted username
-	 * @param string|null $password Submitted password
-	 * 
-	 * @return void
-	 * 
+	 * Determine whether the browser-facing request uses HTTPS, including when
+	 * TLS is terminated by a reverse proxy that supplies X-Forwarded-Proto.
 	 */
-	private function outerLogin(?string $username, ?string $password): void
+	private function requestUsesHttps(): bool
 	{
+		$https = strtolower((string)($_SERVER['HTTPS'] ?? ''));
+		if ($https !== '' && $https !== 'off' && $https !== '0') {
+			return true;
+		}
+
+		$forwardedProto = explode(',', (string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))[0];
+		return strtolower(trim($forwardedProto)) === 'https';
+	}
+
+	private function check_mmode(?int $uid, bool $disableMsg = false): void
+	{
+		if (is_null($uid)) return;
+
 		// required for front/backend active login checking
-		require_once "inc/php/systemState.php";
+		require_once __DIR__ . "/systemState.php";
 
 		// check for maintenance mode, block login if maint mode active
 		$sstate = get_mmode("backend", $this->db);
 
-		// get uid ahead of time for superadmin check in next lines; usually class object uid not instantiated at this point in the code
-		// the if statement also bypasses the login block for all superadmins, so only superadmins can login when in maint mode
-		$uid = $this->db->fetchValue("SELECT `id` FROM `users` WHERE `name` = ?", [$this->username])['data'];
 		if ($sstate === true && $this->checkSA($uid) === false) {
-			$this->killSession($this->uiLang->translate("System is currently in maintenance mode. Please try again later."), true);
+			$retMsg = ($disableMsg) ? "" : $this->uiLang->translate("System is currently in maintenance mode. Please try again later.");
+			$this->killBackendState($retMsg, true);
+			exit;
 		}
+	}
+
+	/**
+	 * Validate some basic assumptions for user/pass and system state prior to starting actual real login routine.
+	 * @param string|null $username Submitted username
+	 * @param string|null $password Submitted password
+	 * @return void
+	 */
+	private function outerLogin(?string $username, #[\SensitiveParameter] ?string $password): void
+	{
+
+		// get the uid of the logging in user
+		$uid = $this->db->fetchValue("SELECT `id` FROM `users` WHERE `name` = ?", [$this->username])['data'];
+
+		// check maintenance mode status
+		$this->check_mmode($uid);
 
 		// call login method after initial input validation/sanitation/maintenance check have passed
 		$loginAttempt = $this->loginAuthValidation($username, $password);
@@ -192,29 +209,51 @@ class userAuth
 			// clear out the users.resetdata column for the user to keep things nice n' tidy
 			$this->db->update("users", ['resetdata' => null], "id = ?", [$uid]);
 		} else {
-			$this->killSession($loginAttempt, true);
+			$this->rejectLoginAttempt($loginAttempt);
 		}
 	}
 
 	/**
-	 * Session/authentication consistency checking which is performed on any/all action calls.
-	 *
+	 * Reject a normal credential attempt without deleting the anonymous backend
+	 * state. Keeping that state allows another AJAX login attempt on the same
+	 * page while still removing every value that could represent authentication.
+	 */
+	private function rejectLoginAttempt(string $message): void
+	{
+		$this->setAuthResult($message);
+		foreach (['userid', 'username', 'usergroup', 'roles', 'email', 'editor_active'] as $property) {
+			if (isset($this->backendState->$property)) {
+				unset($this->backendState->$property);
+			}
+		}
+
+		$this->userid = -999;
+		$this->username = '';
+		$this->usergroup = [];
+		$this->roles = [];
+		$this->email = '';
+		$this->returnData['error'] = $message;
+		$this->returnData['returnMsg'] = $message;
+	}
+
+	/**
+	 * initial sesh/auth check and one off consistency routines
 	 * @return void
-	 * 
 	 */
 	private function check(): void
 	{
 		// check if session has valid auth
 		$authResult = $this->getAuthResult();
-		if (($authResult !== true) && (!empty($_SESSION['username']))) {
-			$this->writeLogEntry("BAD SESSION: {$authResult}");
-			$this->killSession($authResult);
+		if (($authResult !== true) && (!empty($this->backendState->username))) {
+			$this->writeLogEntry("BAD BACKENDSTATE: $authResult");
+			$this->killBackendState($authResult);
 		}
 
 		// check that our user account is active/enabled and return array of available languages
+
 		// FYI: This particular condition would probably only occur when the login page is reloaded after account disable and before logout
 		if ((!empty($this->username)) && ($this->checkAcctEnabled($this->userid) === false)) {
-			$this->killSession($this->uiLang->translate("Account has been disabled."), true);
+			$this->killBackendState($this->uiLang->translate("Account has been disabled."), true);
 		}
 
 		// return list of languages
@@ -222,40 +261,95 @@ class userAuth
 		$this->returnData['langs'] = ['DE' => 'DE', 'EN' => 'EN', 'FR' => 'FR'];
 
 
-		// get and return editor button list
-		$eList = [];
-		$eListRes = [];
+		/* -----------------------EDITOR LIST VALIDATION AND ENFORCEMENT---------------------------- */
 
+		global $languages, $skins;
+		$eList = ['placeholder'];
 		$ugIds = $this->usergroup;
-		$this->returnData['ugroups'] = $ugIds;
-
-		// iterate the editor button list based on usergroup IDs
-		foreach (array_values($ugIds) as $userGroupId) {
-			$eListRes = json_decode($this->db->fetchValue("SELECT JSON_QUERY(`accessDef`, '$.editorButtons') FROM `userGroups` WHERE id = ?", [$userGroupId])['data'] ?? '', true);
-
-			// failsafe for blank accessDef column for superadmin
-			if (is_null($eListRes) && $this->checkSA() === true) {
-				$a = [];
-				$b = [];
-				$tempDef = getDefaultSettings($this->db, $a, $b);
-
-				$edtbtnJSON = [];
-				foreach (array_keys($tempDef['editorButtons']['choices']) as $editorKey) {
-					$edtbtnJSON[$editorKey]	= true;
-				}
-
-				$edtbtnJSON = json_encode($edtbtnJSON);
-
-				$this->db->update("userGroups", ['accessDef' => '{"editorButtons": ' . $edtbtnJSON . '}'], "name = ?", ['superadmin']);
-				$eListRes = json_decode($this->db->fetchValue("SELECT JSON_QUERY(`accessDef`, '$.editorButtons') FROM `userGroups` WHERE id = ?", [$userGroupId])['data'] ?? '', true);
+		$modRawData = \Oasys\OasysSettings::findMods();
+		$modData = [];
+		$core_editor_list = $this->config->getDefaults()['editorButtons']['choices']; // fetch core editor list sans modules
+		//remove all buttons that have a property 'module' => true
+		foreach ($core_editor_list as $button => $properties) {
+			if (isset($properties['module']) && $properties['module'] === true) {
+				unset($core_editor_list[$button]);
 			}
+		}
+		$user_access_level = 0; // default init as standard user
 
-			foreach ($eListRes as $eName => $eVal) {
-				if ($eVal === true && (!in_array($eName, $eList))) array_push($eList, $eName);
+		if ($this->checkAdmin() === true) $user_access_level = 50; // regular admin
+		// System Settings editor removed for non-elevated admins in the authcommonfunctions routine.
+		if ($this->checkSA()) $user_access_level = 150; // superadmin
+
+		/* build out all non-core editors as an array */
+		foreach ($modRawData as $ml_key => $ml_entry) {
+			foreach ($ml_entry["editor_sections"] as $ml_name => $m_entry) {
+				$modData[$ml_name] = $m_entry;
 			}
 		}
 
+		function enforce_AL(rixPDO $db, array $modData, array $core_editor_list, int $user_access_level, int $userGroupId): void
+		{
+			$editorData = [];
+
+			// get current permission set for group
+			$cur_ad_set = json_decode($db->fetchValue("SELECT JSON_QUERY(`accessDef`, '$.editorButtons') FROM `userGroups` WHERE id = ?", [$userGroupId])['data'] ?? '', true);
+
+			// loop module access values, and set default to 'false' if it does not exist yet
+			foreach ($modData as $main_mod_entry => $mod_values) {
+				if (!isset($cur_ad_set[$main_mod_entry])) {
+					$editorData["editorButtons"][$main_mod_entry] = false;
+				} else {
+					if ($mod_values["accesslevel"] > $user_access_level) {
+						$editorData["editorButtons"][$main_mod_entry] = false; // enforce access level restrictions for module based editors as well
+					} else {
+						$editorData["editorButtons"][$main_mod_entry] = $cur_ad_set[$main_mod_entry]; // final fallthrough condition is to keep original value
+					}
+				}
+			}
+
+			// set access for each core editor module based on access level
+			foreach ($core_editor_list as $c_key => $c_values) {
+				$editorData["editorButtons"][$c_key] = $c_values["accesslevel"] <= $user_access_level;
+			}
+
+			// record when this update is made in the accessDef column
+			$editorData["updateStamp"] = (new DateTime())->format(DateTimeInterface::ATOM);
+
+			$el_db_update = json_encode($editorData, JSON_PRETTY_PRINT);
+			$db->update("userGroups", ["accessDef" => $el_db_update], "id=?", [$userGroupId]);
+		}
+
+		/* get and set the ONLY the core editor list based on user access standards */
+		switch ($user_access_level) {
+			case 0:
+				foreach ($ugIds as $userGroupId) {
+					enforce_AL($this->db, $modData, $core_editor_list, $user_access_level, $userGroupId);
+				}
+
+				break;
+
+			case 50:
+				$admin_ug_id = $this->db->fetchValue("SELECT `id` FROM `userGroups` WHERE `name` = 'admin'")['data'];
+				enforce_AL($this->db, $modData, $core_editor_list, $user_access_level, $admin_ug_id);
+
+				break;
+
+			case 150:
+				$superadmin_ug_id = $this->db->fetchValue("SELECT `id` FROM `userGroups` WHERE `name` = 'superadmin'")['data'];
+				enforce_AL($this->db, $modData, $core_editor_list, $user_access_level, $superadmin_ug_id);
+
+				break;
+		}
+
+		/* ----------------------------------------------------------------------------------------- */
+
+		// return combined editor access list, this may be out of use now since we have editor access hard-coded now
 		$this->returnData['editors'] = $eList;
+
+		// return usergroup membership id list
+		$this->returnData['ugroups'] = $ugIds;
+
 
 		// return selected language (if any)
 		$defLang = $this->db->fetchValue("SELECT `defLang` FROM `users` WHERE `id` = ?", [$this->userid])['data'];
@@ -267,25 +361,22 @@ class userAuth
 
 	/**
 	 * Final session logout routine for backend.
-	 *
 	 * @return void
-	 * 
 	 */
 	private function logout(): void
 	{
-		$this->writeLogEntry("USER ACTION: User logged out.");
-		$this->killSession($this->uiLang->translate("User has been logged out."));
-
-		if (isset($_SESSION['SSOUserName'])) $this->returnData['SSOlogout'] = true;
+		if (isset($this->backendState->SSOUserName)) {
+			$this->returnData['SSOlogout'] = true;
+		} else {
+			$this->killBackendState($this->uiLang->translate("User has been logged out."));
+			$this->writeLogEntry("USER ACTION: User logged out.");
+		}
 	}
 
 	/**
 	 * Check if session has access to a particular module/editor
-	 *
 	 * @param string $editorId
-	 * 
 	 * @return bool When session has access to the editor id being checked, boolean 'true' is returned, otherwise, boolean 'false'
-	 * 
 	 */
 	public function getEditorResult(string $editorId): bool
 	{
@@ -301,12 +392,8 @@ class userAuth
 	/**
 	 * Publicly available authorisation status return for current session.
 	 * If 'true' is not returned, a string is returned containing the reason why the session is not authenticated.
-	 * 
-	 *
 	 * @param bool $noEcho Whether or not to echo out at the shutdown handler part of the stack.
-	 * 
 	 * @return string|bool
-	 * 
 	 */
 	public function getAuthResult(bool $noEcho = false): string|bool
 	{
@@ -316,12 +403,12 @@ class userAuth
 		}
 
 		// if no authStatus is defined for this session, return false (probably session expiration condition)
-		if (!isset($_SESSION['authStatus'])) {
+		if (!isset($this->backendState->authStatus)) {
 			return $this->uiLang->translate("No valid session was found. Please log in again.");
 		}
 
 		// if authStatus is set and it's not set to true, return message indicating that user is actively not authenticated
-		if (isset($_SESSION['authStatus']) && ($_SESSION['authStatus'] !== true)) {
+		if (isset($this->backendState->authStatus) && ($this->backendState->authStatus !== true)) {
 			return $this->uiLang->translate("User is not logged in.");
 		}
 
@@ -335,39 +422,30 @@ class userAuth
 
 	/**
 	 * setter for user authentication value
-	 *
 	 * @param bool|string $auth
-	 * 
 	 * @return void
-	 * 
 	 */
 	private function setAuthResult(bool|string $auth): void
 	{
-		$_SESSION['authStatus'] = $auth;
+		$this->backendState->authStatus = $auth;
 		$this->authResult = $auth;
 	}
 
 	/**
 	 * setter for username
-	 *
 	 * @param string $username
-	 * 
 	 * @return void
-	 * 
 	 */
 	private function setUsername(string $username): void
 	{
-		$_SESSION['username'] = $username;
+		$this->backendState->username = $username;
 		$this->username = $username;
 	}
 
 	/**
 	 * getter for username (sourced from DB)
-	 *
 	 * @param int $uid
-	 * 
 	 * @return string|null
-	 * 
 	 */
 	public function getUsername(int $uid): ?string
 	{
@@ -378,19 +456,17 @@ class userAuth
 
 	/**
 	 * Force resync of group-based editor button list to master editor list.
-	 *
 	 * @return bool
-	 * 
-	 * @todo // TODO: implement some form of error catching in case of bad DB data
-	 * 
 	 */
 	public function forceEditorSync(): bool
 	{
-		global $settingsDefaults;
+		global $config;
+
+		$settingsDefaults = $config->getDefaults();
 
 		$masterEBlist = $settingsDefaults['editorButtons']['choices'];
 
-		$ugList = $this->db->fetchColumn("SELECT `id` FROM `userGroups`", [])['data'];
+		$ugList = $this->db->fetchColumn("SELECT `id` FROM `userGroups`")['data'];
 
 		foreach ($ugList as $userGroupId) {
 
@@ -417,7 +493,6 @@ class userAuth
 					$groupEBlist[$mKey] = false; // if we find a new key that the group does not have, add it and set to false
 					$this->db->prepare("UPDATE `userGroups` SET `accessDef` = JSON_SET(`accessDef`, CONCAT('$.editorButtons.', ?), false) WHERE `id` = ?");
 					$this->db->executePrepared([$mKey, $userGroupId]);
-					continue;
 				}
 			}
 		}
@@ -434,7 +509,6 @@ class userAuth
 				if (empty($masterEBlist[$gKey])) {
 					$this->db->prepare("UPDATE `userGroups` SET `accessDef` = JSON_REMOVE(`accessDef`, CONCAT('$.editorButtons.', ?)) WHERE `id` = ?");
 					$this->db->executePrepared([$gKey, $userGroupId]);
-					continue;
 				}
 			}
 		}
@@ -444,13 +518,8 @@ class userAuth
 
 	/**
 	 * Force resync of granular permissions to their concept permission value.
-	 *
 	 * @param bool|array $returnData
-	 * 
 	 * @return bool
-	 * 
-	 * @todo // TODO: implement some form of error catching in case of bad DB data
-	 * 
 	 */
 	public function forceGSync(bool|array &$returnData): bool
 	{
@@ -475,7 +544,7 @@ class userAuth
 		foreach (['itemFolderAccess' => 1, 'testFolderAccess' => 1, 'loginsFolderAccess' => 1] as $accessTableName => $sKey) {
 
 			/** @noinspection SqlResolve */
-			$res = $this->db->fetchTable("SELECT `id`, `accessDef` FROM {$accessTableName}")['data'];
+			$res = $this->db->fetchTable("SELECT `id`, `accessDef` FROM $accessTableName")['data'];
 
 			// iterate accessDef entries
 			foreach ($res as $entryVal) {
@@ -500,11 +569,8 @@ class userAuth
 
 	/**
 	 * Check for permission schema consistency with usergroup permission entries.
-	 *
 	 * @param array|bool $returnData
-	 * 
 	 * @return bool
-	 * 
 	 */
 	public function syncSchema(array|bool &$returnData): bool
 	{
@@ -519,7 +585,7 @@ class userAuth
 			$masterSchema[$counter] = json_decode(file_get_contents($pFile) ?? '', true);
 			if (json_last_error() !== JSON_ERROR_NONE) {
 				$this->writeLogEntry("SYSTSEM ERROR: Bad JSON permission schema file.");
-				$returnData['error'] = "<br>Permission[{$counter}] JSON permission schema file not valid. It may have been incorrectly updated. Please report to Oasys Administrator.";
+				$returnData['error'] = "<br>Permission[$counter] JSON permission schema file not valid. It may have been incorrectly updated. Please report to Oasys Administrator.";
 				exit;
 			}
 
@@ -543,7 +609,7 @@ class userAuth
 				$this->uiLang->translate("The following user entries did not have any general access definitions and were automatically repaired.") .
 				"<span style='font-style: italic'>" .
 				$this->uiLang->translate("Please manually check standard permission rights on these user accounts.") .
-				"</span><span style='font-weight: bold;'>{$badUserStr}</span><br><br>";
+				"</span><span style='font-weight: bold;'>$badUserStr</span><br><br>";
 		}
 
 		$permShell = '{"c_items": {}, "items": {}}';
@@ -552,13 +618,13 @@ class userAuth
 		foreach (['itemFolderAccess' => 1, 'testFolderAccess' => 1, 'loginsFolderAccess' => 1, 'users' => 2] as $accessTableName => $sKey) { // link the table to the correctly associated master schema we're checking against
 
 			/** @noinspection SqlResolve */
-			$res = $this->db->fetchTable("SELECT `id`, `accessDef` FROM {$accessTableName}")['data'];
+			$res = $this->db->fetchTable("SELECT `id`, `accessDef` FROM $accessTableName")['data'];
 
 			// iterate group/folder combinations in permission access tables and add missing records (default to false for missing entries)
 			if ($sKey === 1) {
 				$ugMasterList = $this->db->fetchColumn("SELECT `id` FROM `userGroups` WHERE `name` <> 'superadmin' AND `name` <> 'admin'")['data'];
 
-				$tblUgIds = $this->db->fetchColumn("SELECT DISTINCT `userGroupId` FROM {$accessTableName}")['data'];
+				$tblUgIds = $this->db->fetchColumn("SELECT DISTINCT `userGroupId` FROM $accessTableName")['data'];
 
 				$missingGroupsDefs = array_diff($ugMasterList, $tblUgIds);
 
@@ -571,11 +637,11 @@ class userAuth
 				# Missing accessDef fillout from root folder as source #
 				# ---------------------------------------------------- #
 				if (!empty($missingGroupsDefs)) {
-					$uniqueFID_root = $this->db->fetchColumn("SELECT DISTINCT `id` FROM {$rootTbl} WHERE `name` <> 'Home'")['data'];
+					$uniqueFID_root = $this->db->fetchColumn("SELECT DISTINCT `id` FROM $rootTbl WHERE `name` <> 'Home'")['data'];
 
-					foreach (array_values($uniqueFID_root) as $fID) {
-						foreach (array_values($missingGroupsDefs) as $missingGroup) {
-							$this->db->prepare("INSERT INTO {$accessTableName} VALUES (null, ?, ?, null, ?)");
+					foreach ($uniqueFID_root as $fID) {
+						foreach ($missingGroupsDefs as $missingGroup) {
+							$this->db->prepare("INSERT INTO $accessTableName VALUES (null, ?, ?, null, ?)");
 							$this->db->executePrepared([$fID, $missingGroup, '{"c_items": {}, "items": {}}']);
 						}
 					}
@@ -585,11 +651,11 @@ class userAuth
 				# Missing individual entries in existing folder Ids from accessDef source #
 				# ----------------------------------------------------------------------- #
 				if (!empty($missingGroupsDefs)) {
-					$uniqueFIDs = $this->db->fetchColumn("SELECT DISTINCT `folderId` FROM {$accessTableName}")['data'];
+					$uniqueFIDs = $this->db->fetchColumn("SELECT DISTINCT `folderId` FROM $accessTableName")['data'];
 
-					foreach (array_values($uniqueFIDs) as $fID) {
-						foreach (array_values($missingGroupsDefs) as $missingGroup) {
-							$this->db->prepare("INSERT INTO {$accessTableName} VALUES (null, ?, ?, null, ?)");
+					foreach ($uniqueFIDs as $fID) {
+						foreach ($missingGroupsDefs as $missingGroup) {
+							$this->db->prepare("INSERT INTO $accessTableName VALUES (null, ?, ?, null, ?)");
 							$this->db->executePrepared([$fID, $missingGroup, '{"c_items": {}, "items": {}}']);
 						}
 					}
@@ -615,7 +681,7 @@ class userAuth
 				$ps_arr = json_decode($permShell ?? '', true);
 				foreach (array_keys($ps_arr) as $psKey) {
 					if (!isset($db_data[$psKey])) {
-						$this->db->execute("UPDATE `users` SET `accessDef` = JSON_SET(`accessdef`, '$.{$psKey}', JSON_OBJECT()) WHERE `id` = ?", [$entryVal['id']]);
+						$this->db->execute("UPDATE `users` SET `accessDef` = JSON_SET(`accessdef`, '$.$psKey', JSON_OBJECT()) WHERE `id` = ?", [$entryVal['id']]);
 						$db_data[$psKey] = [];
 					}
 				}
@@ -628,7 +694,7 @@ class userAuth
 					if (!(in_array($c_perm, array_keys($db_data['c_items'])))) {
 						$changeMade = true;
 						/** @noinspection SqlResolve */
-						$this->db->prepare("UPDATE {$accessTableName} SET `accessDef` = JSON_SET(`accessDef`, CONCAT('$.', ?, '.', ?), false) WHERE `id` = ?");
+						$this->db->prepare("UPDATE $accessTableName SET `accessDef` = JSON_SET(`accessDef`, CONCAT('$.', ?, '.', ?), false) WHERE `id` = ?");
 						$this->db->executePrepared(["c_items", $c_perm, $entryVal['id']]);
 					}
 
@@ -641,18 +707,18 @@ class userAuth
 
 							$cKey = null;
 							foreach ($masterSchema[$sKey] as $cVal => $gVal) {
-								if (array_search($gp_entry, $masterSchema[$sKey][$cVal]) !== false) $cKey = $cVal;
+								if (in_array($gp_entry, $masterSchema[$sKey][$cVal])) $cKey = $cVal;
 							} // find the parent concept permission key based on granular permission name
 
 							/** @noinspection SqlResolve */
 							$parCval = $this->db->fetchValue(
-								"SELECT JSON_EXTRACT(`accessDef`, CONCAT('$.', ?, '.', ?)) FROM {$accessTableName} WHERE id = ?",
+								"SELECT JSON_EXTRACT(`accessDef`, CONCAT('$.', ?, '.', ?)) FROM $accessTableName WHERE id = ?",
 								['c_items', $cKey, $entryVal['id']]
 							)['data'] ?? 'false'; // get true/false value of the concept parent key linked to the new granular permission, or false if no value found, which shouldn't even be possible
 
-							// insert key
+								// insert key
 							/** @noinspection SqlResolve */
-							$this->db->prepare("UPDATE {$accessTableName} SET `accessDef` = JSON_SET(`accessDef`, CONCAT('$.', ?, '.', ?), {$parCval}) WHERE `id` = ?");
+							$this->db->prepare("UPDATE $accessTableName SET `accessDef` = JSON_SET(`accessDef`, CONCAT('$.', ?, '.', ?), $parCval) WHERE `id` = ?");
 							$this->db->executePrepared(["items", $gp_entry, $entryVal['id']]);
 						}
 					}
@@ -665,7 +731,7 @@ class userAuth
 					if (!(in_array($key, array_keys($masterSchema[$sKey])))) {
 						$changeMade = true;
 						/** @noinspection SqlResolve */
-						$this->db->prepare("UPDATE {$accessTableName} SET `accessDef` = JSON_REMOVE(`accessDef`, CONCAT('$.', ?, '.', ?)) WHERE `id` = ?");
+						$this->db->prepare("UPDATE $accessTableName SET `accessDef` = JSON_REMOVE(`accessDef`, CONCAT('$.', ?, '.', ?)) WHERE `id` = ?");
 						$this->db->executePrepared(["c_items", $key, $entryVal['id']]);
 					}
 				}
@@ -679,7 +745,7 @@ class userAuth
 					if (!(in_array($key, $arrCompare))) {
 						$changeMade = true;
 						/** @noinspection SqlResolve */
-						$this->db->prepare("UPDATE {$accessTableName} SET `accessDef` = JSON_REMOVE(`accessDef`, CONCAT('$.', ?, '.', ?)) WHERE `id` = ?");
+						$this->db->prepare("UPDATE $accessTableName SET `accessDef` = JSON_REMOVE(`accessDef`, CONCAT('$.', ?, '.', ?)) WHERE `id` = ?");
 						$this->db->executePrepared(["items", $key, $entryVal['id']]);
 					}
 				}
@@ -695,12 +761,9 @@ class userAuth
 
 	/**
 	 * Change account email address
-	 *
 	 * @param int|null $userid
 	 * @param string $email
-	 * 
 	 * @return string|bool
-	 * 
 	 */
 	public function emailChange(?int $userid = null, string $email = ""): string|bool
 	{
@@ -718,11 +781,8 @@ class userAuth
 
 	/**
 	 * Change account password.
-	 *
 	 * @param int|null $userid
-	 * 
 	 * @return string|bool
-	 * 
 	 */
 	public function pwdChange(?int $userid = null): string|bool
 	{
@@ -735,7 +795,7 @@ class userAuth
 		}
 
 		// validate session exists and is auth'd
-		if (($this->getAuthResult() !== true) || (!isset($_SESSION['userid']))) {
+		if (($this->getAuthResult() !== true) || (!isset($this->backendState->userid))) {
 			$this->writeLogEntry("BAD INPUT: Password update attempted without valid authentication, or with an empty session.");
 			return $this->uiLang->translate("Session not valid.");
 		}
@@ -806,20 +866,24 @@ class userAuth
 
 	/**
 	 * Input data parsing and validation
-	 *
 	 * @return array|bool
-	 * 
 	 */
 	private function loginPrecheck(): array|bool
 	{
 		// SSO username sanitation; this login type does not have a local password (validation done against SAML data returned by IdP)
-		if (isset($_SESSION['SSOloginTrigger']) && $_SESSION['SSOloginTrigger'] == true) {
-			$loginInputs['username'] = filter_var($_SESSION['SSOUserName'], FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+		if (isset($this->backendState->SSOloginTrigger) && $this->backendState->SSOloginTrigger) {
+			$loginInputs['username'] = filter_var($this->backendState->SSOUserName, FILTER_SANITIZE_FULL_SPECIAL_CHARS);
 			$loginInputs['password'] = "";
 		} else {
 			// JSON -> array conversion, or bail if not valid
 			$loginInputs = $this->handleInput(filter_input(INPUT_POST, 'data'));
-			if (!isset($loginInputs['username']) || !isset($loginInputs['password'])) {
+			if (
+				!isset($loginInputs['username'], $loginInputs['password'])
+				|| !is_string($loginInputs['username'])
+				|| !is_string($loginInputs['password'])
+				|| trim($loginInputs['username']) === ''
+				|| $loginInputs['password'] === ''
+			) {
 				$this->writeLogEntry("BAD INPUT: Invalid login inputs (empty data submitted in either username or password.)");
 				return false;
 			}
@@ -833,13 +897,10 @@ class userAuth
 
 	/**
 	 * Validate POST data from JS AJAX requests.
-	 *
 	 * @param string $data JSON formatted user/pass data.
-	 * 
 	 * @return array|bool The return value will either be 'false' on error or bad data, or an arrayified version of the JSON input data.
-	 * 
 	 */
-	public function handleInput(string $data): array|bool
+	public function handleInput(#[\SensitiveParameter] string $data): array|bool
 	{
 		# --------------------------------------------------- #
 		# Input array JSON validation and conversion to array #
@@ -860,199 +921,45 @@ class userAuth
 
 	/**
 	 * Rotate / cycle session
-	 *
 	 * @param int $percentRotate 100 = do not rotate, 0 = force rotate
-	 * 
-	 * @return bool
-	 * 
+	 * @return void
 	 */
-	private function rotateSesh(int $percentRotate = 100): bool
+	private function rotateSesh(int $percentRotate = 100): void
 	{
 		// limit our SID rotation to not cycle on every call
 		if (rand(0, 99) < $percentRotate) {
-			// if the session is good, rotate session id val for extra security
-			if ($this->getAuthResult() === true) {
-				$prevSesh = $_SESSION;
-
-				// kill session var and session itself if/when active
-				if (session_status() === PHP_SESSION_ACTIVE) {
-					$_SESSION = [];
-					session_destroy();
-				}
-
-				try {
-					$rndb = random_bytes(16);
-				} catch (Error $e) {
-					$this->killSession($this->uiLang->translate("Unable to generate random session ID string:") . " " . $e->getMessage(), true);
-					$this->echoSuppress = false;
-					return false;
-				} catch (Exception $ex) {
-					$this->killSession($this->uiLang->translate("Unable to generate random session ID string:") . " " . $ex->getMessage(), true);
-					$this->echoSuppress = false;
-					return false;
-				}
-
-				$newSid = bin2hex($rndb); // gen new cryptographically secure string
-				session_id($newSid);
-
-				global $sql_db, $sql_user, $sql_password, $sql_host;
-				$sessionHandler = new dbSessionHandler($sql_db, $sql_user, $sql_password, $sql_host, DOCROOT . 'logs/sessionHandler_errors.txt', 'userAuth');
-				session_set_save_handler($sessionHandler, true);
-
-				session_start(['cookie_path' => $this->cookiePath, 'cookie_httponly' => true]);
-				$_COOKIE['PHPSESSID'] = session_id();
-				$_SESSION = $prevSesh; // restore previous session's array values
-				$this->sid = session_id(); // update the class SID property
-			}
+			$this->backendState->rotateStateId();
 		}
-		return true;
 	}
 
 	/**
 	 * Attempt LDAP authentication based on login and password parameter input.
-	 * 
-	 * The LDAP/Active Directory values are preconfigured in the setting section of Oasys.  
-	 *   
-	 * This is a public static method which has been designed to be called from the frontend  
-	 * Oasys login area as well.
-	 *
+	 * The LDAP/Active Directory values are preconfigured in the setting section of Oasys.
 	 * @param string $login
 	 * @param string $password
-	 * 
-	 * @return bool|string
-	 * 
+	 * @return string One of the OasysLdapAuthenticator status constants.
 	 */
-	public static function bindLDAP(string $login, string $password): bool|string
+	private function bindLDAP(string $login, #[\SensitiveParameter] string $password): string
 	{
-		global $settings;
-		// define DOCROOT for static method calls
-		if (!defined("DOCROOT")) define("DOCROOT", str_replace("//", "/", ($_SERVER['CONTEXT_DOCUMENT_ROOT'] ?? $_SERVER['DOCUMENT_ROOT']) . $settings['rootURL']));
-		require_once DOCROOT . "editor/inc/php/uiLang.php"; // required for translation inclusion (additional call for static calls to method)
-
-		// define uiLang for static method calls
-		$uiLang = new uiLang($settings['interfaceLanguage']);
-
-
-		# -------------------------------------- #
-		# Setup initial vars for ldap connection #
-		# -------------------------------------- #
-
-		$username = preg_replace("/@.*/", "", $login);
-		$app_user = $settings['ldap_appUser'];
-		$app_pass = Crypt::decryptString($settings['ldap_appPass']);
-		$ldap_server = $settings['ldap_server'];
-		$search_base = $settings['ldap_searchBase'];
-
-		# ---------------------------------- #
-		# Initial connection to LDAP service #
-		# ---------------------------------- #
-
-		putenv('LDAPTLS_REQCERT=never'); // this is required to ignore SSL certificate as we have not imported the chain
-		$conn_status = ldap_connect($ldap_server); // the secondary 'port' param for ldap_connect() is depreciated and should not be used
-		if ($conn_status === false) {
-			self::writeLogEntry("The LDAP-URI [$ldap_server] was not parseable.");
-			return $uiLang->translate("Couldn't connect to LDAP service.");
-		}
-
-		//set protocol version 3 (v2 is deprecated). Important to support passwords with certain special characters e.g. the EURO sign
-		ldap_set_option($conn_status, LDAP_OPT_PROTOCOL_VERSION, 3);
-
-		//disable referrals due to security issues
-		ldap_set_option($conn_status, LDAP_OPT_REFERRALS, 0);
-
-		# ---------------------------- #
-		# Initial bind to read objects #
-		# ---------------------------- #
-
-		$bind_status = ldap_bind($conn_status, $app_user, $app_pass);
-		if ($bind_status === false) {
-			self::writeLogEntry("LDAP ERROR: " . ldap_error($conn_status) . ".");
-			return $uiLang->translate("Couldn't bind to LDAP as application user.");
-		}
-
-		# ------------------------------------------ #
-		# Initial query to find target DN and expiry #
-		# ------------------------------------------ #
-
-		// variable query string - the %1 in the imported settings string is substituted with the $username value
-		$settingsQuery = $settings['ldap_query'];
-		$query = str_replace('%1', $username, $settingsQuery);
-
-		$search_status = ldap_search($conn_status, $search_base, $query, array('dn', 'msds-userpasswordexpirytimecomputed'));
-
-		//if an error occurred during search
-		if ($search_status === false) {
-			self::writeLogEntry("LDAP ERROR: " . ldap_error($conn_status) . ".");
-			return $uiLang->translate("Search on LDAP failed.");
-		}
-
-		//pull the search results
-		$result = ldap_get_entries($conn_status, $search_status);
-		if ($result === false) {
-			self::writeLogEntry("LDAP ERROR: " . ldap_error($conn_status) . ".");
-			return $uiLang->translate("Couldn't pull search results from LDAP.");
-		}
-
-		//check if there is either no match or more than 1 match
-		if ((int) @$result['count'] === 0) {
-			self::writeLogEntry("LDAP RESULT: " . "Username not found on LDAP.");
-			return $uiLang->translate("Username not found on LDAP.");
-		} else if ((int) @$result['count'] > 1) {
-			self::writeLogEntry("LDAP ERROR: " . "Username found more than once on LDAP.");
-			return $uiLang->translate("Username found more than once on LDAP.");
-		}
-
-		//read DN and convert expiry date
-		$userdn = $result[0]['dn'];
-		$ms_expiry = $result[0]['msds-userpasswordexpirytimecomputed'][0] ?? null;
-		if (!is_null($ms_expiry)) {
-			$expiryDate = bcsub(bcdiv($ms_expiry, '10000000'), '11644473600');
-		}
-
-		// if DN entry is empty
-		if (trim((string) $userdn) == '') {
-			self::writeLogEntry("LDAP ERROR: " . ldap_error($conn_status) . ".");
-			return "Empty DN. Something is wrong.";
-		}
-
-		# --------------------------------------------------- #
-		# Final find to target object to validate credentials #
-		# --------------------------------------------------- #
-
-		// manually suppress error warning 
-		$originalErrorReporting = error_reporting();
-		error_reporting(E_ERROR);
-		$auth_status = @ldap_bind($conn_status, $userdn, $password);
-		error_reporting($originalErrorReporting);
-
-		//if login fails
-		if ($auth_status === false) {
-
-			if (isset($expiryDate) && time() > $expiryDate) {
-				// if password has expired
-				self::writeLogEntry("LDAP ERROR: " . ldap_error($conn_status) . ".");
-				return $uiLang->translate("Account password has expired.");
-			} else {
-				// if login has failed due to any other reason (probably wrong password)
-				self::writeLogEntry("LDAP ERROR: " . ldap_error($conn_status) . ".");
-				return $uiLang->translate("Incorrect credentials.");
+		return OasysLdapAuthenticator::authenticate(
+			$login,
+			$password,
+			$this->settings,
+			static function (string $message, array $context): void {
+				$encodedContext = json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}';
+				$details = $context === [] ? '' : " $encodedContext";
+				self::writeLogEntry("LDAP: $message$details");
 			}
-		}
-
-		ldap_close($conn_status);
-		return true;
+		);
 	}
 
 	/**
 	 * Main login routine (user/pass authentication check)
-	 *
 	 * @param string $username
 	 * @param string $password
-	 * 
 	 * @return string|bool
-	 * 
 	 */
-	private function loginAuthValidation(string $username, string $password): string|bool
+	private function loginAuthValidation(string $username, #[\SensitiveParameter] string $password): string|bool
 	{
 		# ------------------------ #
 		# Username existence check #
@@ -1063,13 +970,13 @@ class userAuth
 
 		// if the username doesn't match exactly one entry from user table, bail
 		if ($rowCount !== 1) {
-			$this->writeLogEntry("BAD INPUT: Unique instance of username `{$username}` not found.");
-			$_SESSION['SSO_LO_ECODE'] = "oaNUF"; // this code will display 'user not found in oasys' on frontend return, when applicable in an SSO scenario
+			$this->writeLogEntry("BAD INPUT: Unique instance of username `$username` not found.");
+			$this->backendState->SSO_LO_ECODE = "oaNUF"; // this code will display 'user not found in oasys' on frontend return, when applicable in an SSO scenario
 			return $this->uiLang->translate("Incorrect credentials.");
 		}
 
 		// set uid/gid val based on unique username existing
-		$this->userid = $this->db->fetchValue("SELECT `id` FROM `users` WHERE `name` = ?", [$username])['data'];
+		$this->userid = (int)($this->db->fetchValue("SELECT `id` FROM `users` WHERE `name` = ?", [$username])['data'] ?? -999);
 		$this->usergroup = $this->db->fetchColumn("SELECT `usergroupId` FROM `userGroupAccess` WHERE `userId` = ?", [$this->userid])['data'];
 
 		// set roles values based on logged in ID
@@ -1081,31 +988,45 @@ class userAuth
 		# ----------------------------------------------- #
 
 		$acctType = $this->db->fetchValue("SELECT `acct_type` FROM `users` WHERE `id` = ?", [$this->userid])['data'];
+		$countFailedAttempt = $acctType !== 'SSO';
+
+		// Local and LDAP accounts are temporarily throttled after too many failed attempts.
+		// SSO authentication is validated by the identity provider and does not use this counter.
+		$lockMinutes = $acctType !== 'SSO' ? $this->badPasswordLockMinutesRemaining($this->userid) : 0;
+		if ($lockMinutes > 0) {
+			$message = sprintf(
+				$this->uiLang->translate("Login temporarily locked after too many unsuccessful attempts. Please try again in %d minute(s) or ask an administrator to reset your password."),
+				$lockMinutes
+			);
+			$this->setAuthResult($message);
+			$this->writeLogEntry("ACCOUNT RESTRICTION: Login temporarily blocked after too many incorrect password attempts.");
+			return $message;
+		}
 
 
 		switch ($acctType) {
 
-				# ---------------------------------------------------------------------------- #
-				# SSO validation already run -- validate username exists in Oasys users table. #
-				# Perform session checking to ensure the login attempt is being routed from an #
-				# SSO route, and not direct login.                                             #
-				# ---------------------------------------------------------------------------- #
+			# ---------------------------------------------------------------------------- #
+			# SSO validation already run -- validate username exists in Oasys users table. #
+			# Perform session checking to ensure the login attempt is being routed from an #
+			# SSO route, and not direct login.                                             #
+			# ---------------------------------------------------------------------------- #
 
 			case 'SSO':
 
 				if (
-					isset($_SESSION['SSOloginTrigger']) &&
-					$_SESSION['SSOloginTrigger'] === true &&
+					isset($this->backendState->SSOloginTrigger) &&
+					$this->backendState->SSOloginTrigger === true &&
 					isset($_POST['RelayState']) &&
 					$_POST['RelayState'] === "oali"
 				) {
 					$pwdRes = true;
 					$this->setAuthResult($pwdRes);
-					$_SESSION['SSOloginTrigger'] = false;
+					$this->backendState->SSOloginTrigger = false;
 				} else {
 					$pwdRes = $this->uiLang->translate("Incorrect credentials.");
 					$this->setAuthResult($pwdRes);
-					$this->killSession($this->uiLang->translate("Incorrect credentials."), true);
+					$this->killBackendState($this->uiLang->translate("Incorrect credentials."), true);
 				}
 
 				break;
@@ -1116,14 +1037,22 @@ class userAuth
 				# Perform LDAP connection and validation of sent in credentials #
 				# ------------------------------------------------------------- #
 
-				$ldap_attempt = $this->bindLDAP($username, $password);
-
-				$pwdRes = $ldap_attempt === true ? true : $ldap_attempt;
+				$ldapAttempt = $this->bindLDAP($username, $password);
+				$countFailedAttempt = in_array($ldapAttempt, [
+					OasysLdapAuthenticator::INVALID_CREDENTIALS,
+					OasysLdapAuthenticator::PASSWORD_EXPIRED
+				], true);
+				$pwdRes = match ($ldapAttempt) {
+					OasysLdapAuthenticator::SUCCESS => true,
+					OasysLdapAuthenticator::INVALID_CREDENTIALS,
+					OasysLdapAuthenticator::PASSWORD_EXPIRED => $this->uiLang->translate("Incorrect credentials."),
+					default => $this->uiLang->translate("Couldn't connect to LDAP service.")
+				};
 				$this->setAuthResult($pwdRes);
 
 				break;
 
-				// if the account is set as LOCAL, or blank/null, use default pwd check method
+			// if the account is set as LOCAL, or blank/null, use default pwd check method
 			case 'LOCAL':
 			default:
 
@@ -1144,16 +1073,18 @@ class userAuth
 		}
 
 		# ---------------------------------------------------------------------------------------- #
-		# Bad password count exceeding check (exclude SSO b/c local login attempts blocked anyway) #
+		# Bad password count exceeding check (exclude SSO and LDAP service/configuration failures)  #
 		# ---------------------------------------------------------------------------------------- #
 
-		if ($pwdRes !== true && $acctType !== "SSO") {
+		if ($pwdRes !== true && $countFailedAttempt) {
 			$bpCheckRes = $this->badPassCountOk($this->userid);
 			if ($bpCheckRes !== true) {
-				$this->killSession($bpCheckRes, true);
+				$this->killBackendState($bpCheckRes, true);
 				$this->writeLogEntry("BAD INPUT: User exceeded bad password threshold.");
 				exit; // FYI: this is a special short-circuit to the exit handler to immediately return a more specific login failure message
 			}
+		} elseif ($pwdRes === true) {
+			$this->loginTSupdate($this->userid);
 		}
 
 		# --------------------- #
@@ -1162,11 +1093,11 @@ class userAuth
 
 		if ($this->checkAcctEnabled($this->userid) !== true) {
 			$this->writeLogEntry("ACCOUNT RESTRICTION: Login attempted on disabled user account.");
-			$this->killSession($this->uiLang->translate("Account has been disabled."), true);
+			$this->killBackendState($this->uiLang->translate("Account has been disabled."), true);
 
 			// special re-direct for SSO login types which have a disabled Oasys account
 			if ($acctType === "SSO") {
-				$_SESSION['SSO_LO_ECODE'] = "oaD"; // change our default error code message to 'account disabled' when returning frontend message
+				$this->backendState->SSO_LO_ECODE = "oaD"; // change our default error code message to 'account disabled' when returning frontend message
 				return "SSO_E_AD"; // this gets returned to the ssologin call for oasys login -- not used now, but could be used later
 			} else {
 				exit; // FYI: this is a special short-circuit to the exit handler to immediately return a more specific login failure message
@@ -1175,32 +1106,58 @@ class userAuth
 
 		// output message for login attempt to send back to frontend client
 		if ($this->getAuthResult() !== true) {
-			$this->writeLogEntry("BAD INPUT: {$pwdRes}");
+			$this->writeLogEntry("BAD INPUT: $pwdRes");
 			return $pwdRes;
 		} else {
 			// reset our bad login counter and timestamp on an authenticated login
 			$this->db->update("users", ["bad_logins" => "0", "last_bad_pass" => null], "id = ?", [$this->userid]);
 
 			// set class-scoped uid/gid vals only after sucessful login
-			$_SESSION['userid'] = $this->userid;
-			$_SESSION['usergroup'] = $this->usergroup;
-			$_SESSION['roles'] = $this->roles;
-			$_SESSION['email'] = $this->email;
-			if (!isset($_SESSION['editor_active'])) $_SESSION['editor_active'] = true;
+			$this->backendState->userid = $this->userid;
+			$this->backendState->usergroup = $this->usergroup;
+			$this->backendState->roles = $this->roles;
+			$this->backendState->email = $this->email;
+			$this->backendState->editor_active = true;
 
 			$this->writeLogEntry("USER ACTION: User successfully logged in.");
-			$this->rotateSesh(100);
+			$this->rotateSesh();
 			return true;
 		}
 	}
 
 	/**
+	 * Update the lastLogin timestamp in the users.activity column for a given user.
+	 * @param int $uid The user ID whose lastLogin timestamp will be updated.
+	 * @return void
+	 */
+	private function loginTSupdate(int $uid): void
+	{
+		// Update or create the JSON structure for lastLogin in users.activity column
+		$currentActivity = $this->db->fetchValue("SELECT `activity` FROM `users` WHERE `id` = ?", [$uid])['data'];
+		$activityData = json_decode($currentActivity ?? '{}', true) ?? [];
+
+		// Ensure authTimes key exists
+		if (!isset($activityData['authTimes'])) {
+			$activityData['authTimes'] = [];
+		}
+
+		// Move the current timestamp to previous timestamp, unless this is an initial run
+		if (isset($activityData['authTimes']['currentStateLogin'])) {
+			$activityData['authTimes']['previousStateLogin'] = $activityData['authTimes']['currentStateLogin'];
+			$activityData['authTimes']['currentStateLogin'] = date("Y-m-d H:i:s");
+		} else {
+			$activityData['authTimes']['currentStateLogin'] = date("Y-m-d H:i:s");
+			$activityData['authTimes']['previousStateLogin'] = false;
+		}
+
+		// Update the database
+		$this->db->update('users', ['activity' => json_encode($activityData, JSON_PRETTY_PRINT)], "id = ?", [$uid]);
+	}
+
+	/**
 	 * Check if account in question is enabled/disabled
-	 *
 	 * @param int $uid
-	 * 
 	 * @return bool
-	 * 
 	 */
 	public function checkAcctEnabled(int $uid): bool
 	{
@@ -1209,45 +1166,22 @@ class userAuth
 		$acctStatus = $qResult['data'];
 
 		// what to do if account is disabled
-		return ((int) $acctStatus !== 1) ? false : true;
+		return !(((int)$acctStatus !== 1));
 	}
 
 	/**
 	 * Unset and destroy the active session.
-	 * 
 	 * Used when auth condition is unmet, various errors, and standard logout requests.
-	 *
 	 * @param string|bool $killMsg
 	 * @param bool $isError
-	 * 
 	 * @return void
-	 * 
 	 */
-	public function killSession(string|bool $killMsg = false, bool $isError = false)
+	public function killBackendState(string|bool $killMsg = false, bool $isError = false): void
 	{
 		$this->setAuthResult($killMsg); // set class auth var to reason why it's being killed
+		$this->backendState->eraseState();
 
-		// remove selected editor server side session vars
-		unset($_SESSION['userid']);
-		unset($_SESSION['username']);
-		unset($_SESSION['usergroup']);
-		unset($_SESSION['roles']);
-		unset($_SESSION['email']);
-		if (isset($_SESSION['editor_active']) && $_SESSION['editor_active'] === true) $_SESSION['editor_active'] = false;
-
-		// if the frontend has been active within the last 15 minutes, only set editor auth to false
-		if (OasysFrontendState::getNumberOfActiveClients(15 * 60) > 0) {
-			$this->setAuthResult(false);
-		} elseif (session_status() === PHP_SESSION_ACTIVE) {
-			// if frontend not active, remove client cookie, unset session, and stop session (exemption for SSO logins since we still need session vals to logout)
-			if (!isset($_SESSION['SSOloginTrigger'])) {
-				setcookie("PHPSESSID", "", time() - 3600, $this->cookiePath);
-				session_unset();
-				session_destroy();
-			}
-		}
-
-		// remove upgrader auth cookies regardless of either condition above
+		// remove upgrader auth cookies
 		setcookie("UNAME", "", time() - 3600, $this->cookiePath . "editor/");
 		setcookie("PSID", "", time() - 3600, $this->cookiePath . "editor/");
 
@@ -1264,37 +1198,65 @@ class userAuth
 
 	/**
 	 * Validate that user is not exceeding max bad password count.
-	 *
 	 * @param int $uid
-	 * 
 	 * @return string|bool
-	 * 
 	 */
 	private function badPassCountOk(int $uid): string|bool
 	{
-		// increment bad pwd count for user by 1
-		$badPassIncrementQuery = "UPDATE `users` SET `bad_logins` = `bad_logins` + 1 WHERE `id` = ?";
-		$this->db->prepare($badPassIncrementQuery);
-		$this->db->executePrepared([$uid]);
+		$row = $this->db->fetchRow(
+			"SELECT `bad_logins`, `last_bad_pass` FROM `users` WHERE `id` = ?",
+			[$uid]
+		)['data'] ?? [];
+		$lastBadTime = !empty($row['last_bad_pass']) ? strtotime($row['last_bad_pass']) : false;
 
-		// get current bad pwd count and last bad attempt timestamp
-		$bpCount = $this->db->fetchValue("SELECT `bad_logins` FROM `users` WHERE `id` = ?", [$uid])['data'];
-		$lastBadTime = strtotime($this->db->fetchValue("SELECT `last_bad_pass` FROM `users` WHERE `id` = ?", [$uid])['data']);
-
-		// update bad pass last attempt timestamp
-		$this->db->update('users', ['last_bad_pass' => date("Y-m-d H:i:s")], "id = ?", [$uid]);
-
-		// check if bad pwds exceed limit in time allowed time period (defaults set in class constants); if no current val for last bad timestamp don't execute block
-		if ($lastBadTime) {
-			if ((time() - $lastBadTime < self::MAX_TIME4_BADPWD) && ($bpCount >= self::MAX_BADPWD_COUNT)) {
-				$this->db->update("users", ["status" => "0"], "id = ?", [$uid]);
-				return $this->uiLang->translate("Exceeded incorrect password attempts. Your account has been disabled. <br><strong>Please contact your system adminstrator to re-enable this account.</strong>");
-			} else {
-				return true;
-			}
-		} else {
-			return true;
+		// A sufficiently long gap starts a new sequence of failed attempts.
+		if ($lastBadTime === false || time() - $lastBadTime >= self::MAX_TIME4_BADPWD) {
+			$this->db->update("users", ["bad_logins" => 0, "last_bad_pass" => null], "id = ?", [$uid]);
 		}
+
+		$badPassIncrementQuery = "UPDATE `users`
+			SET `bad_logins` = `bad_logins` + 1, `last_bad_pass` = ?
+			WHERE `id` = ?";
+		$this->db->prepare($badPassIncrementQuery);
+		$this->db->executePrepared([date("Y-m-d H:i:s"), $uid]);
+
+		$bpCount = (int)($this->db->fetchValue(
+			"SELECT `bad_logins` FROM `users` WHERE `id` = ?",
+			[$uid]
+		)['data'] ?? 0);
+
+		if ($bpCount >= self::MAX_BADPWD_COUNT) {
+			return sprintf(
+				$this->uiLang->translate("Login temporarily locked after too many unsuccessful attempts. Please try again in %d minute(s) or ask an administrator to reset your password."),
+				(int)ceil(self::BADPWD_LOCKOUT_TIME / 60)
+			);
+		}
+		return true;
+	}
+
+	/**
+	 * Return the remaining temporary bad-password lockout in whole minutes.
+	 * Expired counters are cleared automatically; the account's enabled status is never changed.
+	 */
+	private function badPasswordLockMinutesRemaining(int $uid): int
+	{
+		$row = $this->db->fetchRow(
+			"SELECT `bad_logins`, `last_bad_pass` FROM `users` WHERE `id` = ?",
+			[$uid]
+		)['data'] ?? [];
+		$badLogins = (int)($row['bad_logins'] ?? 0);
+		$lastBadTime = !empty($row['last_bad_pass']) ? strtotime($row['last_bad_pass']) : false;
+
+		if ($badLogins < self::MAX_BADPWD_COUNT || $lastBadTime === false) {
+			return 0;
+		}
+		$remainingSeconds = self::BADPWD_LOCKOUT_TIME - (time() - $lastBadTime);
+		if ($remainingSeconds > 0) {
+			return (int)ceil($remainingSeconds / 60);
+		}
+
+		$this->db->update("users", ["bad_logins" => 0, "last_bad_pass" => null], "id = ?", [$uid]);
+		return 0;
 	}
 
 	/**
@@ -1331,13 +1293,13 @@ class userAuth
 		}
 	}
 
-	/**	
+	/**
 	 * Write+close session.
 	 * Close out session early to avoid clashing with session table operations
 	 */
 	public function wc_session(): void
 	{
-		session_write_close();
+		//		session_write_close();
 	}
 
 	/**
@@ -1363,14 +1325,14 @@ class userAuth
 	/**
 	 * writeLogEntry
 	 * Write a log entry related to an authentication event
-	 * @param  string $entry Output log entry string
-	 * @param  string $logfileName output file, defaults to 'authentication.log' if left blank or empty string sent in
-	 * @param  Array $opDetail Extra log detail [location, action]
+	 * @param string $entry Output log entry string
+	 * @param string $logfileName output file, defaults to 'authentication.log' if left blank or empty string sent in
+	 * @param array $opDetail Extra log detail [location, action]
 	 * @return void
 	 */
-	public static function writeLogEntry(string $entry, string $logfileName = "authentication.log", array $opDetail = ['loc' => '', 'action' => ''])
+	public static function writeLogEntry(string $entry, string $logfileName = "authentication.log", array $opDetail = ['loc' => '', 'action' => '']): void
 	{
-		global $settings;
+		global $settings, $backendState;
 
 		// force default log file name even when an empty string is sent in
 		if ($logfileName === "") $logfileName = "authentication.log";
@@ -1378,14 +1340,16 @@ class userAuth
 		// conditional line-breaking when needed
 		$multiLine = substr_count($entry, "\n") > 0;
 
-		$user = $_SESSION['username'] ?? "<UNKNOWN_USERNAME>";
-		$id = $_SESSION['userid'] ?? "<UNKNOWN_USER_ID>";
-		$timeAndUserInfo = date("[Y-m-d H:i:s]") . "[{$user}:{$id}]";
+		$user = $backendState->username ?? "<UNKNOWN_USERNAME>";
+		$id = $backendState->userid ?? "<UNKNOWN_USER_ID>";
+		$timeAndUserInfo = date("[Y-m-d H:i:s]") . "[$user:$id]";
 		$actionInfo = "[" . $opDetail['loc'] . "|" . $opDetail['action'] . "]\t";
-		$sessionCapture = ($multiLine ? "\n" : " ") .  "SESSIONID: [" . session_id() . "]";
+		$stateCapture = ($multiLine ? "\n" : " ") . "STATEID: [" . $backendState->getStateId() . "]";
 
 		// define DOCROOT for static method calls
-		if (!defined("DOCROOT")) define("DOCROOT", str_replace("//", "/", ($_SERVER['CONTEXT_DOCUMENT_ROOT'] ?? $_SERVER['DOCUMENT_ROOT']) . $settings['rootURL']));
+		if (!defined("DOCROOT")) {
+			define("DOCROOT", realpath(__DIR__ . '/../../../') . '/');
+		}
 
 		$logFileRelPath = DOCROOT . "logs" . DIRECTORY_SEPARATOR . $logfileName;
 		if (!file_exists($logFileRelPath)) {
@@ -1393,18 +1357,15 @@ class userAuth
 		}
 
 		// for fresh installs that don't have the file present yet
-		file_put_contents($logFileRelPath, $timeAndUserInfo . $actionInfo . ($multiLine ? "\n" : "") . $entry . $sessionCapture . "\n\n", FILE_APPEND);
+		file_put_contents($logFileRelPath, $timeAndUserInfo . $actionInfo . ($multiLine ? "\n" : "") . $entry . $stateCapture . "\n\n", FILE_APPEND);
 	}
 
 	/**
 	 * Common method for logging various operator actions in content editors.
-	 *
 	 * @param array $data
 	 * @param string $logType
 	 * @param array $retData
-	 * 
 	 * @return void
-	 * 
 	 */
 	public function prepLog(array $data, string $logType, array $retData): void
 	{
@@ -1414,14 +1375,14 @@ class userAuth
 
 		// cancel logging if error prevented proper execution of the operation
 		if ($retData['error'] !== false) {
-			$this->writeLogEntry("ERROR! \nMODULE: {$permAuth->srcRef}\nRAW DATA:" . print_r($data, true));
+			$this->writeLogEntry("ERROR! \nMODULE: $permAuth->srcRef\nRAW DATA:" . print_r($data, true));
 			return;
-		};
+		}
 
 		switch ($logType) {
-				# ------------------------- #
-				#  CONTENT RENAMING LOGGING #
-				# ------------------------- #
+			# ------------------------- #
+			#  CONTENT RENAMING LOGGING #
+			# ------------------------- #
 			case "rename":
 
 				$renType = $data['type'];
@@ -1430,7 +1391,7 @@ class userAuth
 				$renOrig = $data['origName'];
 				$operDetail['action'] = "Rename";
 
-				$this->writeLogEntry("Object type [{$renType}] in [{$permAuth->srcRef}] module with id [{$renId}] was renamed from [{$renOrig}] to [{$renNewName}]", $operLogname, $operDetail);
+				$this->writeLogEntry("Object type [$renType] in [$permAuth->srcRef] module with id [$renId] was renamed from [$renOrig] to [$renNewName]", $operLogname, $operDetail);
 
 				break;
 
@@ -1458,7 +1419,7 @@ class userAuth
 
 				// remove untouched permissions from the original perm array and new perm array
 				foreach ($newPermObj as $k1 => $value) {
-					if (count($newPermObj[$k1]['c_items']) === 0) {
+					if (count($value['c_items']) === 0) {
 						unset($log_oldPerm[$k1]);
 						unset($newPermObj[$k1]);
 					}
@@ -1466,12 +1427,12 @@ class userAuth
 
 				// query and attach the group name value for each group ID entry
 				foreach (array_keys($log_oldPerm) as $groupId) {
-					$log_oldPerm["{$groupId} (" . $this->db->fetchValue("SELECT `name` FROM `userGroups` WHERE id =?", [$groupId])['data'] . ")"] = $log_oldPerm[$groupId];
+					$log_oldPerm["$groupId (" . $this->db->fetchValue("SELECT `name` FROM `userGroups` WHERE id =?", [$groupId])['data'] . ")"] = $log_oldPerm[$groupId];
 					unset($log_oldPerm[$groupId]);
 				}
 
 				foreach (array_keys($newPermObj) as $newGroupId) {
-					$newPermObj["{$newGroupId} (" . $this->db->fetchValue("SELECT `name` FROM `userGroups` WHERE id =?", [$newGroupId])['data'] . ")"] = $newPermObj[$newGroupId];
+					$newPermObj["$newGroupId (" . $this->db->fetchValue("SELECT `name` FROM `userGroups` WHERE id =?", [$newGroupId])['data'] . ")"] = $newPermObj[$newGroupId];
 					unset($newPermObj[$newGroupId]);
 				}
 
@@ -1485,7 +1446,7 @@ class userAuth
 
 					if ($log_newPerm !== $log_oldPerm)
 						$this->writeLogEntry(
-							"Permissions updated in [{$it_vars['i_rootFldTblName']}] table on folder ID [{$fId}] ({$fldName}) in the [{$permAuth->srcRef}] module\nBEFORE:\n{$log_oldPerm}\nAFTER\n{$log_newPerm}\n",
+							"Permissions updated in [{$it_vars['i_rootFldTblName']}] table on folder ID [$fId] ($fldName) in the [$permAuth->srcRef] module\nBEFORE:\n$log_oldPerm\nAFTER\n$log_newPerm\n",
 							$operLogname,
 							$operDetail
 						);
@@ -1502,44 +1463,45 @@ class userAuth
 						$log_newOwnerName = $this->db->fetchValue(("SELECT `name` FROM `users` WHERE `id` = ?"), [$data['newOwner'][$fId]])['data'];
 						$log_fldName = $this->db->fetchValue("SELECT `name` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$fId])['data'];
 
-						$log_curOwnerName = is_int($log_curOwnerId) ?  $this->db->fetchValue(("SELECT `name` FROM `users` WHERE `id` = ?"), [$log_curOwnerId])['data'] : "<USER REMOVED>";
+						$log_curOwnerName = is_int($log_curOwnerId) ? $this->db->fetchValue(("SELECT `name` FROM `users` WHERE `id` = ?"), [$log_curOwnerId])['data'] : "<USER REMOVED>";
 
 						// log action
 						if (empty($log_curOwnerName)) $log_curOwnerName = "<USER REMOVED>"; // when dealing with expired/non-existent user IDs
+						if (is_array($data['newOwner'])) $data['newOwner'] = $data['newOwner'][array_key_first($data['newOwner'])]; // handle array data -- only updating to one owner ever at a time
 						$this->writeLogEntry(
-							"Owner changed in [{$permAuth->srcRef}] module on folder ID [{$fId}] ({$log_fldName}) from userid [{$log_curOwnerId}] ({$log_curOwnerName}) to userid [{$data['newOwner']}] ({$log_newOwnerName})",
+							"Owner changed in [$permAuth->srcRef] module on folder ID [$fId] ($log_fldName) from userid [$log_curOwnerId] ($log_curOwnerName) to userid [{$data['newOwner']}] ($log_newOwnerName)",
 							$operLogname,
 							$operDetail
 						);
 					}
 				}
 				break;
-				# ------------------------ #
-				# CONTENT DELETION LOGGING #
-				# ------------------------ #
+			# ------------------------ #
+			# CONTENT DELETION LOGGING #
+			# ------------------------ #
 
 			case 'delSelection':
 				$delItems = [];
 				$operDetail['action'] = "Object(s) Deletion";
 
 				foreach ($data['selection'] as $key => $value) {
-					if (substr($value['id'], 0, 1) === 'f') {
+					if (str_starts_with($value['id'], 'f')) {
 						array_push($delItems, "Folder ID: [{$value['dbId']}] ('{$value['name']}')");
 					}
 
-					if (substr($value['id'], 0, 2) === 'ig') {
+					if (str_starts_with($value['id'], 'ig')) {
 						array_push($delItems, "ItemGroup ID: [{$value['dbId']}] ('{$value['name']}')");
 					}
 
-					if (substr($value['id'], 0, 1) === 't') {
+					if (str_starts_with($value['id'], 't')) {
 						$tType = $permAuth->srcRef === 'tests' ? 'Test' : 'Test Taker';
-						array_push($delItems, "{$tType} ID: [{$value['dbId']}] ('{$value['name']}')");
+						array_push($delItems, "$tType ID: [{$value['dbId']}] ('{$value['name']}')");
 					}
 				}
 
 				$delItems = json_encode($delItems, JSON_PRETTY_PRINT);
 
-				$this->writeLogEntry("The following content was deleted in the [{$permAuth->srcRef}] module\n{$delItems}\n", $operLogname, $operDetail);
+				$this->writeLogEntry("The following content was deleted in the [$permAuth->srcRef] module\n$delItems\n", $operLogname, $operDetail);
 				break;
 
 			case 'deleteItem':
@@ -1552,7 +1514,7 @@ class userAuth
 				$g_name = $data['groupName'];
 				$operDetail['action'] = "Item Deletion";
 
-				$this->writeLogEntry("The following item was deleted in the [{$permAuth->srcRef}] module: item ID [{$data['id']}] ({$i_name}) belonging to group ID [{$g_id}] ({$g_name})", $operLogname, $operDetail);
+				$this->writeLogEntry("The following item was deleted in the [$permAuth->srcRef] module: item ID [{$data['id']}] ($i_name) belonging to group ID [$g_id] ($g_name)", $operLogname, $operDetail);
 
 				break;
 
@@ -1566,7 +1528,7 @@ class userAuth
 				$target = $data['target'];
 				$operDetail['action'] = "Object Move";
 
-				$this->writeLogEntry("The following content was moved to a new folder location in the [{$module}] module\n{$data_orig}", $operLogname, $operDetail);
+				$this->writeLogEntry("The following content was moved to a new folder location in the [$module] module\n$data_orig", $operLogname, $operDetail);
 
 				break;
 
@@ -1575,7 +1537,7 @@ class userAuth
 				$idStr = "\n" . implode("\n", $data);
 				$operDetail['action'] = "Test Taker Results Reset";
 
-				$this->writeLogEntry("The following test taker ID(s) had all test results reset for all passwords: {$idStr}\n", $operLogname, $operDetail);
+				$this->writeLogEntry("The following test taker ID(s) had all test results reset for all passwords: $idStr\n", $operLogname, $operDetail);
 
 				break;
 
@@ -1584,9 +1546,9 @@ class userAuth
 				$operDetail['action'] = "All Password Results Reset";
 				$ttid = $data["testee"];
 				$pwdIds = $data["password"];
-				$ttname  = $data["ttname"];
+				$ttname = $data["ttname"];
 
-				$this->writeLogEntry("The following password ID [{$pwdIds}] had all its test results reset for the test taker ID [{$ttid}] (\"$ttname\")\n", $operLogname, $operDetail);
+				$this->writeLogEntry("The following password ID [$pwdIds] had all its test results reset for the test taker ID [$ttid] (\"$ttname\")\n", $operLogname, $operDetail);
 				break;
 
 			case "resetResTestPass":
@@ -1598,23 +1560,23 @@ class userAuth
 				$ttid = $data["testee"];
 				$ttname = $data["ttname"];
 
-				$this->writeLogEntry("The following test ID [{$testId}] (\"{$testName}\") had its results reset for the password ID [{$passId}] and test taker ID [{$ttid}] (\"$ttname\")\n", $operLogname, $operDetail);
+				$this->writeLogEntry("The following test ID [$testId] (\"$testName\") had its results reset for the password ID [$passId] and test taker ID [$ttid] (\"$ttname\")\n", $operLogname, $operDetail);
 				break;
 
 			case "testResResults":
 
 				$operDetail['action'] = "Test Results Reset";
 				$allIds = "\n" . implode("\n", $data);
-				$this->writeLogEntry("Results for all associated test takers were reset for the following test ID(s): {$allIds}\n", $operLogname, $operDetail);
+				$this->writeLogEntry("Results for all associated test takers were reset for the following test ID(s): $allIds\n", $operLogname, $operDetail);
 
 
 				break;
-				//
-				//			case "resetResultsTest":
-				//
-				//
-				//
-				//				break;
+			//
+			//			case "resetResultsTest":
+			//
+			//
+			//
+			//				break;
 
 			default:
 				break;
@@ -1623,46 +1585,45 @@ class userAuth
 
 	/**
 	 * Custom shutdown handler for userAuth class
-	 *
 	 * @return void
-	 * 
 	 */
 	public function responseAndExit(): void
 	{
 		// global $returnData;
 		// $this->returnData = array_merge($this->returnData, $returnData);
-		$finalAuth = $this->getAuthResult(false, false);
+		$error = error_get_last();
+		if (!empty($error)) {
+			$documentRoot = filter_input(INPUT_SERVER, "DOCUMENT_ROOT");
+			$file = str_replace($documentRoot, '', $error['file']);
+			$this->returnData['fatalError'] = "<p>Fatal error [type {$error['type']}] on line {$error['line']} of<br><code class='tinyCode'>$file</code></p><p>{$error['message']}</p>";
+		}
+
+		$finalAuth = $this->getAuthResult();
 
 		if ($finalAuth === true) {
 			// update username in case updated in middle of session
-			if (isset($_SESSION['username'])) {
-				$unameRefresh = $this->db->fetchValue("SELECT `name` FROM `users` WHERE `id` = ?", [$_SESSION['userid']])['data'];
+			if (isset($this->backendState->username)) {
+				$unameRefresh = $this->db->fetchValue("SELECT `name` FROM `users` WHERE `id` = ?", [$this->backendState->userid])['data'];
 				$this->setUsername($unameRefresh);
 			}
 
 			// update usergroups in case updated in middle of session
-			if (isset($_SESSION['usergroup'])) {
-				$ugroupRefresh = $this->db->fetchColumn("SELECT `usergroupId` FROM `userGroupAccess` WHERE `userId` = ?", [$_SESSION['userid']])['data'];
-				$_SESSION['usergroup'] = $ugroupRefresh;
+			if (isset($this->backendState->usergroup)) {
+				$ugroupRefresh = $this->db->fetchColumn("SELECT `usergroupId` FROM `userGroupAccess` WHERE `userId` = ?", [$this->backendState->userid])['data'];
+				$this->backendState->usergroup = $ugroupRefresh;
 			}
 
 			// update roles in case updated in middle of session
-			if (isset($_SESSION['roles'])) {
+			if (isset($this->backendState->roles)) {
 				$roleRes = $this->db->fetchValue("SELECT JSON_EXTRACT(`accessDef`, '$.c_items') FROM users WHERE `id` = ?", [$this->userid])['data'];
-				$_SESSION['roles'] = json_decode($roleRes ?? '', TRUE);
+				$this->backendState->roles = json_decode($roleRes ?? '', TRUE);
 			}
 
 			// update email in case updated in middle of session
-			if (isset($_SESSION['email'])) {
+			if (isset($this->backendState->email)) {
 				$emailRes = $this->db->fetchValue("SELECT `email` FROM `users` WHERE `id` = ?", [$this->userid])['data'];
-				$_SESSION['email'] = $emailRes;
+				$this->backendState->email = $emailRes;
 			}
-
-			// cycle our session ID at a 10% chance only when fetching new page library
-			// if (isset($this->returnData['action']) && $this->returnData['action'] === 'fetchLibrary') $this->rotateSesh(10);
-
-			// if the user is still auth'd, update last used timestamp for session timeout purposes;
-			// $_SESSION['lastTimeUsed'] = time();
 		}
 
 		// set our auth status and username values to return to client UI
@@ -1685,7 +1646,6 @@ class userAuth
 			header('Content-type: application/json; charset=UTF-8');
 
 			echo json_encode($this->returnData);
-			// ob_end_flush();
 		}
 	}
 }

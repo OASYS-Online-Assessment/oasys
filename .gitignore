@@ -30,7 +30,12 @@ media/[0-9]*
 composer.json
 composer.lock
 **/vendor
-!inc/domPDF/vendor/*
+!inc/domPDF/vendor/
 modules/*
 !modules/README.md
 *.ini
+/conf/crypt-rotation.json
+/conf/crypt-rotation.json.tmp.*
+/conf/crypt.ini.tmp.*
+customContent/*
+!customContent/.gitkeep

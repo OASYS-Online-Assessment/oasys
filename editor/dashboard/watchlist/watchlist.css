@@ -1,428 +1,437 @@
+/* ---------- Lists (legacy bits) ---------- */
 ul[id^="watchlist"] {
-  list-style-type: none;
-  margin-top: 0px;
-  color: #333333;
-  font-size: 14px;
+    list-style-type: none;
+    margin-top: 0;
+    color: #333333;
+    font-size: 14px;
 }
-
 ul[id^="watchlist"] li {
-  background-position: 0 0px;
-  background-repeat: no-repeat;
-  padding-left: 30px;
-  padding-top: 2px;
-  padding-bottom: 2px;
-  margin-right: 10px;
-  word-wrap: break-word;
-  white-space: pre-wrap;
+    background-position: 0 0;
+    background-repeat: no-repeat;
+    padding: 2px 0 2px 30px;
+    margin-right: 10px;
+    word-wrap: break-word;
+    white-space: pre-wrap;
 }
-
-
 ul[id^="watchlist"] li.folder {
-  background-image: url(images/listFolder.png);
-  background-size: 1.5em;
+    background-image: url(images/listFolder.png);
+    background-size: 1.5em;
 }
 
-#myTabs {
-  /*padding: 0;*/
+/* ---------- Vars ---------- */
+:root {
+    --wl-tabs-h: 27px;
+    --wl-scroll-gutter: 14px; /* adjust 12–18px if needed */
 }
 
+/* ---------- Widget root ---------- */
 #WatchList {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: none;
+    margin-top: 3px;
+    padding-right: var(--wl-scroll-gutter);
 }
 
-#contentcontainer {
-  margin: 0;
-  box-sizing: border-box;
+#contentcontainer, #testscontainer, #testtakerscontainer {
+    margin: 0;
+    margin-left: -4px;
+    box-sizing: border-box;
 }
 
+/* ---------- Tabs ---------- */
+#myTabs.jsTabsBar,
+.jsTabsBar {
+    padding: 0 4px;
+    height: var(--wl-tabs-h);
+    border-bottom: 0;
+}
+#myTabs .jsTab,
+.jsTabsBar .jsTab {
+    font-size: 14px;
+    height: var(--wl-tabs-h);
+    line-height: 30px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+/* Sticky tabs that align with table and cover the gutters */
+#WatchList .jsTabsBar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: #fff;
+
+    /* keep original alignment with table */
+    margin-left: 8px; /* .wl-table has margin-left: 8px */
+    padding-right: calc(4px + var(--wl-scroll-gutter));
+    margin-right: calc(-1 * var(--wl-scroll-gutter));
+    box-sizing: border-box;
+    width: auto;
+}
+
+/* LEFT cap – covers left scrollbar gutter + the 8px left offset */
+#WatchList .jsTabsBar::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: calc(-1 * (var(--wl-scroll-gutter) + 8px));
+    width: calc(var(--wl-scroll-gutter) + 8px);
+    height: 100%;
+    background: #fff;
+    pointer-events: none;
+}
+
+/* RIGHT cap (keeps Edge/Chromium fix) */
+#WatchList .jsTabsBar::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: calc(-1 * var(--wl-scroll-gutter));
+    width: var(--wl-scroll-gutter);
+    height: 100%;
+    background: #fff;
+    pointer-events: none;
+}
+
+/* ---------- Table ---------- */
 .wl-table {
-  width: 100%;
-  color: #333333;
-  border: none;
-  margin: 0;
-  border-spacing: 0;
-  text-align: center;
-  padding: 0 8px;
-  font-size: 14px;
-  overflow: auto;
+    width: 100%;
+    color: #333333;
+    margin-left: 8px;
+    border: none;
+    border-spacing: 0;
+    border-collapse: collapse;
+    font-size: 14px;
+    text-align: left;
 }
 
-.wl-table th {
-  padding-top: 2px;
-
+/* compact cells */
+.wl-table thead th,
+.wl-table tbody td {
+    padding: 2px 7px;
+    line-height: 16px;
+    height: 20px;
+    vertical-align: middle;
+    border: none;
+    white-space: nowrap; /* default single line */
 }
 
-.wl-table td {
-  border: none;
-}
+/* allow multiline only in first column (Name) */
+.wl-table tbody td:first-child { white-space: normal; }
 
+/* legacy header bar (keep if markup still uses it) */
 .wl-tHeader {
-  color: whitesmoke;
-  background: #227DAA;
-  margin: 0 -10px;
-  height: 26px;
-
+    color: #ffffff;
+    background: #227DAA;
+    height: 26.5px;
 }
 
-.wl-HName {
-  text-align: left !important;
-  padding-left: 30px;
+/* thead styles */
+.wl-table thead th {
+    background: #227DAA;
+    color: #ffffff;
+    font-size: 12px;
+    text-align: center;
+}
+.wl-table thead th:first-child,
+.wl-table thead th.wl-HName {
+    text-align: left;
+    padding-left: 7px;
+    font-weight: 700;
 }
 
-.wl-table tr:not(th):hover td {
-  background-color: #eeeeee;
+/* sticky thead under tabs */
+#WatchList .wl-table thead th {
+    position: sticky;
+    top: var(--wl-tabs-h);
+    z-index: 20;
+    background: #227DAA;
+    color: #fff;
 }
 
+.wl-table tr { border-bottom: 1px solid #e9e9e9; }
+
+/* body alignment rules */
+.wl-table tbody td { text-align: left; }
+.wl-table tbody td.wl-testLangs,
+.wl-table tbody td.wl-testState { text-align: center; padding-left: 6px; }
+.wl-table tbody td.wl-loginType { text-align: center; }
+
+/* star column — reserve gutter and keep star away from edge/scrollbar */
+.wl-table thead th:last-child,
+.wl-table tbody td:last-child {
+    width: calc(32px + var(--wl-scroll-gutter));
+    text-align: right;
+}
+.wl-table td.wl-starCol {
+    position: relative;
+    vertical-align: middle;
+    padding-right: calc(8px + var(--wl-scroll-gutter));
+}
+.wl-table td.wl-starCol .watchListToggle {
+    position: absolute;
+    right: calc(6px + var(--wl-scroll-gutter));
+    top: 2px;
+    transform: translateY(-50%);
+    margin: 0;
+    padding: 0;
+    float: none;
+}
+
+/* hover */
+.wl-table tbody tr:hover td { background-color: #f4f8fb; }
+
+/* ---------- Name cell visuals ---------- */
+.wl-HName { text-align: left; padding-left: 30px; }
 .wl-itemName {
-  background-position: 0 3px;
-  background-repeat: no-repeat;
-  padding-left: 30px;
-  padding-top: 2px;
-  padding-bottom: 2px;
-  margin-right: 10px;
-  word-wrap: break-word;
-  white-space: pre-wrap;
-  text-align: left;
+    position: relative;
+    background-position: 0 50%;
+    background-repeat: no-repeat;
+    padding-left: 28px;
+    margin-right: 10px;
+    word-wrap: break-word;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    text-align: left;
+    line-height: 20px;
+}
+
+/* small invisible hover target on top of the icon area */
+.wl-iconHit {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 22px;
+    height: 22px;
+    transform: translateY(-50%);
+    cursor: help;
 }
 
 .wl-itemName a {
-  color: #333333;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
+    color: #333333;
+    cursor: pointer;
+    text-decoration: none;
+}
+.wl-itemName a:hover { text-decoration: underline; }
+
+/* ---------- Icons for types ---------- */
+.folder        { background-image: url(./images/listFolder.png);     background-size: 1.5em; }
+.itemsGroup    { background-image: url(./images/listDocuments.png);  background-size: 1.5em; }
+.testLinear    { background-image: url(./images/testLinear.png);     background-size: 1.5em; }
+.testFluid     { background-image: url(./images/testFluid.png);      background-size: 1.5em; }
+.testMutation  { background-image: url(./images/testMutation.png);   background-size: 1.5em; }
+
+.tTaker        { background-image: url(./images/testee.png);         background-size: 1.5em; }
+.tTakerDP      { background-image: url(./images/testTaker_DP.png);   background-size: 1.5em; }
+.tTakerLDAP    { background-image: url(./images/testTaker_LDAP.png); background-size: 1.5em; }
+.tTakerSAML    { background-image: url(./images/testTaker_IAM.png);  background-size: 1.5em; }
+.tTakerCloned  { background-image: url(./images/testee.png);         background-size: 1.5em; }
+.tTakerCloned > a { color: #c7c7c7; font-style: italic; }
+.tTakerTemplate { background-image: url(./images/template.png);      background-size: 1.5em; }
+
+/* Blocked variants */
+.itemsGroup.blocked   { background-image: url(./images/listdocumentsBlocked.png); background-size: 1.5em; }
+.testLinear.blocked   { background-image: url(./images/testBlocked.png);          background-size: 1.5em; }
+.testFluid.blocked    { background-image: url(./images/testFluidBlocked.png);     background-size: 1.5em; }
+.testMutation.blocked { background-image: url(./images/testMutationBlocked.png);  background-size: 1.5em; }
+.tTaker.blocked       { background-image: url(./images/testeeBlocked.png);        background-size: 1.5em; }
+.folder.blocked       { background-image: url(./images/listFolderBlocked.png);    background-size: 1.5em; }
+.tTakerDP.blocked     { background-image: url(./images/testTakerStudentBlocked.png); background-size: 1.5em; }
+.tTakerLDAP.blocked   { background-image: url(./images/testTakerStudentBlocked.png); background-size: 1.5em; }
+.tTakerSAML.blocked   { background-image: url(./images/testTakerStudentBlocked.png);  background-size: 1.5em; }
+.tTakerCloned.blocked { background-image: url(./images/testeeBlocked.png);        background-size: 1.5em; }
+.tTakerTemplate.blocked { background-image: url(./images/templateBlocked.png);    background-size: 1.5em; }
+
+/* ---------- Notification / issues column ---------- */
+/* general TD styling */
+.wl-table tbody td.wl-notification {
+    text-align: left;
+    white-space: nowrap;
+    line-height: 16px;
+    vertical-align: middle;
 }
 
-.wl-itemName a:hover {
-  text-decoration: underline;
+.wl-table tbody td.wl-notificationWithIcon {
+    padding-left: 26px;                     /* room for icon */
+    background-repeat: no-repeat;
+    background-position: 6px 50%;
+    background-size: 16px 16px;
+}
+.wl-table tbody td.wl-notificationWithIcon.wl-itemError {
+    background-image: url(./images/warning.png);
 }
 
-.folder {
-  background-image: url(./images/listFolder.png);
-  background-size: 1.5em;
-}
-
-.tTaker {
-  background-image: url(./images/testee.png);
-  background-size: 1.5em;
-}
-
-.tTakerDP {
-  background-image: url(./images/testTaker_DP.png);
-  background-size: 1.5em;
-}
-
-.tTakerLDAP {
-  background-image: url(./images/testTaker_LDAP.png);
-  background-size: 1.5em;
-}
-
-.tTakerSAML {
-  background-image: url(./images/testTaker_IAM.png);
-  background-size: 1.5em;
-}
-
-.tTakerCloned {
-  background-image: url(./images/testee.png);
-  background-size: 1.5em;
-}
-
-.tTakerCloned > a{
-  color: #c7c7c7;
-  font-style: italic;
-}
-
-.tTakerTemplate {
-  background-image: url(./images/template.png);
-  background-size: 1.5em;
-}
-
-.itemsGroup {
-  background-image: url(./images/listDocuments.png);
-  background-size: 1.5em;
-}
-
-.test {
-  background-image: url(./images/test.png);
-  background-size: 1.5em;
-}
-
-.testLinear {
-  background-image: url(./images/testLinear.png);
-  background-size: 1.5em;
-}
-
-.testFluid {
-  background-image: url(./images/testFluid.png);
-  background-size: 1.5em;
-}
-
-.testMutation {
-  background-image: url(./images/testMutation.png);
-  background-size: 1.5em;
-}
-
-.itemsGroup.blocked {
-  background-image: url(./images/listdocumentsBlocked.png);
-  background-size: 1.5em;
-}
-
-.test.blocked {
-  background-image: url(./images/testBlocked.png);
-  background-size: 1.5em;
-}
-
-.tTaker.blocked {
-  background-image: url(./images/testeeBlocked.png);
-  background-size: 1.5em;
-}
-
-.folder.blocked {
-  background-image: url(./images/listFolderBlocked.png);
-  background-size: 1.5em;
-}
-
-.tTakerTemplate.blocked {
-  background-image: url(./images/templateBlocked.png);
-  background-size: 1.5em;
-}
-
-.wl-notification {
-  text-align: left;
-  font-weight: normal;
-}
-
-.wl-notificationWithIcon {
-  background-position: 0 3px;
-  background-repeat: no-repeat;
-  padding-left: 30px;
-  padding-top: 2px;
-  padding-bottom: 2px;
-  margin-right: 10px;
-  word-wrap: break-word;
-  white-space: pre-wrap;
-}
-
-.wl-itemError {
-  background-image: url(./images/warning.png);
-  background-size: 1.3em;
-}
-
-.wl-starCol {
-  text-align: center;
-}
-
-.watchListToggle {
-  width: 15px;
-  float: right;
-  padding-right: 10px;
-  margin-top: -1px;
-  line-height: 14px;
-}
-
+/* ---------- Star / favorite icons ---------- */
 .star {
-  position: relative;
-  display: inline-block;
-  width: 0;
-  height: 0;
-  margin-left: .9em;
-  margin-right: .9em;
-  margin-bottom: 1.2em;
-  border-right: .3em solid transparent;
-  border-bottom: .7em solid #d3d3d3;
-  border-left: .3em solid transparent;
-  /* Star size */
-  font-size: 10px;
-  cursor: pointer;
+    position: relative;
+    display: inline-block;
+    width: 0; height: 0;
+    margin: 0;
+    border-right: .3em solid transparent;
+    border-bottom: .7em solid #d3d3d3;
+    border-left: .3em solid transparent;
+    font-size: 9px;
+    cursor: pointer;
+    transform: translateY(2px);
 }
-
 .star:before,
 .star:after {
-  content: '';
-  display: block;
-  width: 0;
-  height: 0;
-  position: absolute;
-  top: .6em;
-  left: -1em;
-  border-right: 1em solid transparent;
-  border-bottom: .7em solid #d3d3d3;
-  border-left: 1em solid transparent;
-  transform: rotate(-35deg);
+    content: '';
+    display: block;
+    width: 0; height: 0;
+    position: absolute; top: .6em; left: -1em;
+    border-right: 1em solid transparent;
+    border-bottom: .7em solid #d3d3d3;
+    border-left: 1em solid transparent;
+    transform: rotate(-35deg);
 }
-
-.star:after {
-  transform: rotate(35deg);
-}
-
-.checked {
-  border-bottom: .7em solid #fddc01;
-}
-
+.star:after { transform: rotate(35deg); }
+.checked { border-bottom: .7em solid #fddc01; }
 .checked:before,
-.checked:after {
-  border-bottom: .7em solid #fddc01;
-}
+.checked:after { border-bottom: .7em solid #fddc01; }
 
-.wl-testState {
-  color: #333333;
-  font-weight: normal;
-}
+/* ---------- States / metrics ---------- */
+.wl-testState { color: #333333; font-weight: normal; }
+.active { color: green; font-weight: 600; }
+.nonzero { font-weight: bolder; color: #227DAA; }
+.inactive, .zero { color: #7b7b7b; }
+.wl-lang-missing { color: #DD1A00; font-weight: bold; }
 
-.active {
-  color: green;
-  font-weight: 600;
-}
-
-.nonzero {
-  font-weight: bolder;
-  color: #227DAA;
-}
-
-.inactive,
-.zero {
-  color: #7b7b7b;
-}
-
-#myTabs.jsTabsBar {
-  padding: 0 8px;
-  height: 27px;
-  border-bottom: 0px solid;
-}
-
-#myTabs .jsTab {
-  font-size: 14px;
-  height: 27px;
-  line-height: 30px;
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
-}
-
-.wl-table th {
-  background-color: #227daa !important;
-  opacity: 100 !important;
-  font-size: 12px;
-  text-align: center;
-  /* padding-right: 20px; */
-}
-
-.wl-table>th:first-child {
-  text-align: left !important;
-  padding-left: 7px !important;
-  font-weight: bold;
-}
-
-.wl-sheduleTooltipBox {
-  display: flex;
-  flex-direction: column;
-}
-
-.wl-dateblockTitle {
-  align-self: flex-start;
-}
-
-/* Tooltip classes for restyling standard jQuery UI tooltip */
-.wl-tooltip {
-  border: 0;
-  border-radius: 2px;
-  padding: 4px 8px;
-  box-shadow: 4px 6px 10px -1px rgba(0, 0, 0, 0.13);
-  -webkit-box-shadow: 4px 6px 10px -1px rgba(0, 0, 0, 0.13);
-  -moz-box-shadow: 4px 6px 10px -1px rgba(0, 0, 0, 0.13);
-  font-size: 11px;
-  max-width: 300px;
-}
-
-.wl-tooltip-path {
-  text-decoration: underline;
-  font-weight: 600;
-}
-
-.wl-tooltip li {
-  font-weight: 600;
-  margin-bottom: 4px;
-  color: #333333;
-  list-style-type: disc;
-}
-
-.wl-tooltip-message {
-  color: #333333;
-  padding: 4px 6px;
-  font-size: 13px;
-  background-color: #e6e6e6;
-  border-radius: 2px;
-  margin-bottom: 2px;
-}
-
-.wl-sheduleTooltipBox {
-  color: #333333;
-  background-color: #ffffff;
-}
-
-.wl-dateblockTitle {
-  display: flex;
-  align-items: center;
-  padding: 0 8px;
-  font-size: 12px;
-}
-
-.wl-dateblockTitle span {
-  font-weight: 600;
-}
-
-.wl-datesblock {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  padding: 0 12px;
-
-}
-
-.wl-dateblock {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 0 8px;
-
-}
-
-.wl-date {
-  color: #333333;
-  font-weight: 600;
-  font-size: 13px;
-  margin: 4px 0;
-}
-
-.wl-time {
-  font-size: 12px;
-  background-color: #4D4D4D;
-  color: #ffffff;
-  border-radius: 6px;
-  margin: 0 0 4px 0;
-  padding: 2px 6px;
-}
-
-.wl-lang-missing {
-  color: #DD1A00;
-  font-weight: bold;
-}
-
+/* ---------- Empty-state ---------- */
 .noFavMsg {
-  color: #bebebe;
-  font-size: 14px;
-  font-weight: 700;
-  padding: 30px;
-  text-align: center;
-  margin: 0 8px;
-  border-top: 2px solid #217eaa;
-
+    color: #bebebe;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 30px;
+    text-align: center;
+    margin: 0 8px;
+    border-top: 2px solid #217eaa;
 }
 
-/* #sortableTable_gfd_id tr td, #sortableTable_ud_id tr td {
-  text-align: center;
+/* ---------- Tooltips ---------- */
+.wl-sheduleTooltipBox {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 4px;
+    padding: 5px 7px;
+    border: 1px solid #e4ebf2;
+    border-left: 3px solid #227DAA;
+    border-radius: 5px;
+    background: #f7fafc;
+    color: #26394a;
 }
-#sortableTable_gfd_id tr td:first-child, #sortableTable_ud_id tr td:first-child {
-  text-align: left;
-} */
+.wl-dateblockTitle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    color: #536579;
+    font-size: 11px;
+    font-weight: 700;
+}
+.wl-dateblockTitle span { color: #26394a; font-weight: 700; }
+.wl-datesblock { display: flex; flex-direction: row; justify-content: space-between; gap: 8px; padding: 0; }
+.wl-dateblock { display: flex; flex-direction: column; align-items: flex-start; margin: 0; }
+.wl-date { color: #26394a; font-weight: 700; font-size: 12px; margin: 0; }
+.wl-time { font-size: 11px; background-color: #175978; color: #ffffff; border-radius: 10px; margin: 2px 0 0; padding: 1px 6px; }
+
+.wl-tooltip {
+    border: 1px solid #d8e3ed;
+    border-radius: 6px;
+    padding: 5px;
+    background: #ffffff;
+    box-shadow: 0 8px 18px rgba(23, 89, 120, .16);
+    color: #26394a;
+    font-size: 12px;
+    line-height: 1.25;
+    max-width: 320px;
+}
+.wl-tooltip-path {
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: #f7fafc;
+    color: #175978;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+.wl-tooltip ul {
+    margin: 4px 0 2px;
+    padding: 0;
+    list-style: none;
+}
+.wl-tooltip li {
+    margin: 1px 0;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: #f7fafc;
+    color: #26394a;
+    font-size: 12px;
+    font-weight: 700;
+    list-style-type: none;
+}
+.wl-tooltip-message {
+    padding: 5px 7px;
+    border: 1px solid #e4ebf2;
+    border-left: 3px solid #227DAA;
+    border-radius: 5px;
+    background: #f7fafc;
+    color: #26394a;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 4px;
+}
+.wl-tooltip-message.wl-tooltip-warning {
+    border-color: #f1c27d;
+    border-left-color: #d68b00;
+    background: #fff8e8;
+    color: #7a4d00;
+}
+.wl-tooltip-message.wl-tooltip-error {
+    border-color: #f0b7b7;
+    border-left-color: #d14545;
+    background: #fff1f1;
+    color: #7f1d1d;
+}
+
+/* Locked row behaviour */
+.wl-row-locked a { pointer-events: none; }
+.wl-row-locked .wl-itemName { opacity: .8; }
+.wl-row-locked .wl-itemName span { font-style: italic; color: #7b7b7b; }
+.wl-row-locked td { background-color: transparent !important; }
+.wl-row-locked .wl-itemName .wl-locked-msg {
+    color: #7b7b7b;
+    font-style: italic;
+}
+
+/* Pages column + pill button */
+.wl-table tbody td.wl-pagesCol { text-align: center; }
+.wl-pagesBtn {
+    display: inline-block;
+    min-width: 28px;
+    padding: 2px 8px;
+    line-height: 16px;
+    border: 0;
+    border-radius: 999px;
+    background: #f1f1f1;
+    font-weight: 700;
+    cursor: pointer;
+}
+.wl-pagesBtn.nonzero { background: #e7f2f9; }
+.wl-pagesBtn.zero    { background: #f6f6f6; }
+
+/* dialog table */
+.wl-pagesDialog { color: #333; }
+.wl-pagesTitle { font-weight: 700; margin-bottom: 8px; }
+.wl-pagesTable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.wl-pagesTable th, .wl-pagesTable td { padding: 6px 8px; border-bottom: 1px solid #e9e9e9; text-align: left; }
+.wl-pagesTable thead th { background: #f5f5f5; }
+.wl-emptyList { text-align: center; color: #7b7b7b; }

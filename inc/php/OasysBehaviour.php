@@ -1,18 +1,15 @@
 <?php
 
-	require_once __DIR__ . "/rixPDO.php";
-	require_once __DIR__ . "/database.php";
-	require_once __DIR__ . "/../../editor/inc/php/testsCommonFunctions.php";
+	use Oasys\OasysApp;
+
+	require_once __DIR__ . "/OasysApp.php";
+	require_once __DIR__ . "/OasysTest.php";
+	require_once __DIR__ . "/OasysTestTakers.php";
 
 	class OasysBehaviour
 	{
 
 		private rixPDO $db;
-		private string $dbName;
-		private string $user;
-		private string $password;
-		private string $host;
-		private string $logFile;
 		private ?string $startDate;
 		private ?string $endDate;
 		private int $testId;
@@ -22,13 +19,8 @@
 
 		function __construct(int $testId, ?string $startDate, ?string $endDate)
 		{
-			global $sql_db, $sql_user, $sql_password, $sql_host;
-			$this->dbName = $sql_db;
-			$this->user = $sql_user;
-			$this->password = $sql_password;
-			$this->host = $sql_host;
-			$this->logFile = __DIR__ . "/../../logs/OasysBehaviour.txt";
-			$this->db = new rixPDO($this->dbName, $this->user, $this->password, $this->host, $this->logFile);
+			global $app;
+			$this->db = $app->getDatabaseInstance();
 			$this->testId = $testId;
 
 			//convert startDate and endDate to YYYY-MM-DD format if they are provided
@@ -47,7 +39,65 @@
 			$this->testData = [];
 			$this->testType = '';
 			$this->structure = [];
-			buildTestData($testId, $this->db, $this->testData, $this->testType, $this->structure);
+			OasysTest::buildTestData($testId, $this->db, $this->testData, $this->testType, $this->structure);
+		}
+
+		/**
+		 * Write a behaviour entry and return its event ID.
+		 *
+		 * The database supplies tsServer. If eventId is omitted, the next event ID
+		 * for the login/password/test combination is used.
+		 */
+		public static function write(int $passwordId, int $testId, array $properties): int|false
+		{
+			$loginId = OasysTestTakers::getLoginForPassword($passwordId);
+			if ($loginId === false) {
+				return false;
+			}
+
+			$db = OasysApp::getInstance()->getDatabaseInstance();
+
+			if (isset($properties['eventId'])) {
+				$eventId = (int)$properties['eventId'];
+			} else {
+				$res = $db->fetchValue(
+					"SELECT COALESCE(MAX(eventId), 0) + 1 FROM behaviour WHERE loginId = ? AND passwordId = ? AND testId = ?",
+					[$loginId, $passwordId, $testId]
+				);
+				if ($res === false || ($res['error'] ?? false) !== false || $res['data'] === null) {
+					return false;
+				}
+				$eventId = (int)$res['data'];
+			}
+
+			$behaviourData = [
+				'loginId' => $loginId,
+				'passwordId' => $passwordId,
+				'testId' => $testId,
+				'tsClient' => $properties['tsClient'] ?? null,
+				'timeLeft' => $properties['timeLeft'] ?? null,
+				'eventId' => $eventId,
+				'itemId' => $properties['itemId'] ?? null,
+				'language' => $properties['language'] ?? null,
+				'eventType' => $properties['eventType'] ?? null,
+				'subType' => $properties['subType'] ?? null,
+				'data' => null
+			];
+
+			if (array_key_exists('data', $properties)) {
+				$encodedData = json_encode($properties['data'], JSON_UNESCAPED_UNICODE);
+				if ($encodedData === false) {
+					$encodedData = null; // Handle JSON encoding error by setting data to null
+				}
+				$behaviourData['data'] = $encodedData;
+			}
+
+			$res = $db->insert('behaviour', $behaviourData);
+			if ($res === false || ($res['error'] ?? false) !== false || ($res['rows'] ?? 0) === 0) {
+				return false;
+			}
+
+			return $eventId;
 		}
 
 		/* return complete behaviour data for a given passwordId and testId
@@ -86,7 +136,7 @@
 		public function getTimeSpentOnItems(): array
 		{
 			$query = <<<SQL
-				SELECT passwordId, eventId, logins.name, passwords.tag, itemId, tsClient, subType
+				SELECT passwordId, eventId, logins.name AS login, passwords.tag, logins.displayname AS name, itemId, tsClient, subType
 				FROM behaviour
 				INNER JOIN logins ON logins.id=behaviour.loginId
 				INNER JOIN passwords ON passwords.id=behaviour.passwordId
@@ -97,7 +147,7 @@
 				ORDER BY passwordId, eventId
 			SQL;
 
-			$res = $this->db->fetchTable($query, [$this->testId, $this->startDate, $this->endDate], 'name', 'passwordId', true);
+			$res = $this->db->fetchTable($query, [$this->testId, $this->startDate, $this->endDate], 'login', 'passwordId', true);
 			if ($res['rows'] === 0) {
 				return [];
 			}
@@ -114,8 +164,10 @@
 					}
 					$timePerItem = [];
 					$row['legend'] = '';
+					$row['passwordId'] = (int)$passwordId;
 					$row['login'] = $name;
 					$row['tag'] = $passwordData[0]['tag'];
+                    $row['name']  = $passwordData[0]['name'] ?? '';
 					$lastEventType = '';
 					$lastItemId = '';
 					$lastTsClient = '';

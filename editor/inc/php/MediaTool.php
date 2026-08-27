@@ -1,6 +1,6 @@
 <?php
 
-	/* MediaTool v1.2
+	/* MediaTool v1.3
 	 * This class is used to parse blocks for media ids, fetch media file information, and handle media files.
 	 * It is used in the OASYS front end to load media files and in the editor to parse blocks for media ids.
 	 *
@@ -8,15 +8,12 @@
 	 * v1.0: initial version
 	 * v1.1: added loader functions for front end
 	 * v1.2: added functionality for replacing media ids in blocks
+	 * v1.3: transformed a large number of methods into static methods
 	 */
 
 	require_once __DIR__ . "/../../../inc/php/valueFormats.php";
-	require_once __DIR__ . "/../../../inc/php/settings.php";
-	require_once __DIR__ . "/../../../inc/php/rixPDO.php";
-	require_once __DIR__ . "/../../../inc/php/db_credentials.php";
 
-	class MediaTool
-	{
+	class MediaTool {
 		private static ?rixPDO $static_db = null;
 		private array $languages = [];
 		private string $mediaRegex = '/fetchMediaFile\.php\?(?:fileid=(\d+)(?:&|&amp;)checksum=[0-9a-fA-F-]+|checksum=[0-9a-fA-F-]+(?:&|&amp;)fileid=(\d+))/';
@@ -56,6 +53,278 @@
 			} catch (JsonException $e) {
 				$this->errors[] = "Error parsing manifest or default values: " . $e->getMessage();
 			}
+		}
+
+		public static function getFileSize($fileid, $checksum, $mediaInformation = null): bool|int
+		{
+			global $app, $settings;
+			$db = $app->getDatabaseInstance();
+
+			if (!$mediaInformation) {
+				$mediaInformation = self::getFileInformation($fileid, $checksum);
+				if (!$mediaInformation) {
+					return false;
+				}
+			}
+
+			return $mediaInformation['filesize'];
+		}
+
+		public static function getFileInformation($fileid, $checksum): array|bool
+		{
+			global $app;
+			$db = $app->getDatabaseInstance();
+
+			$query = "SELECT filetype, UNIX_TIMESTAMP(created) as modTime, filesize, `name`, parent FROM media WHERE id = ? AND uuid = ?";
+			$results = $db->fetchRow($query, array($fileid, $checksum));
+			if ($results['error'] || $results['rows'] < 1) {
+				return false;
+			}
+
+			return $results['data'];
+		}
+
+		public static function getMimeType($fileid, $checksum, $mediaInformation = null): bool|string
+		{
+			if (!$mediaInformation) {
+				$mediaInformation = self::getFileInformation($fileid, $checksum);
+				if (!$mediaInformation) {
+					return false;
+				}
+			}
+
+			return match ($mediaInformation['filetype']) {
+				'svg' => 'image/svg+xml',
+				'png' => 'image/png',
+				'gif' => 'image/gif',
+				'jpg' => 'image/jpeg',
+				'webp' => 'image/webp',
+				'avif' => 'image/avif',
+				'wav' => 'audio/wav',
+				'mp3' => 'audio/mpeg',
+				'aac' => 'audio/aac',
+				'm4a' => 'audio/mp4',
+				'weba' => 'audio/webm',
+				'webm' => 'video/webm',
+				'm4v', 'mp4' => 'video/mp4',
+				default => 'application/octet-stream',
+			};
+		}
+
+		public static function getMediaFile($fileid, $checksum, $mediaInformation = null): ?string
+		{
+			global $app, $settings;
+			$db = $app->getDatabaseInstance();
+
+			if (!$mediaInformation) {
+				$mediaInformation = self::getFileInformation($fileid, $checksum);
+				if (!$mediaInformation) {
+					return null;
+				}
+			}
+
+			if (!self::fileExists($fileid, $checksum, $mediaInformation)) {
+				return null;
+			}
+
+			if ($settings['mediaLocation'] === 'disk') {
+				$parent = $mediaInformation['parent'];
+				$path = __DIR__ . "/../../../media/$parent/$fileid.dat";
+				$data = file_get_contents($path);
+				if ($data === false) {
+					return null;
+				}
+				return $data;
+			}
+
+			if ($settings['mediaLocation'] === 'database') {
+				$query = "SELECT `data` FROM mediaFiles WHERE id = ?";
+				$results = $db->fetchValue($query, [$fileid]);
+				if ($results['error'] || $results['rows'] < 1) {
+					return null;
+				}
+				return $results['data'];
+			}
+
+			// invalid media location setting
+			return null;
+		}
+
+		public static function fileExists($fileid, $checksum, $mediaInformation = null): bool
+		{
+			global $app, $settings;
+			$db = $app->getDatabaseInstance();
+
+			if (!$mediaInformation) {
+				$mediaInformation = self::getFileInformation($fileid, $checksum);
+				if (!$mediaInformation) {
+					return false;
+				}
+			}
+
+			if ($settings['mediaLocation'] === 'disk') {
+				$parent = $mediaInformation['parent'];
+				$path = __DIR__ . "/../../../media/$parent/$fileid.dat";
+				if (!file_exists($path)) {
+					$log = ['message' => "Media file not found", 'data' => $path];
+					$db->insert("logErrors", $log);
+					return false;
+				}
+			} elseif ($settings['mediaLocation'] === 'database') {
+				$query = "SELECT MD5(`data`) FROM mediaFiles WHERE id = ?";
+				$results = $db->fetchValue($query, [$fileid]);
+				if ($results['error'] || $results['rows'] < 1) {
+					$log = ['message' => "Media file not found in database", 'data' => $fileid];
+					$db->insert("logErrors", $log);
+					return false;
+				}
+			}
+
+			// if we reach this point, the file exists
+			return true;
+		}
+
+		/**
+		 * Get the data for a media file.
+		 * This function reads the media file from disk or database and outputs it as a stream.
+		 */
+
+		public static function getMediaStream($fileid, $checksum, $outputBuffer, $mediaInformation = null): void
+		{
+			global $app, $settings;
+			$db = $app->getDatabaseInstance();
+
+			if (!$mediaInformation) {
+				$mediaInformation = self::getFileInformation($fileid, $checksum);
+				if (!$mediaInformation) {
+					return;
+				}
+			}
+
+			if (!self::fileExists($fileid, $checksum, $mediaInformation)) {
+				return;
+			}
+
+			if ($settings['mediaLocation'] === 'disk') {
+				$parent = $mediaInformation['parent'];
+				$path = __DIR__ . "/../../../media/$parent/$fileid.dat";
+				$fp = fopen($path, "rb");
+				if ($fp === false) {
+					return;
+				}
+				stream_filter_append($fp, 'convert.base64-encode');
+				fpassthru($fp);
+				fclose($fp);
+			} elseif ($settings['mediaLocation'] === 'database') {
+				$memoryLimit = self::parseMemoryLimit(ini_get('memory_limit'));
+				$usedMemory = memory_get_usage(true);
+				$availableMemory = max(0, $memoryLimit - $usedMemory);
+
+				// Reserve a safety margin (e.g., leave 10MB free)
+				$safeAvailable = max(1024 * 1024, $availableMemory - (10 * 1024 * 1024));
+
+				// Pick a sane chunk size (at most 1MB, never exceeding safe available)
+				$chunkSize = min($safeAvailable, 20 * 1024 * 1024);
+
+				// Total size of blob
+				$totalSize = $mediaInformation['filesize'] ?? 0;
+
+				// Read blob in chunks and write to stream
+				$offset = 0;
+				while ($offset < $totalSize) {
+					$length = min($chunkSize, $totalSize - $offset);
+					$data = self::getMediaRange($fileid, '', $offset, $length);
+					if ($data === null) {
+						// if we cannot read the data, silently fail
+						return;
+					}
+					fwrite($outputBuffer, $data);
+					$offset += $length;
+				}
+			}
+		}
+
+		private static function parseMemoryLimit(string $value): int
+		{
+			$unit = strtolower(substr($value, -1));
+			$num = (int)$value;
+			return match ($unit) {
+				'g' => $num * 1024 * 1024 * 1024,
+				'm' => $num * 1024 * 1024,
+				'k' => $num * 1024,
+				default => (int)$value,
+			};
+		}
+
+		public static function getMediaRange($fileid, $path, $start, $length): ?string
+		{
+			global $app, $settings;
+			$db = $app->getDatabaseInstance();
+
+			if ($settings['mediaLocation'] === 'disk') {
+				$fp = fopen($path, 'rb');
+				if ($fp !== false) {
+					fseek($fp, $start);
+					$stream = fread($fp, $length);
+					fclose($fp);
+					if ($stream !== false) {
+						return $stream;
+					}
+
+					$log = ['message' => "Error reading from media file", 'data' => $path];
+					$db->insert("logErrors", $log);
+					return null;
+				}
+
+				$log = ['message' => "Media file not found", 'data' => $path];
+				$db->insert("logErrors", $log);
+				return null;
+			}
+
+			if ($settings['mediaLocation'] === 'database') {
+				$query = "SELECT SUBSTR(`data`,?,?) FROM mediaFiles WHERE id = ?";
+				$results = $db->fetchValue($query, [($start + 1), $length, $fileid]);
+				if ($results['error'] || $results['rows'] < 1) {
+					return null;
+				}
+
+				return $results['data'];
+			}
+
+			// invalid media location setting
+			return null;
+		}
+
+		public static function getETag($fileid, $checksum, $mediaInformation = null): bool|string
+		{
+			global $app, $settings;
+			$db = $app->getDatabaseInstance();
+
+			if (!$mediaInformation) {
+				$mediaInformation = self::getFileInformation($fileid, $checksum);
+				if (!$mediaInformation) {
+					return false;
+				}
+			}
+
+			if (!self::fileExists($fileid, $checksum, $mediaInformation)) {
+				return false;
+			}
+
+			if ($settings['mediaLocation'] === 'disk') {
+				$parent = $mediaInformation['parent'];
+				$path = __DIR__ . "/../../../media/$parent/$fileid.dat";
+				return md5_file($path);
+			}
+
+			if ($settings['mediaLocation'] === 'database') {
+				$query = "SELECT MD5(`data`) FROM mediaFiles WHERE id = ?";
+				$results = $db->fetchValue($query, [$fileid]);
+				return $results['data'];
+			}
+
+			// invalid media location setting
+			return false;
 		}
 
 		public function parseBlocks($blocks, $languages, $includePaths = false): stdClass
@@ -144,7 +413,7 @@
 											if ($obj->context === 'parsed' || $id === null) {
 												$obj->path = [...$row['contextPath'] ?? [], $lang];
 											} else {
-												$obj->path = [$id,...$row['contextPath'] ?? [], $lang];
+												$obj->path = [$id, ...$row['contextPath'] ?? [], $lang];
 											}
 											$obj->mediaId = $value;
 											$obj->string = "fetchMediaFile.php?fileid=$value&checksum=$fileChecksum";
@@ -241,7 +510,7 @@
 								}
 							}
 							// now we have the block property, parse it for media ids to replace
-							$blockProperty = $this->replaceMediaURLs($blockProperty, $idTable);
+							$blockProperty = self::replaceMediaURLs($blockProperty, $idTable);
 						}
 					} elseif (in_array('isMediaId', $row['flags'], true)) {
 						// if the row has 'isMediaId' flag, check the block's property that corresponds to the row path property
@@ -271,7 +540,9 @@
 							if ($row['localized'] === true) {
 								foreach ($blockProperty as $lang => $value) {
 									if (is_numeric($value)) {
-										$blockProperty->$lang = $idTable[$value]['id'] ?? '';
+										// Media ids are stored as strings elsewhere in editor data.
+										// Preserve that representation when copying/importing media.
+										$blockProperty->$lang = isset($idTable[$value]['id']) ? (string)$idTable[$value]['id'] : '';
 										$uuidProperty->$lang = $idTable[$value]['uuid'] ?? '';
 									}
 								}
@@ -282,7 +553,12 @@
 			}
 		}
 
-		public function replaceMediaURLs($property, $idTable): string|array|object {
+		/******************
+		 * Static methods *
+		 ******************/
+
+		public static function replaceMediaURLs($property, $idTable): string|array|object
+		{
 			foreach ($idTable as $k => $row) {
 				$oldId = $row['oldId'] ?? null;
 				$newId = $row['id'] ?? null;
@@ -293,22 +569,23 @@
 				}
 				$regex = "/fetchMediaFile\.php\?(?:fileid=$oldId(?:&|&amp;)checksum=$oldUuid|checksum=$oldUuid(?:&|&amp;)fileid=$oldId)/";
 				$replacement = "fetchMediaFile.php?fileid=$newId&checksum=$newUuid";
-				$property = $this->recursiveReplaceString($property, $regex, $replacement);
+				$property = self::recursiveReplaceString($property, $regex, $replacement);
 			}
 			return $property;
 		}
 
-		private function recursiveReplaceString($property, $regex, $replacement): string|array|object {
+		private static function recursiveReplaceString($property, $regex, $replacement): string|array|object
+		{
 			if (is_string($property)) {
 				return preg_replace($regex, $replacement, $property);
 			} elseif (is_array($property)) {
 				foreach ($property as $key => $subProperty) {
-					$property[$key] = $this->recursiveReplaceString($subProperty, $regex, $replacement);
+					$property[$key] = self::recursiveReplaceString($subProperty, $regex, $replacement);
 				}
 				return $property;
 			} elseif (is_object($property)) {
 				foreach ($property as $key => $subProperty) {
-					$property->$key = $this->recursiveReplaceString($subProperty, $regex, $replacement);
+					$property->$key = self::recursiveReplaceString($subProperty, $regex, $replacement);
 				}
 				return $property;
 			} else {
@@ -329,287 +606,5 @@
 		public function getMediaData(): stdClass
 		{
 			return $this->mediaData;
-		}
-
-		public function getFileInformation($fileid, $checksum): array|bool
-		{
-			$db = self::getDataBase();
-
-			$query = "SELECT filetype, UNIX_TIMESTAMP(created) as modTime, filesize, `name`, parent FROM media WHERE id = ? AND uuid = ?";
-			$results = $db->fetchRow($query, array($fileid, $checksum));
-			if ($results['error'] || $results['rows'] < 1) {
-				return false;
-			}
-
-			return $results['data'];
-		}
-
-		public function getFileSize($fileid, $checksum, $mediaInformation = null): bool|int
-		{
-			$db = self::getDataBase();
-			global $settings;
-
-			if (!$mediaInformation) {
-				$mediaInformation = $this->getFileInformation($fileid, $checksum);
-				if (!$mediaInformation) {
-					return false;
-				}
-			}
-
-			return $mediaInformation['filesize'];
-		}
-
-		public function getMimeType($fileid, $checksum, $mediaInformation = null): bool|string
-		{
-			if (!$mediaInformation) {
-				$mediaInformation = $this->getFileInformation($fileid, $checksum);
-				if (!$mediaInformation) {
-					return false;
-				}
-			}
-
-			return match ($mediaInformation['filetype']) {
-				'svg' => 'image/svg+xml',
-				'png' => 'image/png',
-				'gif' => 'image/gif',
-				'jpg' => 'image/jpeg',
-				'webp' => 'image/webp',
-				'avif' => 'image/avif',
-				'wav' => 'audio/wav',
-				'mp3' => 'audio/mpeg',
-				'aac' => 'audio/aac',
-				'm4a' => 'audio/mp4',
-				'weba' => 'audio/webm',
-				'webm' => 'video/webm',
-				'm4v', 'mp4' => 'video/mp4',
-				default => 'application/octet-stream',
-			};
-		}
-
-		public function fileExists($fileid, $checksum, $mediaInformation = null): bool
-		{
-			$db = self::getDataBase();
-			global $settings;
-
-			if (!$mediaInformation) {
-				$mediaInformation = $this->getFileInformation($fileid, $checksum);
-				if (!$mediaInformation) {
-					return false;
-				}
-			}
-
-			if ($settings['mediaLocation'] === 'disk') {
-				$parent = $mediaInformation['parent'];
-				$path = __DIR__ . "/../../../media/$parent/$fileid.dat";
-				if (!file_exists($path)) {
-					$log = ['message' => "Media file not found", 'data' => $path];
-					$db->insert("logErrors", $log);
-					return false;
-				}
-			} elseif ($settings['mediaLocation'] === 'database') {
-				$query = "SELECT MD5(`data`) FROM mediaFiles WHERE id = ?";
-				$results = $db->fetchValue($query, [$fileid]);
-				if ($results['error'] || $results['rows'] < 1) {
-					$log = ['message' => "Media file not found in database", 'data' => $fileid];
-					$db->insert("logErrors", $log);
-					return false;
-				}
-			}
-
-			// if we reach this point, the file exists
-			return true;
-		}
-
-		public function getMediaFile($fileid, $checksum, $mediaInformation = null): ?string
-		{
-			$db = self::getDataBase();
-			global $settings;
-			if (!$mediaInformation) {
-				$mediaInformation = $this->getFileInformation($fileid, $checksum);
-				if (!$mediaInformation) {
-					return null;
-				}
-			}
-
-			if (!$this->fileExists($fileid, $checksum, $mediaInformation)) {
-				return null;
-			}
-
-			if ($settings['mediaLocation'] === 'disk') {
-				$parent = $mediaInformation['parent'];
-				$path = __DIR__ . "/../../../media/$parent/$fileid.dat";
-				$data = file_get_contents($path);
-				if ($data === false) {
-					return null;
-				}
-				return $data;
-			}
-
-			if ($settings['mediaLocation'] === 'database') {
-				$query = "SELECT `data` FROM mediaFiles WHERE id = ?";
-				$results = $db->fetchValue($query, [$fileid]);
-				if ($results['error'] || $results['rows'] < 1) {
-					return null;
-				}
-				return $results['data'];
-			}
-
-			// invalid media location setting
-			return null;
-		}
-
-		/**
-		 * Get the data for a media file.
-		 * This function reads the media file from disk or database and outputs it as a stream.
-		 */
-
-		public function getMediaStream($fileid, $checksum, $outputBuffer, $mediaInformation = null): void
-		{
-			$db = self::getDataBase();
-			global $settings;
-			if (!$mediaInformation) {
-				$mediaInformation = $this->getFileInformation($fileid, $checksum);
-				if (!$mediaInformation) {
-					return;
-				}
-			}
-
-			if (!$this->fileExists($fileid, $checksum, $mediaInformation)) {
-				return;
-			}
-
-			if ($settings['mediaLocation'] === 'disk') {
-				$parent = $mediaInformation['parent'];
-				$path = __DIR__ . "/../../../media/$parent/$fileid.dat";
-				$fp = fopen($path, "rb");
-				if ($fp === false) {
-					return;
-				}
-				stream_filter_append($fp, 'convert.base64-encode');
-				fpassthru($fp);
-				fclose($fp);
-			} elseif ($settings['mediaLocation'] === 'database') {
-				$memoryLimit = self::parseMemoryLimit(ini_get('memory_limit'));
-				$usedMemory = memory_get_usage(true);
-				$availableMemory = max(0, $memoryLimit - $usedMemory);
-
-				// Reserve a safety margin (e.g., leave 10MB free)
-				$safeAvailable = max(1024 * 1024, $availableMemory - (10 * 1024 * 1024));
-
-				// Pick a sane chunk size (at most 1MB, never exceeding safe available)
-				$chunkSize = min($safeAvailable, 20 * 1024 * 1024);
-
-				// Total size of blob
-				$totalSize = $mediaInformation['filesize'] ?? 0;
-
-				// Read blob in chunks and write to stream
-				$offset = 0;
-				while ($offset < $totalSize) {
-					$length = min($chunkSize, $totalSize - $offset);
-					$data = $this->getMediaRange($fileid, '', $offset, $length);
-					if ($data === null) {
-						// if we cannot read the data, silently fail
-						return;
-					}
-					fwrite($outputBuffer, $data);
-					$offset += $length;
-				}
-			}
-		}
-
-		public function getMediaRange($fileid, $path, $start, $length): ?string
-		{
-			$db = self::getDataBase();
-			global $settings;
-
-			if ($settings['mediaLocation'] === 'disk') {
-				$fp = fopen($path, 'rb');
-				if ($fp !== false) {
-					fseek($fp, $start);
-					$stream = fread($fp, $length);
-					fclose($fp);
-					if ($stream !== false) {
-						return $stream;
-					}
-
-					$log = ['message' => "Error reading from media file", 'data' => $path];
-					$db->insert("logErrors", $log);
-					return null;
-				}
-
-				$log = ['message' => "Media file not found", 'data' => $path];
-				$db->insert("logErrors", $log);
-				return null;
-			}
-
-			if ($settings['mediaLocation'] === 'database') {
-				$query = "SELECT SUBSTR(`data`,?,?) FROM mediaFiles WHERE id = ?";
-				$results = $db->fetchValue($query, [($start + 1), $length, $fileid]);
-				if ($results['error'] || $results['rows'] < 1) {
-					return null;
-				}
-
-				return $results['data'];
-			}
-
-			// invalid media location setting
-			return null;
-		}
-
-		public function getETag($fileid, $checksum, $mediaInformation = null): bool|string
-		{
-			$db = self::getDataBase();
-			global $settings;
-
-			if (!$mediaInformation) {
-				$mediaInformation = $this->getFileInformation($fileid, $checksum);
-				if (!$mediaInformation) {
-					return false;
-				}
-			}
-
-			if (!$this->fileExists($fileid, $checksum, $mediaInformation)) {
-				return false;
-			}
-
-			if ($settings['mediaLocation'] === 'disk') {
-				$parent = $mediaInformation['parent'];
-				$path = __DIR__ . "/../../../media/$parent/$fileid.dat";
-				return md5_file($path);
-			}
-
-			if ($settings['mediaLocation'] === 'database') {
-				$query = "SELECT MD5(`data`) FROM mediaFiles WHERE id = ?";
-				$results = $db->fetchValue($query, [$fileid]);
-				return $results['data'];
-			}
-
-			// invalid media location setting
-			return false;
-		}
-
-		private static function parseMemoryLimit(string $value): int {
-			$unit = strtolower(substr($value, -1));
-			$num = (int) $value;
-			return match ($unit) {
-				'g' => $num * 1024 * 1024 * 1024,
-				'm' => $num * 1024 * 1024,
-				'k' => $num * 1024,
-				default => (int)$value,
-			};
-		}
-
-		private static function getDataBase(): rixPDO
-		{
-			global $sql_db, $sql_user, $sql_password, $sql_host;
-			if (!self::$static_db) {
-				self::$static_db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/../../../logs/MediaTool_errors.txt');
-				$results = self::$static_db->results();
-				if ($results['error']) {
-					http_response_code(500);
-					die();
-				}
-			}
-			return self::$static_db;
 		}
 	}

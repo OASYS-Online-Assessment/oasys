@@ -106,7 +106,7 @@ class Integer
      */
     public static function radical(int $n): int
     {
-        return array_product(array_unique(self::primeFactorization($n)));
+        return (int)\array_product(\array_unique(self::primeFactorization($n)));
     }
 
     /**
@@ -134,15 +134,18 @@ class Integer
         if ($k < 1) {
             throw new Exception\OutOfBoundsException("k must be ≥ 1. ($k provided)");
         }
+        if ($n < 1) {
+            throw new Exception\OutOfBoundsException("n must be ≥ 1. ($n provided)");
+        }
 
         $J      = $n ** $k;
-        $primes = array_unique(self::primeFactorization($n));
+        $primes = \array_unique(self::primeFactorization($n));
 
         foreach ($primes as $prime) {
             $J *= 1 - 1 / $prime ** $k;
         }
 
-        return $J;
+        return (int) $J;
     }
 
     /**
@@ -182,7 +185,11 @@ class Integer
      */
     public static function reducedTotient(int $n): int
     {
-        $primes = array_count_values(self::primeFactorization($n));
+        if ($n < 1) {
+            throw new Exception\OutOfBoundsException("n must be ≥ 1. ($n provided)");
+        }
+
+        $primes = \array_count_values(self::primeFactorization($n));
         $λ      = 1;
         if (isset($primes[2]) && $primes[2] > 2) {
             --$primes[2];
@@ -218,11 +225,11 @@ class Integer
     public static function mobius(int $n): int
     {
         $factors = self::primeFactorization($n);
-        if ($factors !== array_unique($factors)) {
+        if ($factors !== \array_unique($factors)) {
             return 0;
         }
 
-        return (-1) ** count($factors);
+        return (-1) ** \count($factors);
     }
 
     /**
@@ -282,7 +289,7 @@ class Integer
     public static function isSphenicNumber(int $n): bool
     {
         $factors = self::primeFactorization($n);
-        return count($factors) === 3 && count(array_unique($factors)) === 3;
+        return \count($factors) === 3 && \count(\array_unique($factors)) === 3;
     }
 
     /**
@@ -302,10 +309,7 @@ class Integer
      */
     public static function isPerfectPower(int $n): bool
     {
-        if (empty(self::perfectPower($n))) {
-            return false;
-        }
-        return true;
+        return !empty(self::perfectPower($n));
     }
 
     /**
@@ -324,21 +328,21 @@ class Integer
      *
      * @param  int $n
      *
-     * @return array [m, k]
+     * @return array{0?: int|float, 1?: int|float} [m, k]
      */
     public static function perfectPower(int $n): array
     {
-        $√n = sqrt($n);
-        $ms = array_filter(
+        $√n = \sqrt($n);
+        $ms = \array_filter(
             Algebra::factors($n),
             function ($m) use ($√n) {
                 return ($m > 1 && $m <= $√n);
             }
         );
-        $max_k = ceil(log($n, 2));
+        $max_k = \ceil(\log($n, 2));
 
         foreach ($ms as $m) {
-            foreach (range(2, $max_k) as $k) {
+            foreach (\range(2, $max_k) as $k) {
                 $mᵏ = $m ** $k;
                 if ($mᵏ == $n) {
                     return [$m, $k];
@@ -347,6 +351,39 @@ class Integer
         }
 
         return [];
+    }
+
+    /**
+     * Primality test (prime number test)
+     * https://en.wikipedia.org/wiki/Primality_test
+     *
+     * Determines whether a number is a prime number.
+     *
+     * @param int $n
+     *
+     * @return bool
+     */
+    public static function isPrime(int $n): bool
+    {
+        if ($n <= 1) {
+            return false;
+        }
+
+        if ($n === 2 || $n === 3) {
+            return true;
+        }
+
+        if ($n % 2 === 0 || $n % 3 === 0) {
+            return false;
+        }
+
+        for ($i = 5; $i <= \sqrt($n); $i += 6) {
+            if ($n % $i === 0 || $n % ($i + 2) === 0) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -378,24 +415,24 @@ class Integer
         foreach ([2, 3] as $divisor) {
             while ($remainder % $divisor === 0) {
                 $factors[] = $divisor;
-                $remainder = intdiv($remainder, $divisor);
+                $remainder = \intdiv($remainder, $divisor);
             }
         }
 
         $divisor = 5;
-        $√n = sqrt($remainder);
+        $√n = \sqrt($remainder);
 
         while ($divisor <= $√n) {
             while ($remainder % $divisor === 0) {
                 $factors[] = $divisor;
-                $remainder = intdiv($remainder, $divisor);
-                $√n        = sqrt($remainder);
+                $remainder = \intdiv($remainder, $divisor);
+                $√n        = \sqrt($remainder);
             }
             $divisor += 2;
             while ($remainder % $divisor === 0) {
                 $factors[] = $divisor;
-                $remainder = intdiv($remainder, $divisor);
-                $√n        = sqrt($remainder);
+                $remainder = \intdiv($remainder, $divisor);
+                $√n        = \sqrt($remainder);
             }
             $divisor += 4;
         }
@@ -444,7 +481,7 @@ class Integer
         $factors = self::primeFactorization($n);
         $product = 1;
 
-        foreach (array_count_values($factors) as $factor => $exponent) {
+        foreach (\array_count_values($factors) as $factor => $exponent) {
             $product *= $exponent + 1;
         }
 
@@ -471,15 +508,15 @@ class Integer
         $factors = self::primeFactorization($n);
         $product = 1;
 
-        foreach (array_count_values($factors) as $factor => $exponent) {
+        foreach (\array_count_values($factors) as $factor => $exponent) {
             $sum = 1 + $factor;
             for ($i = 2; $i <= $exponent; $i++) {
-                $sum += pow($factor, $i);
+                $sum += \pow($factor, $i);
             }
             $product *= $sum;
         }
 
-        return $product;
+        return (int)$product;
     }
 
     /**
@@ -491,7 +528,7 @@ class Integer
      */
     public static function isOdd(int $x): bool
     {
-        return (abs($x) % 2) === 1;
+        return (\abs($x) % 2) === 1;
     }
 
     /**
@@ -503,6 +540,6 @@ class Integer
      */
     public static function isEven(int $x): bool
     {
-        return (abs($x) % 2) === 0;
+        return (\abs($x) % 2) === 0;
     }
 }

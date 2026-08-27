@@ -27,6 +27,11 @@ let usettingDataObject = {};
 let noNav = false;
 let myName;
 let lastLmSel;
+let onPageBlock = 0;
+let pageSize = 10;
+let logFullData = [];
+let logRes = [];
+let eHiddenData = [];
 
 function onReady() {
 	//setup in the beginning (e.g. onload or onready)
@@ -62,6 +67,18 @@ function onReady() {
 	});
 
 	//main buttons
+	buttons.search = new jsButton2($('header'), 'searchButton', {
+		label: 'Search',
+		icon: '../images/toolbarIcons/ic_tb_search.png',
+		iconWidth: 48,
+		width: 80,
+		height: 100,
+		callback: openUserManagerSearch,
+		disabled: false
+	});
+
+	insertVerticalDivider('header');
+
 	buttons.addUser = new jsButton2($('header'), 'addUser', {
 		label: 'Add User',
 		icon: '../images/toolbarIcons/ic_tb_addUser.png',
@@ -82,6 +99,16 @@ function onReady() {
 		disabled: false
 	});
 
+	buttons.importUsers = new jsButton2($('header'), 'importUsers', {
+		label: 'Import users',
+		icon: '../images/toolbarIcons/ic_tb_csvUpload.png',
+		iconWidth: 48,
+		width: 80,
+		height: 100,
+		callback: openImportUsersDialog,
+		disabled: false
+	});
+
 	// only show permission sync button in debug mode
 	if (settings.debugSystem === true) {
 
@@ -99,32 +126,6 @@ function onReady() {
 			disabled: false,
 		});
 	}
-	insertVerticalDivider('header');
-
-	buttons.searchUser = new jsButton2($('header'), 'searchUserButton', {
-		label: 'Find User',
-		icon: "../images/toolbarIcons/ic_tb_searchUser.png",
-		iconWidth: 48,
-		width: 180,
-		height: 100,
-		callback: function() {
-			searchUser();
-		},
-		disabled: false,
-	});
-
-	buttons.searchGroup = new jsButton2($('header'), 'searchGroupButton', {
-		label: 'Find Group',
-		icon: "../images/toolbarIcons/ic_tb_searchUsergroup.png",
-		iconWidth: 48,
-		width: 180,
-		height: 100,
-		callback: function() {
-			searchGroup();
-		},
-		disabled: false,
-	});
-
 	insertVerticalDivider('header');
 
 	buttons.logView = new jsButton2($('header'), 'logViewButton', {
@@ -278,6 +279,24 @@ function onReady() {
 		orderKey: 'name',
 		idKey: 'id',
 		hideButtonsKey: 'locked',
+		classConditions: {
+			'umGroupSystemAll': {
+				path: ['id'],
+				value: -1
+			},
+			'umGroupSystemNo': {
+				path: ['id'],
+				value: 0
+			},
+			'umGroupAdmin': {
+				path: ['name'],
+				value: 'admin'
+			},
+			'umGroupSuperadmin': {
+				path: ['name'],
+				value: 'superadmin'
+			}
+		},
 		selectionCallback: groupSelChanged,
 		cancelSingleClickOnDoubleClick: false
 	});
@@ -289,7 +308,23 @@ function onReady() {
 		labelKey: 'name',
 		orderKey: 'name',
 		idKey: 'id',
+		prefixKey: 'listBadges',
+		postfixKey: 'roleBadge',
 		hideButtonsKey: 'locked',
+		classConditions: {
+			'umUserAdmin': {
+				path: ['role'],
+				value: 'admin'
+			},
+			'umUserElevated': {
+				path: ['role'],
+				value: 'elevated'
+			},
+			'umUserSuperadmin': {
+				path: ['role'],
+				value: 'superadmin'
+			}
+		},
 		selectionCallback: userSelChanged,
 		cancelSingleClickOnDoubleClick: false
 	});
@@ -340,7 +375,7 @@ function onReady() {
 		fixedOrder: true,
 		hideDeleteLinks: true
 	};
-	gui.userPermView = new jsSortableTable('permissionList', 'permissionList_table', usPermOptions);
+	gui.userPermView = new JsSortableTable('permissionList', 'permissionList_table', usPermOptions);
 	// *USER PERMISSIONS* INIT END
 
 	// *USER ADMINISTRATION* INIT START
@@ -382,7 +417,7 @@ function onReady() {
 		fixedOrder: true,
 		hideDeleteLinks: true
 	};
-	gui.userAdminView = new jsSortableTable('acctPropList', 'acctPropList_table', usAdminOptions);
+	gui.userAdminView = new JsSortableTable('acctPropList', 'acctPropList_table', usAdminOptions);
 	$('#acctPropList').hide();
 	// *USER ADMINISTRATION* INIT END
 }
@@ -394,143 +429,410 @@ function onReady() {
 async function langStats() {
 
 	let data = await startAjax("getLangStats", {});
-	let sData = data.statData;
-	let langTable = $("<table />");
+	let sData = data.statData || [];
+	let totalUsers = sData.reduce((sum, row) => sum + parseInt(row.userCt, 10), 0);
+	let colors = ['#78c69a', '#86bdd8', '#edbd68', '#e58f9d', '#aca0df', '#83bdbc', '#d3a0b8'];
+	let start = 0;
 
-	for (const tRow of sData) {
-		if (tRow.sLang === null) tRow.sLang = "Not selected";
-		langTable.append( /* html */ `<tr><td class="lang_td">${tRow.sLang}</td><td class="lang_td">${tRow.userCt}</td></tr>\n`);
+	function langMeta(lang) {
+		let code = (lang || '').toString().toUpperCase();
+		let meta = {
+			DE: { label: 'German', flag: '🇩🇪' },
+			EN: { label: 'English', flag: '🇬🇧' },
+			FR: { label: 'French', flag: '🇫🇷' },
+			LU: { label: 'Luxembourgish', flag: '🇱🇺' }
+		};
+		if (!code) return { code: '', label: 'No language set', flag: '—' };
+		return {
+			code: code,
+			label: meta[code] ? meta[code].label : code,
+			flag: meta[code] ? meta[code].flag : '🌐'
+		};
 	}
 
-	/* table styling */
-	$(langTable).css({
-		'border': "1px solid #ccc",
-		'border-spacing': "0px",
-		'border-collapse': "collapse",
-		'padding': "0px",
-		'margin-left': "auto",
-		'margin-right': "auto"
-	});
+	let rows = sData
+		.map((row, idx) => {
+			let count = parseInt(row.userCt, 10);
+			let percent = totalUsers > 0 ? (count / totalUsers * 100) : 0;
+			let meta = langMeta(row.sLang);
+			return {
+				...meta,
+				count: count,
+				percent: percent,
+				color: colors[idx % colors.length]
+			};
+		})
+		.sort((a, b) => b.count - a.count);
+
+	let pieStops = rows.map((row) => {
+		let end = start + row.percent;
+		let stop = `${row.color} ${start.toFixed(2)}% ${end.toFixed(2)}%`;
+		start = end;
+		return stop;
+	}).join(', ');
+
+	let rowHtml = rows.map((row) => /* html */ `
+		<tr>
+			<td>
+				<div class="umLangStatLanguage">
+					<span class="umLangStatFlag">${userMgrEscapeHtml(row.flag)}</span>
+					<div>
+						<div class="umLangStatName">${userMgrEscapeHtml(row.label)}</div>
+						<div class="umLangStatCode">${userMgrEscapeHtml(row.code)}</div>
+					</div>
+				</div>
+			</td>
+			<td class="umLangStatNumber">${row.count}</td>
+			<td>
+				<div class="umLangStatPercent">
+					<span>${row.percent.toFixed(1)}%</span>
+					<div class="umLangStatBar"><span style="width:${row.percent.toFixed(2)}%; background:${row.color};"></span></div>
+				</div>
+			</td>
+		</tr>
+	`).join('');
+
+	let legendHtml = rows.map((row) => /* html */ `
+		<div class="umLangStatLegendItem">
+			<span class="umLangStatDot" style="background:${row.color};"></span>
+			<span class="umLangStatLegendFlag">${userMgrEscapeHtml(row.flag)}</span>
+			<span>${userMgrEscapeHtml(row.label)}</span>
+		</div>
+	`).join('');
 
 	new nxDialog("langStatsId", {
 		title: "User Language Selection Statistics",
-		width: 400,
+		width: 720,
 		buttons: [{
 			label: "Ok",
 			value: "ok",
 			'default': true
 		}],
 		contents: /* html */ `
-            <h2>Count of editor users by language</h2>
-            ${langTable[0].outerHTML}
+			<div class="umLangStatsDialog">
+				<div class="umDialogHero">
+					<div class="umDialogKicker">Language statistics</div>
+					<div class="umDialogTitle">Editor language selection</div>
+					<div class="umDialogMeta">${totalUsers} editor user${totalUsers === 1 ? '' : 's'} counted by selected language.</div>
+				</div>
+				<div class="umLangStatsGrid">
+					<div class="umLangStatsChartCard">
+						<div class="umLangStatsPie" style="background: conic-gradient(${pieStops || '#dce6ef 0 100%'});">
+							<div class="umLangStatsPieCenter">
+								<strong>${totalUsers}</strong>
+								<span>Total users</span>
+							</div>
+						</div>
+						<div class="umLangStatsLegend">${legendHtml}</div>
+					</div>
+					<div class="umLangStatsTableWrap">
+						<table class="umLangStatsTable">
+							<thead>
+								<tr>
+									<th>Language</th>
+									<th>Users</th>
+									<th>Share</th>
+								</tr>
+							</thead>
+							<tbody>${rowHtml || '<tr><td colspan="3" class="umLangStatsEmpty">No language data available.</td></tr>'}</tbody>
+						</table>
+					</div>
+				</div>
+			</div>
         `
 	});
 }
 
 /**
  * Launch user log action viewer.
- *
- * @param {string} button
- * @returns {undefined}
  */
-function logView(button) {
+async function logView(button, filterData = {}) {
+	let curFilterSel = "";
 
 	if (button === 'close') return;
 
-	startAjax("logView").then((res) => {
-		window.logdiag = new nxDialog('logDiagId', {
-			title: "Log Analyzer",
-			width: 1600,
-			buttons: [{
-				label: "Close",
-				'default': true,
-				value: 'close'
-			}, {
-				label: "Refresh",
-			}],
-			contents: /* html */ `
-            <h4 id="lTitle">User Action Logfile Analyzer</h4>
-            <p id="logCount"></p>
-            <p id="clFilterArea"></p>
+	if (button === "" || button === "refresh") {
+		onPageBlock = 0;
+		pageSize = 10;
+		const res = await startAjax("logView", {});
+		logRes = JSON.parse(JSON.stringify(res.data || []));
+		logFullData = JSON.parse(JSON.stringify(res.data || []));
+	}
 
-            <div id="filter_container" style="margin-bottom: 5px; display: flex;">
-                <input class="logFilters" id="date_filter" placeholder="filter Date" type="text" style="width: 145px;" />
-                <select class="logFilters" id="userName_filter" placeholder="filter Name" style="min-width: 125px;"></select>
-                <select class="logFilters" id="userId_filter" placeholder="filter ID" style="min-width: 123px;"></select>
-                <select class="logFilters" id="location_filter" placeholder="filter Module" style="min-width: 127px;"></select>
-                <select class="logFilters" id="action_filter" placeholder="filter Action" style="min-width: 200px;"></select>
-                <input class="logFilters" id="text_filter" placeholder="filter Entry" type="text" style="width: 100%;"/>
-            </div>
-            <div id="logTable"></div>
-            `,
-			callback: logView
+	window.logdiag = new nxDialog('logDiagId', {
+		title: "Log Analyzer",
+		width: 1600,
+		buttons: [{
+			label: "Refresh",
+			value: "refresh"
+		}, {
+			label: "Close",
+			'default': true,
+			value: 'close'
+		}],
+		contents: /* html */ `
+			<h4 id="lTitle">User Action Logfile Analyzer</h4>
+			<p id="logCount"></p>
+			<p id="clFilterArea"></p>
+
+			<div id="filter_container" style="margin-bottom: 5px; display: flex;">
+				<input class="logFilters" id="date_filter" placeholder="filter Date" type="text" style="width: 145px;" />
+				<button class="logClearInput" id="dateClearBtn" title="Reset date filter">❌</button> <!-- conditional 'clear date filter' button when date filter is active -->
+				<select class="logFilters" id="userName_filter" placeholder="filter Name" style="min-width: 125px;"></select>
+				<select class="logFilters" id="userId_filter" placeholder="filter ID" style="min-width: 123px;"></select>
+				<select class="logFilters" id="location_filter" placeholder="filter Module" style="min-width: 127px;"></select>
+				<select class="logFilters" id="action_filter" placeholder="filter Action" style="min-width: 200px;"></select>
+				<input class="logFilters" id="text_filter" placeholder="filter Entry" type="text" style="width: 100%;"/>
+				<button class="logClearInput" id="txtClearBtn" title="Reset text search filter">❌</button> <!-- conditional 'clear text filter' button when text filter is active -->
+			</div>
+			<div id="logTable"></div>
+			`,
+		callback: logView
+	});
+
+	// handler for date clear button
+	$("#dateClearBtn").on("click", function() {
+		$("#date_filter").datepicker("setDate", "");
+		runFilter();
+	});
+
+	// handler for text clear button
+	$("#txtClearBtn").on("click", function() {
+		$("#text_filter").val("");
+		runFilter();
+	});
+
+	// create three equal columns inside the button area and center the middle column
+	let $btnArea = $(".nxDialogButtons");
+	$btnArea.css({
+		display: "flex",
+		gap: "0"
+	});
+
+	let $leftCol = $("<div/>").css({ flex: "1", textAlign: "left" });
+	let $midCol = $("<div/>").css({ flex: "1", textAlign: "center" });
+	let $rightCol = $("<div/>").css({ flex: "1", textAlign: "right" });
+
+	$btnArea.append($leftCol, $midCol, $rightCol);
+
+	// middle column page navigation buttons
+	$midCol.css("textAlign", "center");
+
+	let fpObj = new nxButton($midCol, "firstPage", {
+		label: "<<",
+		value: "firstPage",
+		callback: function() {
+			$("#logTable").html("<div id='logTable'></div>");
+			onPageBlock = 0;
+			loadLogTable();
+		}
+	});
+
+	let ppObj = new nxButton($midCol, "prevPage", {
+		label: "<",
+		value: "prevPage",
+		callback: function() {
+			$("#logTable").html("<div id='logTable'></div>");
+			onPageBlock -= pageSize;
+			if (onPageBlock < 0) onPageBlock = 0;
+			loadLogTable();
+		}
+	});
+
+	let npObj = new nxButton($midCol, "nextPage", {
+		label: ">",
+		value: "nextPage",
+		callback: function() {
+			$("#logTable").html("<div id='logTable'></div>");
+			onPageBlock += pageSize;
+			if (onPageBlock + pageSize > logRes.length) onPageBlock = logRes.length - pageSize;
+			if (onPageBlock < 0) onPageBlock = 0;
+			loadLogTable();
+		}
+	});
+
+	let lpObj = new nxButton($midCol, "lastPage", {
+		label: ">>",
+		value: "lastPage",
+		callback: function() {
+			$("#logTable").html("<div id='logTable'></div>");
+			onPageBlock = (logRes.length - pageSize);
+			if (onPageBlock < 0) onPageBlock = 0;
+			loadLogTable();
+		}
+	});
+
+	// moving the standard refresh/close buttons into the right column
+	$rightCol.append(
+		$('#background_logDiagId_button_0'),
+		$('#background_logDiagId_button_1')
+	);
+
+	// page size control in the left column
+	let pageControlSel = /* html */`<span style="position: relative; top: -8px;">Page Size:&nbsp;</span><span id='pageDD'></span>`;
+	$leftCol.append(pageControlSel);
+
+	let pdjssel = new jsDropList($("#pageDD"), 'pageddselobj', {
+		theme: 'backend',
+		elements: [{ value: 5, label: "5" }, { value: 10, label: "10" }, { value: 20, label: "20" }, { value: 50, label: "50" }],
+		initialValue: 10,
+		onChange: function(_id, psVal) {
+			pageSize = psVal;
+			runFilter();
+		}
+	});
+
+
+	// build reset filter button
+	let clFilter = new nxButton('clFilterArea', 'clFilterId', {
+		label: "Clear All Filters",
+		callback: function() {
+			logdiag.dismiss('close');
+			logView("refresh");
+		}
+	});
+
+	// remove old log entries button
+	if (isSuper) {
+		let logMaint = new nxButton('clFilterArea', 'lmId', {
+			label: "Log Maintenance",
+			callback: showLogMaint
 		});
+	}
 
-		// show count
-		$('#logCount').append(`${res.data.length} entries found.`);
+	// insert default 'all' options for dropdowns
+	$('#action_filter').append(new Option('<ALL ACTIONS>', ''));
 
-		// build reset filter button
-		let clFilter = new nxButton('clFilterArea', 'clFilterId', {
-			label: "Clear All Filters",
-			callback: function() {
-				$('.logFilters').val('');
-				runFilter();
+	// Pre-populate the Action dropdown with specific entires which start as disabled until they are shown to be present in log list data
+	const fullActionList = [
+		"Rename",
+		"Permission Update",
+		"Folder Owner Change",
+		"Object(s) Deletion",
+		"Item Deletion",
+		"Object Move",
+		"Test Taker Results Reset",
+		"All Password Results Reset",
+		"Test/Password Results Reset",
+		"Test Results Reset"
+	];
+
+	// Ensure these disabled options exist in the dropdown and are disabled, but use original source data, not filtered
+	fullActionList.forEach((act) => {
+		let opt = new Option(act, act);
+		opt.disabled = true;
+		$('#action_filter').append(opt);
+	});
+
+	// build unique list of actions present in current log results and enable/add them to the action dropdown
+	const actualActions = logRes.reduce((acc, r) => {
+		const a = r && r.action;
+		if (a && acc.indexOf(a) === -1) acc.push(a);
+		return acc;
+	}, []);
+
+	// selective enabling of 'actions' list based on presence in the log data
+	$('#action_filter option').map(function() {
+		if (actualActions.includes(this.value) || this.text === "<ALL ACTIONS>") {
+			this.disabled = false;
+		} else {
+			this.disabled = true;
+		}
+	});
+
+	$('#location_filter').append(new Option('<ALL MODULES>', ''));
+	$('#userName_filter').append(new Option('<ALL USERS>', ''));
+	$('#userId_filter').append(new Option('<ALL USER IDS>', ''));
+
+	// perform entry row array
+
+	loadLogTable();
+
+	function loadLogTable() {
+
+		// control navigation button states
+		let lastEntryVal = (onPageBlock + pageSize > logRes.length) ? logRes.length : onPageBlock + pageSize;
+
+		if ((logRes.length - pageSize) < 0 || lastEntryVal === logRes.length) {
+			lpObj.disable();
+			npObj.disable()
+		} else {
+			lpObj.enable();
+			npObj.enable();
+		}
+
+		if (onPageBlock === 0) {
+			fpObj.disable();
+			ppObj.disable();
+		} else {
+			fpObj.enable();
+			ppObj.enable();
+		}
+
+		let elementsToAddArr = [];
+		let iLimit = pageSize > logRes.length ? logRes.length : onPageBlock + pageSize;
+
+		let filterObjs = $(".logFilters").map(function() { return this.id.split("_")[0]; }).toArray();
+		for (const fItem of filterObjs) {
+			if (curFilterSel !== fItem) {
+				let $filterObj = $('#' + fItem + '_filter');
+				if ($filterObj.length) {
+					if ($filterObj.is('select')) {
+						// remove all options except the first (keep "<ALL ...>" entry) and reset value
+						if (fItem === "action" && $filterObj[0].value === "") {
+							$filterObj.find('option').not(':first').prop('disabled', true);
+						} else if ($filterObj[0].value === "") {
+							$filterObj.find('option').not(':first').remove();
+						}
+					}
+				}
 			}
-		});
+		}
 
-		// remove old log entries button
-		if (isSuper) {
-			let logMaint = new nxButton('clFilterArea', 'lmId', {
-				label: "Log Maintenance",
-				callback: showLogMaint
+		const sets = {};
+		logRes.forEach(row =>
+			Object.entries(row).forEach(([k, v]) => {
+				if (v == null) return;
+				if (typeof v === 'object') v = ('data' in v && typeof v.data === 'string') ? v.data : (() => { try { return JSON.stringify(v); } catch { return String(v); } })();
+				(sets[k] || (sets[k] = new Set())).add(String(v));
+			})
+		);
+		let uniqueDD = Object.fromEntries(Object.entries(sets).map(([k, s]) => [k, [...s]]));
+
+		if (Object.keys(uniqueDD).length !== 0) {
+
+			// add each unique location (module) dropdowns based on submitted log data list
+			uniqueDD.location.forEach((locEntry) => {
+				if (!$('#location_filter option[value="' + locEntry + '"]').length) {
+					$('#location_filter').append(new Option(locEntry, locEntry));
+				}
+			});
+
+			// enable each unique action (module) dropdowns based on submitted log data list
+			uniqueDD.action.forEach((actEntry) => {
+				for (const j of document.getElementById('action_filter')) {
+					if (j.value === actEntry) j.disabled = false;
+				}
+			});
+
+			// add each unique userName (module) dropdowns based on submitted log data list
+			uniqueDD.operatorName.forEach((unameEntry) => {
+				if (!$('#userName_filter option[value="' + unameEntry + '"]').length) {
+					$('#userName_filter').append(new Option(unameEntry, unameEntry));
+				}
+			});
+
+			// add each unique userId (module) dropdowns based on submitted log data list
+			uniqueDD.operatorId.forEach((uidEntry) => {
+				if (!$('#userId_filter option[value="' + uidEntry + '"]').length) {
+					$('#userId_filter').append(new Option(uidEntry, uidEntry));
+				}
 			});
 		}
 
+		for (let i = onPageBlock; i < iLimit; i++ in logRes) {
+			let element = { ...logRes[i] };
 
-		// build the structure of the row to be added to the table object
-		window.logMasterObj = {};
-
-		// insert default 'all' options for dropdowns
-		$('#action_filter').append(new Option('<ALL ACTIONS>', ''));
-
-		// Pre-populate the Action dropdown with specific disabled entries that should always remain disabled
-		const disabledActions = [
-			"Rename",
-			"Permission Update",
-			"Folder Owner Change",
-			"Object(s) Deletion",
-			"Item Deletion",
-			"Object Move",
-			"Test Taker Results Reset",
-			"All Password Results Reset",
-			"Test/Password Results Reset",
-			"Test Results Reset"
-		];
-		// Store in a global set (on window) so later loops can check membership
-		window.disabledActionSet = new Set(disabledActions);
-		// Ensure these disabled options exist in the dropdown and are disabled
-		disabledActions.forEach((act) => {
-			let exists = false;
-			for (const opt of document.getElementById('action_filter').options) {
-				if (opt.value === act) {
-					exists = true;
-					opt.disabled = true;
-					break;
-				}
-			}
-			if (!exists) {
-				let o = new Option(act, act);
-				o.disabled = true;
-				$('#action_filter').append(o);
-			}
-		});
-		$('#location_filter').append(new Option('<ALL MODULES>', ''));
-		$('#userName_filter').append(new Option('<ALL USERS>', ''));
-		$('#userId_filter').append(new Option('<ALL USER IDS>', ''));
-
-		let elementsToAddArr = [];
-		for (let i = 0; i < res.data.length; i++ in res.data) {
-			const element = res.data[i];
 			element.hiddenID = i;
 			element.body = {
 				id: i,
@@ -547,60 +849,53 @@ function logView(button) {
 
 			// add our refined element
 			elementsToAddArr.push(element);
-			logMasterObj[i] = element.body.hiddenData;
-
-			// populate action dropdown selection list
-			// New behavior: enable an existing option if found; only add if it doesn't exist
-			let actionVal = element.body.hiddenData.action;
-			let foundOpt = null;
-			for (const j of document.getElementById('action_filter').options) {
-				if (j.value === actionVal) {
-					foundOpt = j;
-					break;
-				}
-			}
-
-			if (foundOpt) {
-				foundOpt.disabled = false;
-			} else {
-				// Not present; add it (enabled by default unless in disabled list)
-				let o = new Option(actionVal, actionVal);
-				if (window.disabledActionSet && window.disabledActionSet.has(actionVal)) {
-					o.disabled = true;
-				}
-				$('#action_filter').append(o);
-			}
+			eHiddenData[i] = element.body.hiddenData;
 
 			// Ensure hasOpt is declared before reuse below (strict mode safety)
 			let hasOpt;
 
-			// populate module dropdown selection list
-			hasOpt = false;
-			for (const j of document.getElementById('location_filter')) {
-				if (j.value === element.body.hiddenData.location) hasOpt = true;
-			}
-
-			if (!hasOpt) $('#location_filter').append(new Option(element.body.hiddenData.location, element.body.hiddenData.location));
+			// populate filter lists
+			// hasOpt = false;
+			// for (const j of document.getElementById('location_filter')) {
+			// 	if (j.value === element.body.hiddenData.location) {
+			// 		hasOpt = true;
+			// 	}
+			// }
+			// if (!hasOpt) {
+			// 	$('#location_filter').append(new Option(element.body.hiddenData.location, element.body.hiddenData.location));
+			// }
 
 			// populate username dropdown selection list
-			hasOpt = false;
-			for (const j of document.getElementById('userName_filter')) {
-				if (j.value === element.body.hiddenData.userName) hasOpt = true;
-			}
+			// hasOpt = false;
+			// for (const j of document.getElementById('userName_filter')) {
+			// 	if (j.value === element.body.hiddenData.userName) {
+			// 		hasOpt = true;
+			// 	}
+			// }
+			// if (!hasOpt) {
+			// 	$('#userName_filter').append(new Option(element.body.hiddenData.userName, element.body.hiddenData.userName));
+			// }
 
-			if (!hasOpt) $('#userName_filter').append(new Option(element.body.hiddenData.userName, element.body.hiddenData.userName));
+			// // populate userId dropdown selection list
+			// hasOpt = false;
+			// for (const j of document.getElementById('userId_filter')) {
+			// 	if (j.value === element.body.hiddenData.userId) {
+			// 		hasOpt = true;
+			// 	}
+			// }
+			// if (!hasOpt) {
+			// 	$('#userId_filter').append(new Option(element.body.hiddenData.userId, element.body.hiddenData.userId));
+			// }
 
-			// populate userId dropdown selection list
-			hasOpt = false;
-			for (const j of document.getElementById('userId_filter')) {
-				if (j.value === element.body.hiddenData.userId) hasOpt = true;
-			}
-
-			if (!hasOpt) $('#userId_filter').append(new Option(element.body.hiddenData.userId, element.body.hiddenData.userId))
+			// // populate action dropdown selection list
+			// for (const j of document.getElementById('action_filter')) {
+			// 	if (j.value === element.body.hiddenData.action) {
+			// 		j.disabled = false;
+			// 	}
+			// }
 		}
 
-
-		window.logViewObj = new jsSortableTable('logTable', 'logView', {
+		new JsSortableTable('logTable', 'logView', {
 			onClick: showLogEntry,
 			elements: elementsToAddArr,
 			tableHead: {
@@ -639,24 +934,30 @@ function logView(button) {
 			fixedOrder: true
 		});
 
-		// date picker for log filtering
-		$('#date_filter').datepicker({
-			onClose: function() {
-				runFilter();
-				$('#date_filter').on("click", function() {
-					$(this).blur();
-				});
-			},
-			dateFormat: 'yy-mm-dd'
-		});
+		// show number of entries found
+		$('#logCount').html((`${logRes.length} entries found. Showing entries ${onPageBlock + 1} - ${lastEntryVal}.`));
+		if (logRes.length + 1 < pageSize) $('#logCount').html(`Showing all ${logRes.length} entries found.`);
+		if (logRes.length === 1) $('#logCount').html(`Showing the 1 entry found.`);
+		if (logRes.length === 0) $('#logCount').html(`<span style='color: red; font-weight: bold;'>No entries found!</span>`);
+	};
 
-		$('#date_filter').on("click", function() {
-			$(this).blur();
-		});
-
-		// event handler for log field filtering
-		$('.logFilters').on('input', runFilter);
+	// date picker for log filtering
+	$('#date_filter').datepicker({
+		onClose: function() {
+			runFilter();
+			$('#date_filter').on("click", function() {
+				$(this).blur();
+			});
+		},
+		dateFormat: 'yy-mm-dd'
 	});
+
+	$('#date_filter').on("click", function() {
+		$(this).blur();
+	});
+
+	// event handler for log field filtering
+	$('.logFilters').on('input', runFilter);
 
 	function showLogMaint(lmData, button) {
 		let lmDiag;
@@ -679,6 +980,7 @@ function logView(button) {
 			}, [lmData]);
 
 			new jsDropList('lmMain', 'lmOptsId', {
+				theme: 'backend',
 				elements: [{
 					value: 'a',
 					label: "Remove all"
@@ -749,57 +1051,83 @@ function logView(button) {
 	}
 
 	function runFilter() {
+		// ensure logRes is a copy of logFullData, then work on a copy for filtering
+		logRes = logFullData.slice();
+		let logFiltered = logRes.slice();
 
-		// filtering table - first level iterate each row
-		for (const key in logMasterObj) {
-			const element = logMasterObj[key];
+		let filterIds = $(".logFilters").map(function() {
+			return this.id.split("_")[0];
+		}).toArray();
 
-			let filterIds = $(".logFilters").map(function() {
-				return this.id.split("_")[0];
-			}).toArray();
+		// iterate backwards so splice() does not corrupt upcoming indices
+		for (let lfCount = logFiltered.length - 1; lfCount >= 0; lfCount--) {
 
-			// filtering entries - second level iterate each field
-			let showMe = true;
-			filterIds.forEach(field => {
-				if (!showMe) return;
+			// check each row against active filters; if any filter fails, remove the row
+			const row = logFiltered[lfCount];
+			let remove = false;
 
-				if (
-					(field === 'userName' || field === 'userId') &&
-					((element[field] !== $('#' + field + "_filter").val()) && $('#' + field + "_filter").val() !== "")
-				) {
-					showMe = false;
-				} else {
-					if (element[field].toUpperCase().includes($('#' + field + "_filter").val().toUpperCase()) === false) {
-						showMe = false;
+			for (const filterField of filterIds) {
+				const fVal = $('#' + filterField + "_filter").val();
+				if (!fVal || fVal === "") continue; // skip empty filters
+				curFilterSel = filterField;
+
+				if (filterField === "userName") {
+					if (fVal !== row.operatorName) {
+						remove = true;
+						break;
+					}
+				} else if (filterField === "userId") {
+					if (fVal !== row.operatorId) {
+						remove = true;
+						break;
+					}
+				} else if (filterField === "action") {
+					if (fVal !== row.action) {
+						remove = true;
+						break;
+					}
+				} else if (filterField === "location") {
+					if (fVal !== row.location) {
+						remove = true;
+						break;
+					}
+				} else if (filterField === "date") {
+					if (!row.date || row.date.indexOf(fVal) === -1) {
+						remove = true;
+						break;
+					}
+				} else if (filterField === "text") {
+					// row.body may be string or object; handle both
+					let hay = "";
+					if (typeof row.body === "string") hay = row.body;
+					else if (row.body && typeof row.body === "object") hay = row.body.data || JSON.stringify(row.body);
+					if (hay.toUpperCase().indexOf(fVal.toUpperCase()) === -1) {
+						remove = true;
+						break;
 					}
 				}
+			}
 
-				if (showMe) {
-					$('#logView_' + key).show();
-				} else {
-					$('#logView_' + key).hide();
-				}
-			});
+			if (remove) {
+				logFiltered.splice(lfCount, 1);
+			}
 		}
 
-		// count remaining entries
-		let fCount = 0;
-		let tCount = 0;
-		$('.data-rows_logView').each(function(i, v) {
-			if ($(this).css('display') !== 'none') fCount++;
-			tCount++;
-		});
+		/* date and text filter view control */
+		$("#date_filter").datepicker("getDate") === null ? $("#dateClearBtn").hide() : $("#dateClearBtn").show(); // show date input clear button when required
+		$("#text_filter").val() === "" ? $("#txtClearBtn").hide() : $("#txtClearBtn").show(); // show text input clear button when required
 
-		$('#logCount').html(fCount + ((fCount === 1) ? " entry" : " entries") + ((fCount === tCount) ? " found." : " shown (filtered)."));
+		logRes = logFiltered;
+
+		$("#logTable").html("<div id='logTable'></div>");
+		onPageBlock = 0;
+
+		loadLogTable();
 	}
 
 	function showLogEntry(tableDataId, parentId, fieldDesc, logData) {
 		let titleTxt = "LOG ENTRY CREATED: " + logData.date + " FOR USER: " + logData.userId + " (" + logData.userName + ")";
 		let entryFmtd = logData.text;
-		// formatted/parsed entry build variable
-		// entryFmtd = entryFmtd.replace(/\n/g, "<br>");
-		// entryFmtd = entryFmtd.replace(/\t/g, "&nbsp;&nbsp;&nbsp;&nbsp;");
-		// entryFmtd = entryFmtd.replace(/ /g, "&nbsp;");
 
 		entryFmtd = "<textarea id='leTxt' readonly='true' style='width: 100%; height: 400px;'>" + entryFmtd + "</textarea>"; // wrap log entry in a textarea
 
@@ -807,21 +1135,45 @@ function logView(button) {
 			switch (button) {
 				// copy text to clipboard routine
 				case 'cpToClip':
-					let origTxt = logData.text;
-					$('#leTxt').text("LOG ENTRY CREATED: " + logData.date + " FOR USER: " + logData.userId + " (" + logData.userName + ")\n" + origTxt);
-					document.getElementById('leTxt').select();
-					// document.execCommand("copy"); // execCommand deprecated
-					navigator.clipboard.writeText(document.getElementById('leTxt').textContent);
+					(async () => {
+						const textToCopy = "LOG ENTRY CREATED: " + logData.date + " FOR USER: " + logData.userId + " (" + logData.userName + ")\n" + (logData.text || "");
 
-					$('#leTxt').text(origTxt);
+						try {
+							// Preferred modern API
+							if (navigator.clipboard && navigator.clipboard.writeText) {
+								await navigator.clipboard.writeText(textToCopy);
+							} else {
+								// Fallback for older browsers / insecure contexts: use a temporary textarea + execCommand
+								const ta = document.createElement('textarea');
+								ta.value = textToCopy;
+								// Prevent scrolling to bottom
+								ta.style.position = 'fixed';
+								ta.style.left = '-9999px';
+								document.body.appendChild(ta);
+								ta.focus();
+								ta.select();
 
-					// nxDiag for copied ok msg
-					new nxDialog('cOk', {
-						title: "Log Entry Copied",
-						contents: "<p>Copied log entry data to clipboard.</p>",
-						callback: leGo // reload log entry dialog
-					});
+								const successful = document.execCommand && document.execCommand('copy');
+								document.body.removeChild(ta);
 
+								if (!successful) throw new Error('Fallback copy failed');
+							}
+
+							// Success dialog
+							new nxDialog('cOk', {
+								title: "Log Entry Copied",
+								contents: "<p>Copied log entry data to clipboard.</p>",
+								callback: leGo // reload log entry dialog
+							});
+						} catch (err) {
+							// Failure dialog with manual copy hint
+							new nxDialog('cFail', {
+								title: "Copy Failed",
+								contents: "<p>Could not copy to clipboard automatically. Please select the text and press Ctrl/Cmd+C to copy.</p>",
+								callback: leGo
+							});
+						}
+					})();
 					break;
 
 				// standard exit
@@ -830,17 +1182,15 @@ function logView(button) {
 
 				case 'next':
 					let nextId = parseInt(tableDataId) + 1;
-					// if (logMasterObj[nextId] === undefined) nextId = 0;
-					(logMasterObj[nextId] === undefined) ? window.logEntryObj.disableButton('next') : window.logEntryObj.enableButton('next');
-					showLogEntry(nextId, '', '', logMasterObj[nextId]);
+					(eHiddenData[nextId] === undefined) ? window.logEntryObj.disableButton('next') : window.logEntryObj.enableButton('next');
+					showLogEntry(nextId, '', '', eHiddenData[nextId]);
 
 					break;
 
 				case 'prev':
 					let prevId = parseInt(tableDataId) - 1;
-					// if (logMasterObj[prevId] === undefined) prevId = Object.keys(logMasterObj).length - 1;
-					(logMasterObj[prevId] === undefined) ? window.logEntryObj.disableButton('prev') : window.logEntryObj.enableButton('prev');
-					showLogEntry(prevId, '', '', logMasterObj[prevId]);
+					(eHiddenData[prevId] === undefined) ? window.logEntryObj.disableButton('prev') : window.logEntryObj.enableButton('prev');
+					showLogEntry(prevId, '', '', eHiddenData[prevId]);
 
 					break;
 
@@ -869,8 +1219,13 @@ function logView(button) {
 						callback: leGo
 					});
 
-					(logMasterObj[parseInt(tableDataId) + 1] === undefined) ? window.logEntryObj.disableButton('next') : window.logEntryObj.enableButton('next');
-					(logMasterObj[parseInt(tableDataId) - 1] === undefined) ? window.logEntryObj.disableButton('prev') : window.logEntryObj.enableButton('prev');
+					// Selective older/newer button disabling when browsing through log entry interface
+					let entryIdx = parseInt(tableDataId);
+					let min = onPageBlock;
+					let max = onPageBlock + pageSize > logRes.length ? logRes.length : onPageBlock + pageSize;
+
+					(entryIdx + 1 >= max) ? window.logEntryObj.disableButton('next') : window.logEntryObj.enableButton('next'); // 'older' button
+					(entryIdx - 1 < min) ? window.logEntryObj.disableButton('prev') : window.logEntryObj.enableButton('prev'); // 'newer' button
 
 					break;
 			}
@@ -878,215 +1233,110 @@ function logView(button) {
 	}
 }
 
-// search group list
-function searchGroup(button, searchObject) {
-	if (!button) {
-		let searchGroupHTML =
-			`
-            <div style="width:100%;max-height:250px;overflow: auto;">
-                <table style="width:100%;">
-                    <tr>
-                        <td style="width:40%;">
-                            Search for group:
-                        </td>
-                        <td>
-                            <input type="text" id="searchGroupTerm">
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="2"><em>Wildcards "*" or "%" should be used, otherwise only an exact term will be returned.</td>
-                    </tr>
-                </table>
-            </div>
-        `;
-
-		let searchGroupDialogData = {
-			buttons: [{
-				label: 'Cancel',
-				'cancel': true,
-				value: 'cancel'
-			}, {
-				label: 'Search',
-				'default': true,
-				disabled: false,
-				value: 'save'
-			}],
-			contents: searchGroupHTML,
-			datafields: ['searchGroupTerm'],
-			mandatory: ['searchGroupTerm'],
-			focus: 'searchGroupTerm',
-			dataFormat: 'string',
-			title: 'Group Search',
-			width: 400,
-			callback: searchGroup
-		};
-
-		new nxDialog('searchGroup', searchGroupDialogData);
-	} else if (button === 'save') {
-
-		startAjax('searchGroup', {
-			sTerm: searchObject
-		}).then((res) => {
-			let sResHTML =
-				`
-                <div id="rgCount"></div>
-                <div id="gResults"></div>
-                `;
-
-			let sresDialogData = {
-				buttons: [{
-					label: 'Close',
-					'cancel': true,
-					value: 'cancel',
-					'default': true
-				}],
-				contents: sResHTML,
-				dataFormat: 'string',
-				title: 'Group Search Results',
-				width: 400
-			};
-
-			let gResDialog = new nxDialog('groupResults', sresDialogData);
-
-			// display # groups found
-			let rgCount = res.data.length;
-			if (rgCount === 1) {
-				$('#rgCount').html(`Found ${rgCount} group.`);
-			} else if (rgCount > 1) {
-				$('#rgCount').html(`Found ${rgCount} groups.`);
-			} else {
-				$('#rgCount').html(`No groups found.`);
-				$('#gResults').hide();
-			}
-
-			// iterate & display found search results
-			for (const key in res.data) {
-				const element = res.data[key];
-				$('#gResults').append(`<div class="gResult" id="${element.id}">${element.name}</div>`);
-			}
-
-			// set handler for found group click
-			$('.gResult').on("click", function() {
-				let newGrId = parseInt($(this).attr('id'));
-				ugId = newGrId;
-
-				startAjax('fetchUsergroups', {});
-				gResDialog.dismiss();
-
-				groupSelChanged({
-					id: newGrId
-				});
-			})
-
-		});
-
-	}
+function userManagerHighlight(value, searchTerm) {
+	const text = value === null || value === undefined ? '' : String(value);
+	const escapedText = userMgrEscapeHtml(text);
+	const escapedTerm = String(searchTerm).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	return escapedTerm ? escapedText.replace(new RegExp(`(${escapedTerm})`, 'gi'), '<mark>$1</mark>') : escapedText;
 }
 
-// search userbase
-function searchUser(button, searchObject) {
-	if (!button) {
+function userManagerResultChips(items, searchTerm, emptyLabel) {
+	if (!items.length) return `<span class="umSearchEmptyMeta">${emptyLabel}</span>`;
+	return items.map((item) => `<span class="umSearchChip">${userManagerHighlight(item.name, searchTerm)}</span>`).join('');
+}
 
-		let searchUserHTML =
-			`
-            <div style="width:100%;max-height:250px;overflow: auto;">
-                <table style="width:100%;">
-                    <tr>
-                        <td style="width:40%;">
-                            Search for user:
-                        </td>
-                        <td>
-                            <input type="text" id="searchUserTerm">
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="2"><em>Wildcards "*" or "%" should be used, otherwise only an exact term will be returned.</td>
-                    </tr>
+async function openUserManagerSearch() {
+	const searchDialog = new nxDialog('userManagerSearch', {
+		buttons: [
+			{label: 'Cancel', cancel: true, value: 'cancel'},
+			{label: 'Search', default: true, value: 'search'}
+		],
+		contents: /* html */ `
+			<div class="umSearchPrompt">
+				<label for="userManagerSearchTerm">Search users and groups</label>
+				<input type="text" id="userManagerSearchTerm" autocomplete="off" placeholder="Name, email address, or group">
+				<p>Results include user email addresses, group memberships, and group members.</p>
+			</div>`,
+		datafields: ['userManagerSearchTerm'],
+		mandatory: ['userManagerSearchTerm'],
+		focus: 'userManagerSearchTerm',
+		dataFormat: 'object',
+		title: 'Search',
+		returnPromise: true,
+		width: 520
+	});
 
-                </table>
-            </div>
-        `;
+	const response = await searchDialog;
+	if (response.button !== 'search') return;
+	const searchTerm = response.data.userManagerSearchTerm.trim();
+	if (!searchTerm) return;
+	const res = await startAjax('searchManager', {searchTerm: searchTerm});
+	showUserManagerSearchResults(res.data, searchTerm);
+}
 
-		let searchUserDialogData = {
-			buttons: [{
-				label: 'Cancel',
-				'cancel': true,
-				value: 'cancel'
-			}, {
-				label: 'Search',
-				'default': true,
-				disabled: false,
-				value: 'save'
-			}],
-			contents: searchUserHTML,
-			datafields: ['searchUserTerm'],
-			mandatory: ['searchUserTerm'],
-			focus: 'searchUserTerm',
-			dataFormat: 'string',
-			title: 'User Search',
-			width: 400,
-			callback: searchUser
-		};
+function showUserManagerSearchResults(results, searchTerm) {
+	const userCards = results.users.map((user) => /* html */ `
+		<button type="button" class="umSearchCard umSearchUserResult" data-user-id="${user.id}">
+			<span class="umSearchCardHead">
+				<strong>${userManagerHighlight(user.name, searchTerm)}</strong>
+				<span class="umSearchResultType">User</span>
+			</span>
+			<span class="umSearchEmail">${userManagerHighlight(user.email || 'No email address', searchTerm)}</span>
+			<span class="umSearchMetaLabel">Groups</span>
+			<span class="umSearchChips">${userManagerResultChips(user.groups, searchTerm, 'No groups')}</span>
+		</button>`).join('');
 
-		new nxDialog('searchUser', searchUserDialogData);
+	const groupCards = results.groups.map((group) => /* html */ `
+		<button type="button" class="umSearchCard umSearchGroupResult" data-group-id="${group.id}" data-group-name="${userMgrEscapeHtml(group.name)}">
+			<span class="umSearchCardHead">
+				<strong>${userManagerHighlight(group.name, searchTerm)}</strong>
+				<span class="umSearchResultType">Group</span>
+			</span>
+			<span class="umSearchMetaLabel">Users</span>
+			<span class="umSearchChips">${userManagerResultChips(group.users, searchTerm, 'No users')}</span>
+		</button>`).join('');
 
-	} else if (button === 'save') {
-		startAjax('searchUser', {
-			sTerm: searchObject
-		}).then((res) => {
-			let sResHTML =
-				`
-                <div id="rCount"></div>
-                <div id="uResults"></div>
-                `;
+	const contents = /* html */ `
+		<div class="umSearchResults">
+			<div class="umSearchSummary">Results for <strong>${userMgrEscapeHtml(searchTerm)}</strong></div>
+			<div class="umSearchColumns">
+				<section class="umSearchSection">
+					<div class="umSearchSectionHeader"><span>Users</span><strong>${results.users.length}</strong></div>
+					<div class="umSearchList">${userCards || '<div class="umSearchNoResults">No matching users</div>'}</div>
+				</section>
+				<section class="umSearchSection">
+					<div class="umSearchSectionHeader"><span>Groups</span><strong>${results.groups.length}</strong></div>
+					<div class="umSearchList">${groupCards || '<div class="umSearchNoResults">No matching groups</div>'}</div>
+				</section>
+			</div>
+		</div>`;
 
-			let sresDialogData = {
-				buttons: [{
-					label: 'Close',
-					'cancel': true,
-					value: 'cancel',
-					'default': true
-				}],
-				contents: sResHTML,
-				dataFormat: 'string',
-				title: 'User Search Results',
-				width: 400
-			};
+	const resultsDialog = new nxDialog('userManagerSearchResults', {
+		buttons: [
+			{label: 'New search', value: 'new'},
+			{label: 'Close', cancel: true, default: true, value: 'close'}
+		],
+		contents: contents,
+		title: 'Search results',
+		width: 900,
+		callback: function(button) {
+			if (button === 'new') openUserManagerSearch();
+		}
+	});
 
-			let uResDialog = new nxDialog('userResults', sresDialogData);
+	$('.umSearchUserResult').on('click', async function() {
+		const userId = String($(this).data('user-id'));
+		resultsDialog.dismiss();
+		await groupSelChanged({id: -1, name: '<ALL USERS>'}, false);
+		userSelChanged({id: userId});
+	});
 
-			// display # users found
-			let rCount = res.data.length;
-			if (rCount === 1) {
-				$('#rCount').html(`Found ${rCount} user.`);
-			} else if (rCount > 1) {
-				$('#rCount').html(`Found ${rCount} users.`);
-			} else {
-				$('#rCount').html(`No users found.`);
-				$('#uResults').hide();
-			}
-
-			// iterate & display found search results
-			for (const key in res.data) {
-				const element = res.data[key];
-				$('#uResults').append(`<div class="uResult" id="${element.id}">${element.name}</div>`);
-			}
-
-			// set handler for found user click
-			$('.uResult').on("click", function() {
-				startAjax('fetchUsergroups', {});
-
-				uResDialog.dismiss();
-				ugId = -1;
-				groupSelChanged(-1);
-
-				userSelChanged({
-					id: $(this).attr('id')
-				});
-			});
-		});
-
-	}
+	$('.umSearchGroupResult').on('click', function() {
+		const groupId = Number($(this).data('group-id'));
+		const groupName = $(this).attr('data-group-name');
+		resultsDialog.dismiss();
+		groupSelChanged({id: groupId, name: groupName});
+	});
 }
 
 /**
@@ -1209,7 +1459,7 @@ function groupSelChanged(groupObj, ltOverride = true) {
 	loadTop = ltOverride;
 
 	// User list load call
-	startAjax('fetchUsers', {
+	return startAjax('fetchUsers', {
 		userGroupId: ugId,
 	});
 }
@@ -1233,6 +1483,206 @@ function valChanged(sender, valSend, a, source) {
 		$('#xtraPropInfo').html("").hide();
 	}
 
+}
+
+function userMgrEscapeHtml(value) {
+	return $('<div>').text(value === null || value === undefined ? '' : value).html();
+}
+
+function userMgrFormatValue(value) {
+	return value === null || value === undefined || value === "" ? "&lt;no value&gt;" : userMgrEscapeHtml(value);
+}
+
+function userMgrAccountTypeLabel(type) {
+	if (type === "LOCAL") return "Local account";
+	if (type === "LDAP") return "LDAP account";
+	if (type === "SAML") return "SAML account";
+	return userMgrFormatValue(type);
+}
+
+function userMgrNormalizeAccountType(type) {
+	const normalized = (type || '').toString().toUpperCase();
+	return normalized === 'SAML' ? 'SSO' : normalized;
+}
+
+function userMgrUserListBadges(type) {
+	const normalized = userMgrNormalizeAccountType(type);
+	if (normalized === 'LDAP') {
+		return '<span class="umUserAuthIcon" title="LDAP">L</span>';
+	}
+	if (normalized === 'SSO') {
+		return '<span class="umUserAuthIcon" title="SSO">S</span>';
+	}
+	return '';
+}
+
+function userMgrAccountTypeFromListItem(item) {
+	if (!item) return '';
+	return item.acct_type || item.acctType || '';
+}
+
+function userMgrRoleFromListItem(item) {
+	if (item.isSuper) return 'superadmin';
+	if (item.isElevated) return 'elevated';
+	if (item.isAdminOnly) return 'admin';
+	return 'standard';
+}
+
+function userMgrRoleBadge(role) {
+	const badges = {
+		superadmin: {short: 'S', title: 'Superadmin'},
+		admin: {short: 'A', title: 'Admin'},
+		elevated: {short: 'EA', title: 'Elevated Admin'}
+	};
+	const badge = badges[role];
+	return badge ? `<span class="umUserRoleBadge umUserRoleBadge-${role}" title="${badge.title}">${badge.short}</span>` : '';
+}
+
+function userMgrUserIcon() {
+	return /* html */ `
+		<svg class="umUserSymbol" viewBox="0 0 24 24" aria-hidden="true">
+			<path d="M12 12c2.58 0 4.67-2.09 4.67-4.67S14.58 2.66 12 2.66 7.33 4.75 7.33 7.33 9.42 12 12 12Z"></path>
+			<path d="M4.5 21.34c.45-4.01 3.66-6.84 7.5-6.84s7.05 2.83 7.5 6.84"></path>
+		</svg>
+	`;
+}
+
+function userMgrGetRole(data) {
+	if (superArr[data.name]) {
+		return {
+			key: "superadmin",
+			label: "Superadmin"
+		};
+	}
+
+	if (admArr[data.id]) {
+		let accessDef = {};
+		try {
+			accessDef = typeof data.accessDef === "string" ? jsonDecode(data.accessDef) : (data.accessDef || {});
+		} catch (e) {
+			accessDef = {};
+		}
+
+		let elevated = !!(
+			accessDef &&
+			(
+				(accessDef.c_items && accessDef.c_items["Elevated Administrator"]) ||
+				(accessDef.items && accessDef.items.adminElevated)
+			)
+		);
+
+		return {
+			key: elevated ? "elevated" : "admin",
+			label: elevated ? "Elevated Admin" : "Admin"
+		};
+	}
+
+	return {
+		key: "standard",
+		label: "Standard"
+	};
+}
+
+function userMgrGetElevatedSettingData(data) {
+	if (superArr[data.name] || !admArr[data.id]) return null;
+
+	let accessDef = {};
+	try {
+		accessDef = typeof data.accessDef === "string" ? jsonDecode(data.accessDef) : (data.accessDef || {});
+	} catch (e) {
+		accessDef = {};
+	}
+
+	if (!accessDef.c_items || accessDef.c_items["Elevated Administrator"] === undefined) return null;
+
+	return {
+		uid: data.id,
+		name: data.name,
+		id: "Elevated Administrator",
+		fName: "Elevated Administrator",
+		edit_type: "accessDef",
+		updateType: "permission",
+		value: accessDef.c_items["Elevated Administrator"],
+		section: "c_items",
+		perm: "Elevated Administrator"
+	};
+}
+
+function userMgrUpdateLanguageFlag(lang) {
+	let cleanLang = (lang || "").toString().toUpperCase();
+	let flagMap = {
+		DE: "🇩🇪",
+		EN: "🇬🇧",
+		FR: "🇫🇷"
+	};
+	let labelMap = {
+		DE: "German",
+		EN: "English",
+		FR: "French"
+	};
+	let label = labelMap[cleanLang] || "";
+
+	$('#umLangFlag')
+		.toggleClass('is-empty', !cleanLang)
+		.text(flagMap[cleanLang] || "")
+		.attr('title', label)
+		.attr('aria-label', label);
+}
+
+function userMgrSaveSetting(data, newVal, refresh = true) {
+	let oldVal = data.value === undefined ? null : data.value;
+
+	if (data.edit_type === "boolean") {
+		oldVal = (data.value === "Enabled") ? 1 : 0;
+		newVal = (newVal === true || newVal === "Enabled" || parseInt(newVal, 10) === 1) ? 1 : 0;
+	}
+
+	if (data.id === 'bad_logins') newVal = 0;
+	if (data.id === 'last_bad_pass') newVal = "";
+
+	let acctUpdateObj = {
+		userId: data.uid,
+		origUgId: ugId,
+		fieldName: data.id,
+		oldVal: oldVal,
+		newVal: newVal,
+		updateType: data.updateType,
+		section: data.section || "",
+		perm: data.perm || ""
+	};
+
+	return startAjax('updatePerms', acctUpdateObj).then((res) => {
+		gui.statusBar.setStatus("User successfully updated.", 2500, '#0A0');
+		startAjax('fetchUsergroups', {});
+
+		if (res.loadUg !== ugId && res.loadUg !== undefined) groupSelChanged({
+			id: res.loadUg,
+			name: res.ugName
+		}, true);
+
+		if (refresh && ('data' in res)) {
+			startAjax('fetchPerms', {
+				id: res.data.userId,
+				selectedUg: res.loadUg
+			});
+		}
+
+		return res;
+	});
+}
+
+function userMgrBuildSettingData(acctPropModel, data, key, value) {
+	return {
+		uid: data.id,
+		name: data.name,
+		id: key,
+		userGroups: data.userGroups,
+		fName: acctPropModel[key]['fName'],
+		edit_type: acctPropModel[key]['type'],
+		updateType: "account",
+		optList: acctPropModel[key]['optList'] || "",
+		value: value
+	};
 }
 
 // parse user account data and add to users jsSortableTable view
@@ -1289,68 +1739,199 @@ function parseAcctData(data, dataOpts) {
 			type: "readonly"
 		}
 	};
+	let userRole = userMgrGetRole(data);
+	let elevatedSetting = userMgrGetElevatedSettingData(data);
+	let lockOwnAdminStatus = selName === myName && (admArr[data.id] || superArr[data.name]);
 
 	gui.userAdminView.clearElements();
-	$('#acctPropList').show();
+	$('#acctPropList').show().html( /* html */ `
+		<div class="umAccountCard">
+			<div class="umAccountInfo umRole-${userRole.key}">
+				<div class="umAccountAvatar">${userMgrUserIcon()}</div>
+				<div class="umAccountInfoMain">
+					<div class="umAccountName">${userMgrEscapeHtml(data.name)}</div>
+					<div class="umAccountMeta">
+						<span>ID ${userMgrEscapeHtml(data.id)}</span>
+						<span>${userMgrEscapeHtml(userRole.label)}</span>
+						<span>${userMgrAccountTypeLabel(data.acct_type)}</span>
+						<span class="umStatusPill ${data.status === "Enabled" ? "is-enabled" : "is-disabled"}">${data.status === "Enabled" ? "Enabled" : "Disabled"}</span>
+					</div>
+				</div>
+			</div>
+			<div class="umSettingsList" id="umSettingsList"></div>
+		</div>
+	`);
 
-	// define value display var for showing formatted value but retaining original data
-	let valDisp = "";
+	let lockedForAdminPeer = selName !== myName && isAdmin && !isAE && (admArr[selId]);
+	let rowData = {};
 	$.each(data, function(key, value) {
-
-		valDisp = value;
-
-		if (['accessDef', 'id'].includes(key)) return; // don't show these keys in account properties list
-		if (value === null) valDisp = "<no value>"; // replace nulls with friendly value
-		if (key === 'userGroups') valDisp = '[Click to View]';
-
-		// skip homeaccess display if an admin/superadmin since any admin level can create home folders
-		if (!(key === 'homeaccess' && (superArr[data.name] || admArr[data.id]))) {
-
-			// main element adding loop
-			gui.userAdminView.addElement({
-				property: {
-					data: acctPropModel[key]['fName'],
-					id: key,
-					hiddenData: {
-						uid: data.id,
-						name: data.name,
-						id: key,
-						userGroups: data.userGroups,
-						fName: acctPropModel[key]['fName'],
-						edit_type: acctPropModel[key]['type'],
-						updateType: "account",
-						optList: acctPropModel[key]['optList'] || "",
-						value: value
-					}
-				},
-				value: valDisp
-			});
-		}
+		if (!acctPropModel[key] || ['accessDef', 'id', 'acct_type'].includes(key)) return;
+		if (key === 'homeaccess' && (superArr[data.name] || admArr[data.id])) return;
+		rowData[key] = userMgrBuildSettingData(acctPropModel, data, key, value);
 	});
 
-	// admin/elevated admin rules for admin group
-	if (selName === myName) {
-		if (isAdmin) gui.userAdminView.unlock();
-	} else {
-		if (isAdmin && !isAE && (admArr[selId])) gui.userAdminView.lock();
-		$('.data-rows_acctPropList_table td[data-fielddesc="property"]').css('text-align', 'left'); // refresh left-alignment after lock
+	function addSettingRow(key, controlHtml, helpHtml = "") {
+		if (!rowData[key]) return;
+		$('#umSettingsList').append( /* html */ `
+			<div class="umSettingRow" data-setting="${key}">
+				<div class="umSettingLabel">${userMgrEscapeHtml(rowData[key].fName)}${key === 'homeaccess' ? ' <span id="umHomeAccessHelp"></span>' : ''}</div>
+				<div class="umSettingValue">${controlHtml}</div>
+				${helpHtml}
+			</div>
+		`);
 	}
 
+	function addCustomSettingRow(key, label, controlHtml, helpHtml = "") {
+		$('#umSettingsList').append( /* html */ `
+			<div class="umSettingRow" data-setting="${key}">
+				<div class="umSettingLabel">${userMgrEscapeHtml(label)}</div>
+				<div class="umSettingValue">${controlHtml}</div>
+				${helpHtml}
+			</div>
+		`);
+	}
+
+	addSettingRow('name', `<button type="button" class="umValueButton" data-edit-setting="name">${userMgrFormatValue(data.name)}</button>`);
+	addSettingRow('email', `<button type="button" class="umValueButton" data-edit-setting="email">${userMgrFormatValue(data.email)}</button>`);
+	addSettingRow('status', `<div id="umStatusSwitch" class="umInlineSwitch"></div>`);
+	if (elevatedSetting) {
+		addCustomSettingRow('elevatedAdmin', 'Elevated Administrator', `<div id="umElevatedSwitch" class="umInlineSwitch"></div>`, /* html */ `
+			<div class="umSettingHelp umElevatedHelpIntro">
+				<span class="umElevatedHelpBadge">Role permission</span>
+				<span class="umElevatedHelpText">Allows trusted admins to manage other administrator accounts.</span>
+				<span id="umElevatedHelp"></span>
+			</div>
+		`);
+	}
+	addSettingRow('homeaccess', `<div id="umHomeSwitch" class="umInlineSwitch"></div>`);
+	addSettingRow('bad_logins', /* html */ `
+		<span class="umReadonlyValue umReadonlyValueSmall">${userMgrFormatValue(data.bad_logins)}</span>
+		<button type="button" class="umIconButton" id="umResetBadLogins" title="Reset bad login counter to zero">&#8634;</button>
+	`);
+	addSettingRow('last_bad_pass', `<span class="umReadonlyValue umReadonlyValueSmall">${userMgrFormatValue(data.last_bad_pass)}</span>`);
+	addSettingRow('defLang', `<div class="umLangControl"><span id="umLangFlag" class="umLangFlag is-empty" aria-hidden="true"></span><select class="umInlineSelect" id="umLangSelect"></select></div>`);
+	addSettingRow('userGroups', `<button type="button" class="umValueButton" data-edit-setting="userGroups">View and edit</button>`);
+
 	// reset the innerHTML content of our target button DIV or else the centering will be off after multiple calls to this case
-	$('#pwdResetBox').html('');
+	$('#pwdResetBox').html('').hide();
 
 	// pwd reset button will be disabled if the account is not type LOCAL; and conditionally for certain admin conditions
 	let disablePwdReset = data.acct_type !== "LOCAL";
 	if (!isAE && isAdmin && admArr[data.id]) disablePwdReset = true;
 	if (myName === data.name && data.acct_type === "LOCAL") disablePwdReset = false;
 
-	// account reset password button init and function call
-	let pwdResetBtn = new nxButton($('#pwdResetBox'), 'pwdReset', {
-		label: "Reset Account Password",
-		disabled: disablePwdReset,
-		callback: function() {
+	if (data.acct_type === "LOCAL") {
+		addCustomSettingRow('password', 'Password', `<button type="button" class="umValueButton" id="umPwdResetButton"${disablePwdReset ? ' disabled' : ''}>Reset password</button>`);
+		$('#umPwdResetButton').on('click', function() {
+			if (disablePwdReset) return;
 			passReset(data.id, data.name);
+		});
+	}
+
+	if (lockedForAdminPeer) {
+		$('#umSettingsList').addClass('umSettingsLocked');
+		$('#umSettingsList button, #umSettingsList select').prop('disabled', true);
+		$('#umSettingsList').find('.jstsContainer').addClass('locked');
+	}
+
+	$('[data-edit-setting]').on('click', function() {
+		if (lockedForAdminPeer) return;
+		edit_acct_setting(rowData[$(this).data('edit-setting')]);
+	});
+
+	if (document.getElementById('umHomeAccessHelp')) {
+		new OasysHelp('umHomeAccessHelp', {
+			htmlContent: '<p>When this option is active, the user can create root-level folders in the Content, Test and Test Taker managers. When it is inactive, the user can only work inside folders they are allowed to access.</p>',
+			title: 'Home folder create'
+		});
+	}
+
+	if (document.getElementById('umElevatedHelp')) {
+		new OasysHelp('umElevatedHelp', {
+			htmlContent: OasysHelp.layout({
+				lead: 'Elevated administrator is a stronger admin role for trusted operators who may act on other administrator accounts.',
+				items: [{
+					title: 'User administration:',
+					text: 'Add users to, or remove users from, the admin user group.'
+				}, {
+					title: 'Admin accounts:',
+					text: 'Modify, disable, or delete other administrator accounts.'
+				}, {
+					title: 'New admins:',
+					text: 'Create administrator accounts directly in the admin user group.'
+				}, {
+					title: 'System and backup:',
+					text: 'Access additional system settings and manage backup archive files.'
+				}],
+				caution: 'Enable this only for administrators who should be allowed to perform sensitive account and backup actions.'
+			}),
+			title: 'Elevated Administrator'
+		});
+	}
+
+	if (rowData.status) {
+		new jsToggleswitch($('#umStatusSwitch'), 'um_status_ts', {
+			dataId: 'ActSetVal',
+			height: 20,
+			width: 60,
+			background: 'images/ic_ui_toggleswitch.png',
+			readOnly: lockedForAdminPeer || lockOwnAdminStatus,
+			changeCallback: function(_sender, checked) {
+				if (checked === false && selName === myName) {
+					$('#umStatusWarning').remove();
+					$('[data-setting="status"]').append( /* html */ `
+						<div class="umSettingWarning" id="umStatusWarning">Disabling your own account will lock you out immediately after the change is saved.</div>
+					`);
+				} else {
+					$('#umStatusWarning').remove();
+				}
+				userMgrSaveSetting(rowData.status, checked);
+			}
+		}, data.status === "Enabled");
+	}
+
+	if (rowData.homeaccess) {
+		new jsToggleswitch($('#umHomeSwitch'), 'um_home_ts', {
+			dataId: 'ActSetVal',
+			height: 20,
+			width: 60,
+			background: 'images/ic_ui_toggleswitch.png',
+			readOnly: lockedForAdminPeer,
+			changeCallback: function(_sender, checked) {
+				userMgrSaveSetting(rowData.homeaccess, checked);
+			}
+		}, data.homeaccess === "Enabled");
+	}
+
+	if (elevatedSetting) {
+		new jsToggleswitch($('#umElevatedSwitch'), 'um_elevated_ts', {
+			dataId: 'permSetVal',
+			height: 20,
+			width: 60,
+			background: 'images/ic_ui_toggleswitch.png',
+			readOnly: lockedForAdminPeer || !isSuper,
+			changeCallback: function(_sender, checked) {
+				userMgrSaveSetting(elevatedSetting, checked);
+			}
+		}, elevatedSetting.value === true);
+	}
+
+	if (rowData.defLang) {
+		let langs = dataOpts.langs || {};
+		$('#umLangSelect').append(`<option value="">&lt;No language set&gt;</option>`);
+		for (const key in langs) {
+			$('#umLangSelect').append(`<option value="${userMgrEscapeHtml(key)}">${userMgrEscapeHtml(langs[key])}</option>`);
 		}
+		$('#umLangSelect').val(data.defLang || "");
+		userMgrUpdateLanguageFlag(data.defLang || "");
+		$('#umLangSelect').on('change', function() {
+			userMgrUpdateLanguageFlag($(this).val());
+			userMgrSaveSetting(rowData.defLang, $(this).val());
+		});
+	}
+
+	$('#umResetBadLogins').on('click', function() {
+		userMgrSaveSetting(rowData.bad_logins, 0);
 	});
 }
 
@@ -1362,10 +1943,12 @@ function parseAccessDef(data) {
 	$('#userPermsTbText').html('');
 
 	// loop perm object
+	let addedPermRows = 0;
 	$.each(data, function(_key, objValue) {
 		for (let section in objValue) {
 			if (section.substring(0, 2) !== "c_") continue; // skip any entry that isn't a concept permisison entry
 			for (let entry in objValue[section]) {
+				if (entry === "Elevated Administrator") continue;
 				gui.userPermView.addElement({
 					property: {
 						data: (entry).toString(),
@@ -1383,56 +1966,15 @@ function parseAccessDef(data) {
 					},
 					value: objValue[section][entry]
 				});
+				addedPermRows++;
 			}
 		}
 	});
 
-	$('[data-tdid="Elevated Administrator"]').html("Elevated Administrator <span id='aeInfo' class='qmark_extra_info'>?</span>");
-
-	// do not show infoBox for elevated admin if not at least elevated admin
-	if (isAdmin && !isAE) {
-		$('#aeInfo').hide();
+	if (addedPermRows === 0) {
+		$('#permissionList').hide();
+		return;
 	}
-
-	// handler for infobox so it doesn't trigger the actual option setting
-	$('#aeInfo').hover(() => {
-		gui.userPermView.lock();
-	}, () => {
-		if (isSuper) gui.userPermView.unlock();
-	});
-
-	// AE infoBox handler for clicking the question mark
-	$('#aeInfo').on("click", () => {
-		let aei = new nxDialog('aeiId', {
-			width: 700,
-			title: "Elevated Administrator Information",
-			contents: `
-            <p>When this option is selected, the following <em>additional</em> privileges are granted to this Admin user:</p>
-
-            <p>
-                <ul id="aeListProp">
-                    <li>Access to Additional System Settings</li>
-                <br>
-                    <li>(Users): Remove or add other users to Admin usergroup</li>
-                    <li>(Users): Delete/disable other Administrators</li>
-                    <li>(Users): Create Administrators in the Admin usergroup</li>
-                    <li>(Users): Modify another Admin level user's account properties</li>
-                <br>
-                    <li>(Backup): Download any backup archive file</li>
-                    <li>(Backup): Delete any backup archive file</li>
-                    <li>(Backup): Restore previous snapshot file</li>
-                </ul>
-            </p>
-            <p>This option should be enabled with caution.</p>
-            `
-		});
-
-		// forcibly override style for LI entries
-		$('#aeListProp > li').css({
-			'font-weight': 'bold',
-			'list-style-type': "unset"
-		});
-	});
 
 	// Only superadmins can change the 'roles' values
 	if (isAdmin) gui.userPermView.lock();
@@ -1473,21 +2015,25 @@ function edit_acct_setting(data, button) {
 		}
 
 		let editAcctHTML = /* html */
-			`<div class="userSettingsDialog">
-                <table style="width:100%;" id="settingsView">
-                    <tr><td text-align: right;">User ID:</td><td style="font-weight: bolder;">${data.name.toString()}</td></tr>
-                    <tr><td text-align: right;">Setting:</td><td style="font-weight: bolder;">${data.fName}</td></tr>
-                    <tr><td text-align: right;">Value:</td><td><div id="setting" style="max-height: 147px; overflow-y: auto;"></div></td></tr>
-                </table>
-                <div style='display: none; margin: 10px; padding: 5px; border: 1px solid #ccc;' id='xtraPropInfo'></div>
-            </div>
-            `;
+			`<div class="userSettingsDialog umEditDialog">
+				<div class="umDialogHero">
+					<div class="umDialogKicker">${data.id === "userGroups" ? "User group membership" : "Account setting"}</div>
+					<div class="umDialogTitle">${data.id === "userGroups" ? userMgrEscapeHtml(data.name.toString()) : userMgrEscapeHtml(data.fName)}</div>
+					<div class="umDialogMeta">${data.id === "userGroups" ? "View and edit the groups assigned to this user." : userMgrEscapeHtml(data.name.toString())}</div>
+				</div>
+				<div class="umDialogField" id="settingsView">
+					<label>Value</label>
+					<div id="setting" class="umDialogSetting"></div>
+				</div>
+				<div style='display: none;' id='xtraPropInfo' class="umSettingWarning"></div>
+			</div>
+			`;
 
 		let acctEditDialogData = {
 			buttons: btnArr,
 			contents: editAcctHTML,
-			title: `EDIT SETTING: ${data.fName}`,
-			width: 450,
+			title: data.id === "userGroups" ? `User Group Membership` : `Edit ${data.fName}`,
+			width: data.id === "userGroups" ? 620 : 480,
 			callback: edit_acct_setting
 		};
 		window.editSetDialog = new nxDialog('editSetDialog', acctEditDialogData, arguments);
@@ -1499,7 +2045,7 @@ function edit_acct_setting(data, button) {
 			case 'string':
 				if (data.value === null) data.value = ""; // email addresses sometimes come back as null and we don't want to display the string 'null' in the edit value dialog box
 
-				jqSetObj.html(`<input id='strInput' type='text' value='${data.value}'>`);
+				jqSetObj.html(`<input id='strInput' type='text' value='${userMgrEscapeHtml(data.value)}'>`);
 				$('#strInput').focus().select();
 
 				// # ------------------------------------- #
@@ -1576,22 +2122,24 @@ function edit_acct_setting(data, button) {
 					});
 				};
 
-				$('#settingsView').find('tr:last').prev().after( /* html */ `<tr><td>Filter Usergroups:</td><td><input id='ugFilter' type='text' placeholder='search' style='margin-bottom: 5px;'></td></tr>`);
+				$('#settingsView').prepend( /* html */ `
+					<div class="umGroupFilterRow">
+						<label for="ugFilter">Filter user groups</label>
+						<input id='ugFilter' type='text' placeholder='Search groups'>
+					</div>
+				`);
 
 				$('#ugFilter').on('input', function() {
 					let filterVal = $(this).val();
 
 					$("div#setting label").each(function(i, v) {
 						if ($(v).html().toLowerCase().includes(filterVal.toLowerCase())) {
-							$(v).show();
-							$(v).prev().show();
+							$(v).closest('.umGroupChoice').show();
 						} else {
-							$(v).hide();
-							$(v).prev().hide();
+							$(v).closest('.umGroupChoice').hide();
 						}
 						if (filterVal === "") {
-							$(v).show();
-							$(v).prev().show();
+							$(v).closest('.umGroupChoice').show();
 						}
 					});
 
@@ -1600,7 +2148,8 @@ function edit_acct_setting(data, button) {
 				for (const key in data.optList.ugList) {
 					if (data.optList.ugList.hasOwnProperty(key)) {
 						const ugroup = data.optList.ugList[key];
-						jqSetObj.append(`<div id='div_${ugroup.value}'><input type='checkbox' class="ugcb_array" data-dbId=${ugroup.value} id=ugcb_${ugroup.value} /><label for='ugcb_${ugroup.value}'>${ugroup.label}</label></div>`);
+						const roleGroupClass = ugroup.label === "superadmin" ? " umGroupChoiceSuperadmin" : (ugroup.label === "admin" ? " umGroupChoiceAdmin" : "");
+						jqSetObj.append(`<div class="umGroupChoice${roleGroupClass}" id='div_${ugroup.value}'><input type='checkbox' class="ugcb_array" data-dbId=${ugroup.value} id=ugcb_${ugroup.value} /><label for='ugcb_${ugroup.value}'>${userMgrEscapeHtml(ugroup.label)}</label></div>`);
 
 						// enable save button and udpate new usergroup membership object to send on save request
 						$('#ugcb_' + ugroup.value).on("change", function(e) {
@@ -1673,6 +2222,7 @@ function edit_acct_setting(data, button) {
 
 					let langSV = {};
 					langSV.curVal = new jsDropList(jqSetObj, 'lang_opts', {
+						theme: 'backend',
 						elements: langs,
 						onChange: valChanged
 					});
@@ -1699,48 +2249,7 @@ function edit_acct_setting(data, button) {
 		}
 	} else {
 		if (button === 'save' || button === 'resetCount') {
-
-			// convert boolean data type from bool true/false to 1/0
-			if (data.edit_type === "boolean") {
-				data.value = (data.value === "Enabled") ? 1 : 0;
-				val = (val === true) ? 1 : 0;
-			}
-
-			if (data.id === 'bad_logins') val = 0;
-			if (data.id === 'last_bad_pass') val = "";
-
-
-			let acctUpdateObj = {
-				userId: data.uid,
-				origUgId: ugId,
-				fieldName: data.id,
-				oldVal: data.value || null,
-				newVal: val,
-				updateType: data.updateType,
-				section: data.section || "",
-				perm: data.perm || ""
-			};
-
-			// do permission update
-			startAjax('updatePerms', acctUpdateObj).then((res) => {
-				gui.statusBar.setStatus("User successfully updated.", 2500, '#0A0');
-				startAjax('fetchUsergroups', {});
-
-				// do not do group change function if still in same group, or returned loadgroup value undefined
-				if (res.loadUg !== ugId && res.loadUg !== undefined) groupSelChanged({
-					id: res.loadUg,
-					name: res.ugName
-				}, true);
-
-				// on an error do not do refresh b/c res.data.userId is not returned to us
-				if (('data' in res)) {
-					// refresh permissions
-					startAjax('fetchPerms', {
-						id: res.data.userId,
-						selectedUg: res.loadUg
-					});
-				}
-			});
+			userMgrSaveSetting(data, val);
 		}
 	}
 }
@@ -1750,21 +2259,34 @@ function passReset(userId, userName, button, newPass) {
 	if (!button) {
 		let pwdDialogData = {
 			buttons: [{
-				label: "cancel",
+				label: "Cancel",
 				value: 'cancel',
 				'cancel': true
 			},
 			{
-				label: "Update Password",
+				label: "Update password",
 				value: "ok",
 				disabled: true
 			}
 			],
-			contents: "New Password:<input type='text' id='newPwdInput'><br><div id='pwdWarning'></div>",
-			title: "Password Reset for " + userName.toUpperCase(),
+			contents: /* html */ `
+				<div class="umPasswordDialog">
+					<div class="umDialogHero">
+						<div class="umDialogKicker">Password reset</div>
+						<div class="umDialogTitle">${userMgrEscapeHtml(userName)}</div>
+						<div class="umDialogMeta">Local account password</div>
+					</div>
+					<label class="umPasswordLabel" for="newPwdInput">New password</label>
+					<input type='text' id='newPwdInput' autocomplete="new-password">
+					<div class="umPasswordHint">Use at least 8 characters with upper, lower and numeric values, or 12+ characters of any type.</div>
+					<div id='pwdResetWarning'></div>
+				</div>
+			`,
+			title: "Reset Account Password",
 			datafields: ["newPwdInput"],
 			mandatory: ["newPwdInput"],
 			focus: "newPwdInput",
+			width: 520,
 			callback: passReset
 		};
 
@@ -1775,18 +2297,18 @@ function passReset(userId, userName, button, newPass) {
 
 			// no zero-len pwds
 			if ($(this).val().length === 0) {
-				$('#pwdWarning').html('');
+				$('#pwdResetWarning').html('');
 				pwdDiag.disableButton('ok');
 			} else {
 				// regex checks for: mix of upper/lower/num + 8 chars in len+, OR 12 chars in len+
 				if (/(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z]).{8,}|.{12,}/.test($(this).val()) === false) {
-					$('#pwdWarning').html("WARNING: This is an insecure password. It is recommended to use a mix of capital, lower, and numeric values with at least 8 characters, or a minimum of any 12 characters.");
+					$('#pwdResetWarning').html("WARNING: This is an insecure password. It is recommended to use a mix of capital, lower, and numeric values with at least 8 characters, or a minimum of any 12 characters.");
 				} else {
-					$('#pwdWarning').html('');
+					$('#pwdResetWarning').html('');
 				}
 
 				if (userName === $(this).val()) {
-					$('#pwdWarning').html($('#pwdWarning').html() + ($('#pwdWarning').html() === "" ? "" : "<br><br>") + "WARNING: It is not recommended to use the same value for both username and password.");
+					$('#pwdResetWarning').html($('#pwdResetWarning').html() + ($('#pwdResetWarning').html() === "" ? "" : "<br><br>") + "WARNING: It is not recommended to use the same value for both username and password.");
 				}
 
 				pwdDiag.enableButton('ok');
@@ -1814,28 +2336,18 @@ function editGroup(button, dataObject) {
 
 	if (!button) {
 		let createGroupHTML = /* html */ `
-            <div class="group_editDialog">
-                <div id='group_editor_view' display: block; width: 100%; border-collapse: collapse; margin: 0 auto;'>
-
-                <div style='display: table;'>
-
-                    <div class='tRow'>
-                        <span class='tTitle'>GROUP NAME:</span>
-                        <span id='fld_name' class='tData'>${ugName}</span>
-                    </div>
-
-                    <div class='tRow'>
-                        <span class='tTitle lastTitle'>SETTING:</span>
-                        <span id='settingListId' class='tData'"></span>
-                    </div>
-                </div>
-
-                <hr>
-
-                <div class="regData tCellEdit" id="grpSetDropdown"></div>
-
-            </div>
-            `;
+			<div class="group_editDialog">
+				<div id="group_editor_view" style="display: block; width: 100%; border-collapse: collapse; margin: 0 auto;">
+					<div style="display: table;">
+						<div class="tRow">
+							<span class="eg_row_title">MODULE ACCESS FOR:</span>
+							<span id="fld_name" class="tData">${ugName}</span>
+						</div>
+					</div>
+					<div class="regData tCellEdit" id="grpSetDropdown"></div>
+				</div>
+			</div>
+		`;
 
 		// manually populate the ID value of the group to be renamed
 		let edtDialogData = {
@@ -1875,6 +2387,7 @@ function editGroup(button, dataObject) {
 
 			// Dropdown list of settings options
 			let settingDD = new jsDropList($('#settingListId'), 'settingListDD', {
+				theme: 'backend',
 				width: 260,
 				onChange: function(src, settingName) {
 					$("[id^='TSentryID_']").hide();
@@ -1887,28 +2400,31 @@ function editGroup(button, dataObject) {
 				if (!usettingDataObject.hasOwnProperty(usetting)) continue;
 				const settingEntry = usettingDataObject[usetting];
 
-				settingDD.addElement(usetting, usetting);
+				// settingDD.addElement(usetting, usetting);
 
 				// setup outer jsSelect List to populate with toggle switches
 				edtSelListObj[usetting] = new jsSelectList($('#grpSetDropdown'), 'TSentryID_' + usetting, {});
 
-				// iterate and show editor permissions for group
+				// iterate and show editor permissions for group; show info msg if no modules found
+				if (settingEntry.length === 0) {
+					$("#grpSetDropdown").html("<div style='display: block; text-align: center; color: #505050;'>No Oasys modules found.</div>");
+					editGroupDialog.disableButton("save");
+					return;
+				}
+
 				for (const entryName in settingEntry) {
 
-					let valObj = settingEntry[entryName];
-					const labelName = (usetting === "editorButtons") ? valObj.name : entryName;
+					const valObj = settingEntry[entryName];
+					let labelName = (usetting === "editorButtons") ? valObj.name : entryName;
 					const trueVal = (usetting === "editorButtons") ? valObj.value : valObj;
 
-					let ro = entryName === 'users' && ugName === 'superadmin'; // do not allow disabling of users menu for superadmins
+					let ro = valObj.ro ?? false;
 
-					// admin group will not have access to upgrader (always disabled in backend)
-					if (entryName === "upgrader" && ugName === "admin") {
-						ro = true;
-					}
+					labelName += ((ro) ? ` [&nbsp;<span style='color: red; font-style: italic;'>blocked by access level</span>&nbsp;]` : "");
 
 					TSobj[entryName] = insertToggleswitch($('#TSentryID_' + usetting), 'edtTs_' + entryName, labelName, {
 						dataId: {
-							label: entryName,
+							label: entryName + ((ro) ? `*` : ""),
 							value: trueVal
 						},
 						checked: trueVal,
@@ -1947,18 +2463,12 @@ function renameGroup(button, dataObject) {
 	if (!button) {
 		let dataFields = ['groupNewName', 'groupId'];
 		let createGroupHTML = `
-            <div class="users_addDialog">
-            <table style="width:100%;">
-                <tr>
-                    <td style="width:40%;">
-                        Rename Group to:
-                    </td>
-                    <td>
-                        <input type="text" id="groupNewName" value="${ugName}" style="width: 100%;">
-                        <input type="hidden" id="groupId" value=${ugId}>
-                    </td>
-                </tr>
-            </table>
+            <div class="tmDialogForm">
+                <div class="tmDialogFormField">
+                    <label for="groupNewName">Group name</label>
+                    <input type="text" id="groupNewName" value="${ugName}">
+                    <input type="hidden" id="groupId" value=${ugId}>
+                </div>
             </div>
             `;
 
@@ -2042,16 +2552,16 @@ function renameGroup(button, dataObject) {
 function deleteGroup(button) {
 
 	if (!button) {
-		let message = "<p>Are you sure you want to remove this group completely?</p>\
-        <p></p>\
-        <p style='font-weight: bold; color: red;'>NOTE! Continuing will remove all existing permission associations for this group in items, tests, and test taker modules.</p>\
-        <p id='naWarning' style='display: none; font-weight: bold; color: red;'>Additionally, the following user(s) will not have any Oasys functionality after group deletion until they are added to another group:</p>\
-        <p id='naList' style='font-style: italic; font-weight: bolder'></p>\
-        ";
+		let message = "<div class='deleteConfirm'>\
+        <div class='deleteConfirmText'><p>Are you sure you want to remove this group completely?</p></div>\
+        <p class='deleteConfirmWarning'>NOTE! Continuing will remove all existing permission associations for this group in items, tests, and test taker modules.</p>\
+        <p id='naWarning' class='deleteConfirmWarning' style='display: none;'>Additionally, the following user(s) will not have any Oasys functionality after group deletion until they are added to another group:</p>\
+        <div id='naList' class='deleteConfirmText' style='display: none; font-style: italic; font-weight: bolder'></div>\
+        </div>";
 
 		let dialogData = {
 			buttons: [{
-				label: 'cancel',
+				label: 'Cancel',
 				'cancel': true,
 				'default': true,
 				value: 'cancel'
@@ -2080,7 +2590,7 @@ function deleteGroup(button) {
 
 			if (res.naData.length !== 0) {
 				$('#naWarning').show();
-				$('#naList').html(naList);
+				$('#naList').html(naList).show();
 			}
 
 		});
@@ -2109,7 +2619,7 @@ function deleteGroup(button) {
 function deleteUser(v1, button) {
 	if (!button) {
 
-		let message = "<p>Are you sure you want to delete this user?</p>";
+		let message = "<div class='deleteConfirm'><div class='deleteConfirmText'><p>Are you sure you want to delete this user?</p></div></div>";
 
 		// if user trying to delete self by enabling delete button, do not respond
 		if (myName === selName) {
@@ -2204,6 +2714,7 @@ function deleteUser(v1, button) {
 
 						/* all owner change droplist build */
 						let aoddObj = new jsDropList(`allOwnerDD${fCount}`, `aodDDid${fCount}`, {
+							theme: 'backend',
 							listTitle: "Select New Owner",
 							elements: oa_arr,
 							width: '100%',
@@ -2222,7 +2733,7 @@ function deleteUser(v1, button) {
 						});
 
 						/* iterative folder list owner change row build */
-						let nofObj = new jsSortableTable(`o_fList${fCount}`, `oflId${fCount}`, {
+						let nofObj = new JsSortableTable(`o_fList${fCount}`, `oflId${fCount}`, {
 							elements: [],
 							tableHeadDisplay: true,
 							tableHead: {
@@ -2269,6 +2780,7 @@ function deleteUser(v1, button) {
 							}
 
 							noJsoArr[f.id] = new jsDropList(f.id + "_no", "no_jsd_" + f.id, {
+								theme: 'backend',
 								width: 310,
 								listTitle: "Select New Owner",
 								cssCollapsed: { 'padding-top': '3px' },
@@ -2326,20 +2838,14 @@ function deleteUser(v1, button) {
 
 function addGroup() {
 	let dataFields = ['groupName'];
-	let createGroupHTML = `
-    <div  class="users_addDialog">
-
-    <table style="width:100%;">
-        <tr>
-            <td style="width:40%;">New Group Name:</td>
-            <td>
-                <input type="text" id="groupName">
-            </td>
-        </tr>
-    </table>
-
-    </div>
-    `;
+	let createGroupHTML = /* html */ `
+	<div class="users_addDialog users_addUserDialog users_addGroupDialog">
+		<div class="umDialogFormTile">
+			<label for="groupName">Group name</label>
+			<input type="text" id="groupName" autocomplete="off">
+		</div>
+	</div>
+	`;
 
 	let cgDialogData = {
 		buttons: [{
@@ -2358,7 +2864,7 @@ function addGroup() {
 		focus: 'groupName',
 		dataFormat: 'object',
 		title: 'Add New Group',
-		width: 400,
+		width: 460,
 		callback: saveNewGroup
 	};
 
@@ -2398,23 +2904,25 @@ function addGroup() {
 			startAjax('addGroup', {
 				"groupData": dataObject,
 			}).then((res) => {
+				if (!res || res.error) return;
 				let loadGroup = res.loadUg;
 				// refresh our group list
 				startAjax('fetchUsergroups', {}).then((res2) => {
+					if (!res2 || res2.error) return;
 
 					// set global ugName to new group
-					ugName = res2.data.filter(obj => {
-						return obj.id === loadGroup
-					})[0].name;
+					const newGroup = res2.data.find(obj => parseInt(obj.id, 10) === parseInt(loadGroup, 10));
+					if (!newGroup) return;
+					ugName = newGroup.name;
 
 					// change to new group
 					groupSelChanged({
-						id: loadGroup
+						id: loadGroup,
+						name: ugName
 					});
 
 					// highlight the newly added userGroup
 					gui.statusBar.setStatus("New group successfully added.", 2500, '#0A0');
-					editGroup();
 				});
 			});
 		}
@@ -2427,59 +2935,31 @@ function addUser(preFill) {
 
 	// friendly name for <all users> usergroup selection
 	let ugDisp = ([undefined, '<ALL USERS>', '<NONE>', '<NO GROUP>'].includes(ugName)) ? "<NONE>" : ugName;
+	let addUserTitle = 'Add New User to ' + userMgrEscapeHtml(ugDisp);
 
 	let createUserHTML = /* html */ `
-    <div style="width:100%;overflow: auto;">
-        <table style="width:100%;">
-            <tr>
-                <td style="width:40%;">
-                    New Username:
-                </td>
-                <td>
-                    <input type="text" id="nu_edt_uname" autocomplete="off">
-                </td>
-            </tr>
-            <tr id ="pwdRow">
-                <td>
-                    New User Password:
-                </td>
-                <td>
-                    <input type="text" id="nu_edt_pwd" autocomplete="new-password">
-                </td>
-            </tr>
-            <tr id ="emailRow">
-                <td>
-                    New User Email:
-                </td>
-                <td>
-                    <input type="text" id="nu_edt_eml" autocomplete="off">
-                </td>
-            </tr>
-            <tr>
-                <td colspan="2">
-                    <div id="pwdWarning"></div>
-                </td>
-            </tr>
-            <tr>
-                <td>
-                    User Group:
-                </td>
-                <td>
-                    <input type="text" id="userGroupName" readonly style="width: 100%;" value='${ugDisp}'>
-                    <input type="hidden" id="userGroupId" value='${ugId}'>
-                </td>
-            </tr>
-            <tr>
-                <td>
-                    Account Type:
-                </td>
-                <td>
-                    <div id="acctType"></div>
-                    <input type="hidden" id="acctTypeVal" value=''>
-                </td>
-            </tr>
-        </table>
-    </div>`;
+	<div class="users_addDialog users_addUserDialog">
+		<input type="hidden" id="userGroupId" value='${userMgrEscapeHtml(ugId)}'>
+		<div class="umDialogFormTile">
+			<label for="nu_edt_uname">Username</label>
+			<input type="text" id="nu_edt_uname" autocomplete="off">
+		</div>
+		<div class="umDialogFormTile" id="pwdRow">
+			<label for="nu_edt_pwd">Password</label>
+			<input type="text" id="nu_edt_pwd" autocomplete="new-password">
+			<div id="pwdWarning"></div>
+		</div>
+		<div class="umDialogFormTile" id="emailRow">
+			<label for="nu_edt_eml">Email address</label>
+			<input type="text" id="nu_edt_eml" autocomplete="off">
+		</div>
+		<div class="umDialogFormTile">
+			<label>Account type</label>
+			<div id="acctType"></div>
+			<input type="hidden" id="acctTypeVal" value=''>
+		</div>
+	</div>
+	`;
 
 	let mandFields = ['nu_edt_uname', 'nu_edt_pwd'];
 	if (settings.emailSysActive) mandFields.push('nu_edt_eml');
@@ -2500,23 +2980,24 @@ function addUser(preFill) {
 		mandatory: mandFields,
 		focus: 'nu_edt_uname',
 		dataFormat: 'object',
-		title: 'Add New User',
-		width: 400,
+		title: addUserTitle,
+		width: 460,
 		callback: saveNewUser
 	};
 	let createUserDialog = new nxDialog('createUserDialog', createUserDialogData);
 
 	let acTypeDD = new jsDropList($('#acctType'), 'acType', {
-		width: 186,
+		theme: 'backend',
+		width: '100%',
 		onChange: function(_vType, val) {
 			if (val !== 'LOCAL') {
-				$('#pwdRow').css('display', 'none');
+				$('#pwdRow').hide();
 				$('#nu_edt_pwd').val('');
 				$('#nu_edt_pwd').attr('disabled', 'disabled');
-				$('#pwdWarning').html('');
+				$('#pwdWarning').hide().html('');
 				$('#nu_edt_uname').trigger('focus');
 			} else {
-				$('#pwdRow').css('display', 'table-row');
+				$('#pwdRow').show();
 				$('#nu_edt_pwd').removeAttr('disabled');
 				$('#nu_edt_uname').trigger('focus');
 			}
@@ -2618,6 +3099,477 @@ function addUser(preFill) {
 				})
 		}
 	}
+}
+
+function openImportUsersDialog() {
+	let importState = {
+		rows: [],
+		validRows: [],
+		groups: [],
+		selectedGroupId: 0
+	};
+	let importFlowBusy = false;
+
+	const dlg = new nxDialog("import_users_dialog", {
+		width: 1150,
+		title: "Import users",
+		contents: `
+			<div id="iuShell" class="imp-shell">
+				<div id="iuStepDrop" style="flex:1;display:flex;">
+					<div id="iuDrop" class="imp-drop" tabindex="0" role="button" aria-label="Drop CSV file here or choose one">
+						<div class="imp-drop-inner">
+							<div class="imp-icon" aria-hidden="true">⬆️</div>
+							<div class="imp-title">Drop CSV here</div>
+							<div class="imp-or">or</div>
+							<label class="imp-choose" id="iuChooseLbl" for="iuFileInput">Select import file…</label>
+							<input id="iuFileInput" type="file" accept=".csv,text/csv" hidden />
+							<div class="imp-hint">
+								CSV with columns <code>username</code>, <code>email</code>, <code>login_type</code>, <code>password</code>
+								<br><a href="#" id="iuExampleLink">Download example CSV</a>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div id="iuTilesWrap" style="display:none;">
+					<div class="imp-tiles">
+						<div class="imp-tile imp-ok" id="iuTileValid">
+							<div class="imp-tile-num" id="iuValidNum">0</div>
+							<div class="imp-tile-label">Valid users</div>
+						</div>
+						<div class="imp-tile" id="iuTileInvalid">
+							<div class="imp-tile-num" id="iuInvalidNum">0</div>
+							<div class="imp-tile-label">Invalid rows</div>
+						</div>
+						<div class="imp-tile" id="iuTileTotal">
+							<div class="imp-tile-num" id="iuTotalNum">0</div>
+							<div class="imp-tile-label">Parsed rows</div>
+						</div>
+					</div>
+				</div>
+
+				<div id="iuOptions" style="display:none; border:1px solid #e7e7e7; border-radius:10px; padding:10px 12px; background:#fafafa;">
+					<table style="width:100%;">
+						<tr>
+							<td style="width:230px;">Assign imported users to group: <span style="color:#b00020;font-weight:bold;" title="Required">*</span></td>
+							<td>
+								<select id="iuGroupSelect" style="min-width:260px;"></select>
+								<span id="iuGroupRequired" style="display:none;margin-left:10px;color:#b00020;font-size:12px;">Required</span>
+							</td>
+						</tr>
+						<tr>
+							<td>Create home folders:</td>
+							<td><label><input type="checkbox" id="iuCreateHome"> Create root-level folders in Content, Test and Test Taker managers</label></td>
+						</tr>
+						<tr>
+							<td>Folder group access:</td>
+							<td><label><input type="checkbox" id="iuGrantRead" disabled> Grant read access to the selected group for each home folder</label></td>
+						</tr>
+					</table>
+				</div>
+
+				<div id="iuDetails" style="display:none; flex:1; overflow:auto; border:1px solid #e7e7e7; border-radius:10px;">
+					<div class="export-table-wrap">
+						<table class="tbl">
+							<thead class="tbl-head">
+								<tr>
+									<th style="width:20%;">Username</th>
+									<th style="width:23%;">Email</th>
+									<th style="width:12%;">Login type</th>
+									<th style="width:12%;">Password</th>
+									<th style="width:33%;">Status / Reason</th>
+								</tr>
+							</thead>
+							<tbody id="iuPreviewBody"></tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+		`,
+		buttons: [
+			{ label: "Close", value: "cancel", cancel: true },
+			{ label: "Import users", value: "import", 'default': true, disabled: true, keepOpen: true }
+		],
+		callback: async function(button) {
+			if (button !== "import") return;
+			runImportUsersFlow();
+		}
+	});
+
+	async function runImportUsersFlow(retryGroupCommit = false) {
+		if (importFlowBusy) return;
+		importFlowBusy = true;
+		try {
+			validateImportReady();
+			const groupId = importState.selectedGroupId;
+			if (!groupId) {
+				if (retryGroupCommit) {
+					importFlowBusy = false;
+					setTimeout(() => runImportUsersFlow(false), 80);
+					return;
+				}
+				showMessage("Import users", "Please select a regular user group.");
+				return;
+			}
+
+			const payload = {
+				users: importState.validRows.map(row => ({
+					username: row.username,
+					email: row.email,
+					login_type: row.login_type,
+					password: row.password
+				})),
+				options: {
+					userGroupId: groupId,
+					createHomeFolder: $('#iuCreateHome').is(':checked'),
+					grantGroupRead: $('#iuGrantRead').is(':checked')
+				}
+			};
+
+			const preflightPayload = JSON.parse(JSON.stringify(payload));
+			preflightPayload.options.dryRun = true;
+			const preflight = await startAjax('importUsers', preflightPayload);
+			if (!preflight || preflight.error) return;
+
+			new nxDialog("import_users_confirm", {
+				width: 560,
+				title: "Confirm user import",
+				icon: "../images/warning.png",
+				iconWidth: 64,
+				contents: `<p><strong>${importUsersEscapeHtml(importState.validRows.length)} backend users will be created.</strong></p>
+					<p>This import is all-or-nothing. If a username or home folder conflict is found, no users or folders will be created.</p>`,
+				buttons: [
+					{ label: "Cancel", value: "cancel", cancel: true, 'default': true },
+					{ label: "Create users", value: "ok" }
+				],
+				callback: async function(confirmButton) {
+					if (confirmButton !== "ok") return;
+					const res = await startAjax('importUsers', payload);
+					if (!res || res.error) return;
+
+					const refreshGroupId = (typeof ugId !== "undefined" && ugId !== null) ? ugId : payload.options.userGroupId;
+					const refreshGroup = importState.groups.find(group => parseInt(group.id, 10) === parseInt(refreshGroupId, 10));
+
+					dlg.dismiss();
+					startAjax('fetchUsergroups', {}).then(() => {
+						groupSelChanged({
+							id: refreshGroupId,
+							name: refreshGroup?.name
+						});
+					});
+				}
+			});
+		} finally {
+			importFlowBusy = false;
+		}
+	}
+
+	startAjax('fetchImportUserGroups', {}).then((res) => {
+		if (!res || res.error) return;
+		importState.groups = res.groups || [];
+		const $sel = $('#iuGroupSelect').empty();
+		$sel.append(`<option value="">Select user group...</option>`);
+		importState.groups.forEach(group => {
+			$sel.append(`<option value="${importUsersEscapeHtml(group.id)}">${importUsersEscapeHtml(group.name)}</option>`);
+		});
+		validateImportReady();
+	});
+
+	const drop = document.getElementById('iuDrop');
+	const fileIn = document.getElementById('iuFileInput');
+	const label = document.getElementById('iuChooseLbl');
+
+	$('#iuExampleLink').on('click', function(e) {
+		e.preventDefault();
+		downloadImportUsersExampleCsv();
+	});
+
+	$('#iuCreateHome').on('change', function() {
+		const checked = $(this).is(':checked');
+		$('#iuGrantRead').prop('disabled', !checked);
+		if (!checked) $('#iuGrantRead').prop('checked', false);
+		validateImportReady();
+	});
+	$('#iuGrantRead').on('change', validateImportReady);
+	$('#iuGroupSelect').on('change input click keyup blur', validateImportReady);
+	validateImportReady();
+
+	['background_import_users_dialog_button_1', 'import_users_dialog_button_1'].forEach(buttonId => {
+		const buttonEl = document.getElementById(buttonId);
+		if (!buttonEl) return;
+		['pointerdown', 'mousedown', 'touchstart'].forEach(ev => {
+			buttonEl.addEventListener(ev, function(e) {
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				runImportUsersFlow(true);
+			}, true);
+		});
+	});
+
+	const resetInput = () => { fileIn.value = ''; };
+	const setBusy = (on) => drop.classList.toggle('is-busy', !!on);
+
+	drop.addEventListener('click', (e) => {
+		if (!e.target.closest('#iuChooseLbl') && !e.target.closest('#iuExampleLink')) {
+			resetInput();
+			fileIn.click();
+		}
+	});
+	label.addEventListener('click', (e) => { e.stopPropagation(); resetInput(); });
+	drop.addEventListener('keydown', (e) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			resetInput();
+			fileIn.click();
+		}
+	});
+
+	['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		drop.classList.add('is-drag');
+	}));
+	['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		drop.classList.remove('is-drag');
+	}));
+	drop.addEventListener('drop', (e) => handleImportUsersFiles(e.dataTransfer.files));
+	fileIn.addEventListener('change', (e) => handleImportUsersFiles(e.target.files));
+
+	async function handleImportUsersFiles(files) {
+		if (!files || !files.length) return;
+		setBusy(true);
+		try {
+			const text = await importUsersReadFileAsText(files[0]);
+			const parsed = parseImportUsersCsv(text);
+
+			if (parsed.errors.length) {
+				new nxDialog("import_users_bad_csv", {
+					width: 560,
+					title: "Invalid CSV",
+					contents: `<div class="imp-error">${parsed.errors.map(importUsersEscapeHtml).join('<br>')}</div>`,
+					buttons: [{ label: "OK", value: "ok", 'default': true }]
+				});
+				return;
+			}
+
+			const prepared = prepareImportUsersRows(parsed.rows);
+			importState.rows = prepared.rows;
+			importState.validRows = prepared.rows.filter(row => row.valid);
+
+			renderImportUsersPreview(importState.rows);
+			$('#iuValidNum').text(String(importState.validRows.length));
+			$('#iuInvalidNum').text(String(importState.rows.length - importState.validRows.length));
+			$('#iuTotalNum').text(String(importState.rows.length));
+
+			$('#iuTileValid').toggleClass('imp-ok', importState.validRows.length > 0);
+			$('#iuTileInvalid').toggleClass('imp-bad', importState.rows.length !== importState.validRows.length);
+			$('#iuTileInvalid').toggleClass('imp-ok', importState.rows.length === importState.validRows.length);
+			$('#iuTileTotal').addClass('imp-ok');
+
+			$('#iuStepDrop').hide();
+			$('#iuTilesWrap').show();
+			$('#iuOptions').show();
+			$('#iuDetails').show();
+			validateImportReady();
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	function validateImportReady() {
+		importState.selectedGroupId = parseInt($('#iuGroupSelect').val(), 10) || 0;
+		const hasGroup = importState.selectedGroupId > 0;
+		$('#iuGroupRequired').toggle(!hasGroup);
+		$('#iuGroupSelect').css('border', hasGroup ? '' : '2px solid #b00020');
+
+		const hasValidCsv = importState.rows.length > 0
+			&& importState.rows.length === importState.validRows.length
+			&& importState.validRows.length > 0;
+
+		if (hasValidCsv) {
+			dlg.enableButton('import');
+		} else {
+			dlg.disableButton('import');
+		}
+		setImportUsersButtonVisualState(hasValidCsv && hasGroup);
+	}
+}
+
+function setImportUsersButtonVisualState(enabled) {
+	const $buttonBg = $('#background_import_users_dialog_button_1');
+	if (!$buttonBg.length) return;
+	$buttonBg.css({
+		opacity: enabled ? '' : '0.45',
+		filter: enabled ? '' : 'grayscale(1)',
+		cursor: enabled ? '' : 'not-allowed'
+	});
+	$buttonBg.attr('title', enabled ? '' : 'Select a user group before importing users.');
+}
+
+function parseImportUsersCsv(text) {
+	const rows = [];
+	const errors = [];
+	let i = 0;
+	let field = '';
+	let inQ = false;
+	let row = [];
+
+	const flushField = () => { row.push(field); field = ''; };
+	const flushRow = () => {
+		if (row.length === 1 && row[0].trim() === '') {
+			row = [];
+			return;
+		}
+		rows.push(row);
+		row = [];
+	};
+
+	while (i < text.length) {
+		const c = text[i++];
+		if (inQ) {
+			if (c === '"') {
+				if (text[i] === '"') {
+					field += '"';
+					i++;
+				} else {
+					inQ = false;
+				}
+			} else {
+				field += c;
+			}
+		} else {
+			if (c === '"') inQ = true;
+			else if (c === ',') flushField();
+			else if (c === '\n') { flushField(); flushRow(); }
+			else if (c === '\r') { /* ignore */ }
+			else field += c;
+		}
+	}
+	flushField();
+	flushRow();
+
+	if (inQ) errors.push("CSV contains an unterminated quoted field.");
+	if (!rows.length) errors.push("No rows found in CSV file.");
+
+	const header = rows.shift() || [];
+	const normalizedHeader = header.map((v, idx) => {
+		let headerValue = String(v || '').trim().toLowerCase();
+		if (idx === 0) headerValue = headerValue.replace(/^\uFEFF/, '');
+		return headerValue;
+	});
+	const expected = ['username', 'email', 'login_type', 'password'];
+	if (normalizedHeader.length !== expected.length || expected.some((name, idx) => normalizedHeader[idx] !== name)) {
+		errors.push("CSV header must be exactly: username,email,login_type,password");
+	}
+
+	const dataRows = rows.map((cols, idx) => {
+		if (cols.length !== expected.length) {
+			errors.push(`Row ${idx + 2} must contain exactly ${expected.length} columns.`);
+		}
+		return {
+			line: idx + 2,
+			username: (cols[0] || '').trim(),
+			email: (cols[1] || '').trim(),
+			login_type: (cols[2] || '').trim().toUpperCase(),
+			password: cols[3] || ''
+		};
+	});
+
+	return { rows: dataRows, errors };
+}
+
+function prepareImportUsersRows(rows) {
+	const usernameSeen = {};
+	const emailSeen = {};
+	const allowedLoginTypes = ['LOCAL', 'LDAP', 'SSO'];
+	const emailRe = /^(([^<>()\[\]\.,;:\s@\"]+(\.[^<>()\[\]\.,;:\s@\"]+)*)|(\".+\"))@(([^<>()[\]\.,;:\s@\"]+\.)+[^<>()[\]\.,;:\s@\"]{2,})$/i;
+
+	rows.forEach(row => {
+		const errors = [];
+
+		if (!row.username) errors.push("Missing username");
+		if (/[^.A-Za-z0-9@+_-]/.test(row.username)) errors.push("Username contains invalid characters");
+		if (row.username.length > 64) errors.push("Username exceeds 64 characters");
+
+		if (!row.email) errors.push("Missing email");
+		if (row.email && !emailRe.test(row.email)) errors.push("Invalid email address");
+
+		if (!allowedLoginTypes.includes(row.login_type)) errors.push("Login type must be LOCAL, LDAP or SSO");
+
+		if (row.login_type === "LOCAL" && row.password.length < 1) errors.push("LOCAL users require a password");
+		if (row.login_type !== "LOCAL" && row.password.length > 0) errors.push("Password must be blank for LDAP and SSO users");
+		if (row.password.length > 50) errors.push("Password exceeds 50 characters");
+
+		const userKey = row.username.toLowerCase();
+		if (userKey && usernameSeen[userKey]) errors.push(`Duplicate username in CSV, first seen on row ${usernameSeen[userKey]}`);
+		if (userKey && !usernameSeen[userKey]) usernameSeen[userKey] = row.line;
+
+		const emailKey = row.email.toLowerCase();
+		if (emailKey && emailSeen[emailKey]) errors.push(`Duplicate email in CSV, first seen on row ${emailSeen[emailKey]}`);
+		if (emailKey && !emailSeen[emailKey]) emailSeen[emailKey] = row.line;
+
+		row.errors = errors;
+		row.valid = errors.length === 0;
+	});
+
+	return { rows };
+}
+
+function renderImportUsersPreview(rows) {
+	const $body = $('#iuPreviewBody').empty();
+	rows.forEach(row => {
+		const status = row.valid
+			? `<span class="status status-ok">valid</span>`
+			: `<span class="status status-warn">${importUsersEscapeHtml(row.errors.join('; '))}</span>`;
+		$body.append(`
+			<tr class="${row.valid ? '' : 'row-warn'}">
+				<td class="tbl-cell"><code>${importUsersEscapeHtml(row.username)}</code></td>
+				<td class="tbl-cell">${importUsersEscapeHtml(row.email)}</td>
+				<td class="tbl-cell">${importUsersEscapeHtml(row.login_type)}</td>
+				<td class="tbl-cell">${row.password ? 'Provided' : 'Blank'}</td>
+				<td class="tbl-cell">${status}</td>
+			</tr>
+		`);
+	});
+}
+
+function downloadImportUsersExampleCsv() {
+	const rows = [
+		['username', 'email', 'login_type', 'password'],
+		['jane.doe', 'jane.doe@example.org', 'LOCAL', 'ChangeMe123'],
+		['ldap.user', 'ldap.user@example.org', 'LDAP', ''],
+		['sso.user', 'sso.user@example.org', 'SSO', '']
+	];
+	const csv = rows.map(r => r.map(importUsersCsvEscape).join(',')).join('\r\n');
+	const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+	const link = document.createElement('a');
+	const url = URL.createObjectURL(blob);
+	link.href = url;
+	link.download = 'oasys_users_import_example.csv';
+	document.body.appendChild(link);
+	link.click();
+	document.body.removeChild(link);
+	URL.revokeObjectURL(url);
+}
+
+function importUsersReadFileAsText(file) {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(reader.result);
+		reader.onerror = () => reject(reader.error || new Error('File read error'));
+		reader.readAsText(file, 'utf-8');
+	});
+}
+
+function importUsersCsvEscape(field) {
+	const s = String(field).replace(/"/g, '""');
+	return `"${s}"`;
+}
+
+function importUsersEscapeHtml(s) {
+	return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /* navigation */
@@ -2752,7 +3704,7 @@ async function groupPermView() {
 		$('#sortableTable_gfd_id').remove();
 
 		// group/folder data table init
-		let ugfObj = new jsSortableTable('gf_data', 'gfd_id', {
+		let ugfObj = new JsSortableTable('gf_data', 'gfd_id', {
 			elements: ugfData,
 			tableHead: {
 				path: 'Path',
@@ -2898,7 +3850,7 @@ async function groupPermView() {
 	};
 	let uhbObj = new nxButton($(`#userListTitle`), `uhb_id`, buttonData);
 
-	let udObj = new jsSortableTable("user_data", "ud_id", {
+	let udObj = new JsSortableTable("user_data", "ud_id", {
 		elements: uData,
 		tableHead: {
 			name: 'Name',
@@ -2988,10 +3940,16 @@ function emailValidator(emObj) {
 	const re = RegExp(goodEmailFmt);
 
 	if (!re.test(emObj.val())) {
-		emObj.css('border', '2 px solid red');
-		if (emObj.val() === "" && settings.emailSysActive === false) return true;
-		return false;
+		if (emObj.val() === "" && settings.emailSysActive === false) {
+			emObj.css('border', '1px solid #ccc');
+			return true;
+		} else {
+			// if the instance has the email subsystem activated, a valid email account is required!
+			emObj.css('border', '2px solid red');
+			return false;
+		}
 	} else {
+		emObj.css('border', '1px solid #ccc');
 		return true;
 	}
 }
@@ -3002,14 +3960,19 @@ function unameValidator(nameObj) {
 	const badChars = /[^.A-Za-z0-9@+_-]/;
 	const re = RegExp(badChars);
 	if (re.test(nameObj.val()) || (nameObj.val().length > 64)) {
-		nameObj.val(nameObj.val().substring(0, nameObj.val().length - 1));
-		alert("Only alphanumeric, '-', '.', '@', '+', and '_' characters allowed in username. Maximum group name length is 64 characters.");
+		if (re.test(nameObj.val())) {
+			alert("Only alphanumeric, '-', '.', '@', '+', and '_' characters allowed in username.");
+			nameObj.val(nameObj.val().substring(0, nameObj.val().length - 1)); // remove the last offending character from input field
+		}
+		if (nameObj.val().length > 64) {
+			alert("Maximum username length is 64 characters.");
+			nameObj.val(nameObj.val().substring(0, 64));
+		}
 		return false;
 	}
 
 	// field formatting
 	if (nameObj.val().length < 1) {
-		nameObj.css('border', '2 px solid red');
 		return false;
 	}
 
@@ -3018,19 +3981,28 @@ function unameValidator(nameObj) {
 
 function passValidator(pwdObj) {
 
+	const pwdWarning = $('#pwdWarning');
+	const messages = [];
+	pwdWarning.removeAttr("title");
+
 	// regex checks for: mix of upper/lower/num + 8 chars in len+, OR 12 chars in len+
 	if (/(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z]).{8,}|.{12,}/.test(pwdObj.val()) === false && pwdObj.val().length !== 0 /* && pwdObj.is(":focus") */) {
-		$('#pwdWarning').html("WARNING: This is an insecure password. It is recommended to use a mix of capital, lower, and numeric values with at least 8 characters, or a minimum of any 12 characters.");
-		pwdObj.css('border', '2px solid red');
+		messages.push("This is an insecure password. Use a mix of uppercase, lowercase and numeric values with at least 8 characters, or use any 12 characters.");
+		pwdObj.css('border', '2px solid orange');
 	} else {
-		$('#pwdWarning').html('');
-		pwdObj.css('border', '1px solid #ccc')
+		pwdObj.css('border', '1px solid #ccc');
 	}
 
-	if ($('#nu_edt_uname').val().toLowerCase() === pwdObj.val().toLowerCase()) {
-		$('#pwdWarning').html($('#pwdWarning').html() + ($('#pwdWarning').html() === "" ? "" : "<br><br>") + "WARNING: It is not recommended to use the same value for both username and password.");
+	if ($('#nu_edt_uname').val().toLowerCase() === pwdObj.val().toLowerCase() && pwdObj.val().length !== 0) {
+		messages.push("It is not recommended to use the same value for both username and password.");
+	}
+
+	if (messages.length > 0) {
+		pwdWarning
+			.html('<strong>Warning</strong><span>' + messages.join('</span><span>') + '</span>')
+			.show();
 	} else {
-		$('#pwdWarning').html($('#pwdWarning').html().replace("WARNING: It is not recommended to use the same value for both username and password.", ""));
+		pwdWarning.html('').hide();
 	}
 
 	if (pwdObj.val().length > 50) {
@@ -3116,7 +4088,7 @@ function ajaxSuccess(res) {
 				cancel: true,
 				value: 'ok'
 			}],
-			contents: '<strong>Sorry! The action cannot be completed.</strong><br />' + res.fatalError,
+			contents: formatActionErrorMessage('<strong>Sorry! The action cannot be completed.</strong><br />' + res.fatalError),
 			title: "Error",
 			icon: "../images/error.png",
 			iconWidth: 64,
@@ -3134,7 +4106,7 @@ function ajaxSuccess(res) {
 				cancel: true,
 				value: 'ok'
 			}],
-			contents: '<strong>' + 'Sorry! The action cannot be completed.' + '</strong><br />' + res.error,
+			contents: formatActionErrorMessage('<strong>' + 'Sorry! The action cannot be completed.' + '</strong><br />' + res.error),
 			title: "Error",
 			icon: "../images/error.png",
 			iconWidth: 64,
@@ -3147,7 +4119,7 @@ function ajaxSuccess(res) {
 				cancel: true,
 				value: 'ok'
 			}],
-			contents: '<strong>' + 'Sorry! The action cannot be completed.' + '</strong><br />' + res.error,
+			contents: formatActionErrorMessage('<strong>' + 'Sorry! The action cannot be completed.' + '</strong><br />' + res.error),
 			title: "Error",
 			icon: "../images/error.png",
 			iconWidth: 64,
@@ -3215,9 +4187,15 @@ function ajaxSuccess(res) {
 
 			// add each user from return data to user jsSelectList
 			$.each(res['data'], function(key, objValue) {
+				const accountType = userMgrAccountTypeFromListItem(objValue);
+				const role = userMgrRoleFromListItem(objValue);
 				gui.users.addItems([{
 					name: objValue.name.data,
 					id: objValue.name.id.toString(),
+					role: role,
+					roleBadge: userMgrRoleBadge(role),
+					acct_type: accountType,
+					listBadges: userMgrUserListBadges(accountType)
 				}]);
 
 				admArr[objValue.name.id] = objValue.isAdminOnly;
@@ -3261,9 +4239,15 @@ function ajaxSuccess(res) {
 
 			$.each(res['uData'], function(key, objValue) {
 				// gui.users.addElement(objValue, true);
+				const accountType = userMgrAccountTypeFromListItem(objValue);
+				const role = userMgrRoleFromListItem(objValue);
 				gui.users.addItems([{
 					name: objValue.name.data,
-					id: objValue.name.id.toString()
+					id: objValue.name.id.toString(),
+					role: role,
+					roleBadge: userMgrRoleBadge(role),
+					acct_type: accountType,
+					listBadges: userMgrUserListBadges(accountType)
 				}]);
 			});
 

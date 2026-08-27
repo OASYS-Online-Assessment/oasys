@@ -1,30 +1,17 @@
 <?php
 
-	require_once __DIR__ . "/rixPDO.php";
-	require_once __DIR__ . "/database.php";
 	require_once __DIR__ . "/OasysActivity.php";
 	require_once __DIR__ . "/OasysTest.php";
 	require_once __DIR__ . "/Crypt.php";
 
-	class OasysCredentials
-	{
+	class OasysCredentials {
 
 		private rixPDO $db;
-		private string $dbName;
-		private string $user;
-		private string $password;
-		private string $host;
-		private string $logFile;
 
 		function __construct()
 		{
-			global $sql_db, $sql_user, $sql_password, $sql_host;
-			$this->dbName = $sql_db;
-			$this->user = $sql_user;
-			$this->password = $sql_password;
-			$this->host = $sql_host;
-			$this->logFile = __DIR__ . "/../../logs/OasysCredentials.txt";
-			$this->db = new rixPDO($this->dbName, $this->user, $this->password, $this->host, $this->logFile);
+			global $db;
+			$this->db = $db;
 		}
 
 		/* return the password id of a given login id and test id
@@ -162,9 +149,17 @@
 				} else {
 					continue;
 				}
-				$testData[$k] = $passwords[$k];
+				$currentTestData = $passwords[$k];
 				if ($testId > -1) {
-					$testData[$k]['activity'] = $activityApi->getActivity($pw['passwordId'], $testId);
+					//check if test exists
+					$query = "SELECT COUNT(*) FROM tests WHERE id = ?";
+					$params = [$testId];
+					$res = $this->db->fetchValue($query, $params);
+					if ($res['rows'] === 0 || $res['data'] === 0) {
+						//test does not exist, skip this password
+						continue;
+					}
+					$currentTestData['activity'] = $activityApi->getActivity($pw['passwordId'], $testId);
 					$options = $testApi->getOptions($testId);
 					$timeLeft = $activityApi->getTimeLeft($pw['passwordId'], $testId);
 					if ($timeLeft === null) {
@@ -177,14 +172,16 @@
 					if ($timeLeft === -1) {
 						$timeLeft = '♾️';
 					}
-					$testData[$k]['uniqueId'] = sha1($passwordId . "_" . $testId);
-					$testData[$k]['timeLeft'] = $timeLeft;
-					$testData[$k]['active'] = $testApi->isActive($testId);
-					$testData[$k]['available'] = $testApi->isAvailable($testId) && $timeLeft !== 0;
-					$testData[$k]['restrictions'] = $options['restrictions'];
+					$currentTestData['uniqueId'] = sha1($passwordId . "_" . $testId);
+					$currentTestData['timeLeft'] = $timeLeft;
+					$currentTestData['active'] = $testApi->isActive($testId);
+					$currentTestData['available'] = $testApi->isAvailable($testId) && $timeLeft !== 0;
+					$currentTestData['restrictions'] = $options['restrictions'];
+					$currentTestData['saveResults'] = (bool)($options['saveResults'] ?? false);
 				} else {
-					$testData[$k]['activity'] = $activityApi->getActivityChain($pw['passwordId'], $testIds);
+					$currentTestData['activity'] = $activityApi->getActivityChain($pw['passwordId'], $testIds);
 				}
+				$testData[] = $currentTestData;
 			}
 			return $testData;
 		}

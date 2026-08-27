@@ -7,21 +7,84 @@
 	{
 
 		private rixPDO $db;
-		private string $dbName;
-		private string $user;
-		private string $password;
-		private string $host;
-		private string $logFile;
 
 		function __construct()
 		{
-			global $sql_db, $sql_user, $sql_password, $sql_host;
-			$this->dbName = $sql_db;
-			$this->user = $sql_user;
-			$this->password = $sql_password;
-			$this->host = $sql_host;
-			$this->logFile = __DIR__ . "/../../logs/OasysTest.txt";
-			$this->db = new rixPDO($this->dbName, $this->user, $this->password, $this->host, $this->logFile);
+			global $app;
+			$this->db = $app->getDatabaseInstance();
+		}
+
+		// Extract test data and build the complete page structure for all test types.
+		public static function buildTestData(int $testId, rixPDO &$db, array &$testData, string &$testType, array &$structure): void
+		{
+			$query = "SELECT id,`name`,JSON_EXTRACT(structure,'$.type') AS type,JSON_EXTRACT(structure,'$.items[*].hiddenID') AS structure FROM tests WHERE id=?";
+			$results = $db->fetchRow($query, [$testId]);
+
+			$results['data']['structure'] = json_decode($results['data']['structure'] ?? '[]', true);
+			$results['data']['type'] = json_decode($results['data']['type'] ?? 'null', true);
+			$testData = $results['data'];
+			$testType = $testData['type'];
+
+			/* the $structure produced in the following code is simply an array of all ids used in the test */
+			if ($testType === 'fluid') {
+				//find all possible pages for a fluid test
+				if (count($results['data']['structure']) === 0) {
+					$testData['structure'] = [];
+				} else {
+					$query = <<<query
+							SELECT DISTINCT
+								f_pages.pageId
+							FROM
+								( SELECT f_structure.* FROM tests t1, JSON_TABLE ( t1.structure, '$.items[*]' COLUMNS ( f_structureId INT path '$.hiddenID' )) f_structure WHERE t1.id = ? ) t2
+								INNER JOIN testFluidStructure tfs ON t2.f_structureId = tfs.id
+								INNER JOIN testPools tp ON tfs.poolID = tp.id,
+								JSON_TABLE (
+									tp.structure,
+									'$.items[*]' COLUMNS ( pageId INT path '$.hiddenID' )
+								) f_pages
+					query;
+					$results = $db->fetchColumn($query, [$testId]);
+					$testData['structure'] = $results['data'];
+				}
+			} elseif ($testType === 'mutation') {
+				$query = <<<query
+						SELECT DISTINCT
+							m_pages.*
+						FROM
+							( SELECT m_struct.* FROM tests, JSON_TABLE ( tests.structure, '$.items[*]' COLUMNS ( testId INT path '$.hiddenID' )) AS m_struct WHERE tests.id = ? ) t1
+							INNER JOIN tests t2 ON t1.testId = t2.id,
+							JSON_TABLE (
+								t2.structure,
+								'$.items[*]' COLUMNS ( pageId INT path '$.hiddenID' )
+							) AS m_pages
+						UNION
+						SELECT
+							DISTINCT cached_pages.*
+						FROM
+							testCache,
+							JSON_TABLE (
+								structure,
+							'$[*]' COLUMNS ( pageId INT PATH '$.hiddenID' )) AS cached_pages
+						WHERE
+							testId = ?
+				query;
+				$results = $db->fetchColumn($query, [$testId, $testId]);
+				$testData['structure'] = $results['data'];
+			}
+
+			//get names and codes for all pages in test
+			if (count($testData['structure']) > 0) {
+				$structureIds = array_values($testData['structure']);
+				$variableString = $db->variableString(count($structureIds));
+				$query = "SELECT id,`name`,`itemCode` as code FROM items WHERE id IN " . $variableString;
+				$results = $db->fetchTable($query, $structureIds, 'id');
+				$testData['pages'] = $results['data'];
+			} else {
+				$testData['pages'] = [];
+			}
+
+			//this applies to all types of tests
+			$structure = $testData['structure'];
 		}
 
 		/* return the type of a test

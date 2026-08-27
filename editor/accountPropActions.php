@@ -4,8 +4,7 @@
 
 //the JSON output will happen, even if a fatal error prevents the script from finishing
 register_shutdown_function('outputJSON');
-require_once 'inc/php/database.php';
-require_once '../inc/php/rixPDO.php';
+require_once __DIR__ . "/inc/php/initBackend.php";
 
 $action = filter_input(INPUT_POST, 'action');
 if (!$action) {
@@ -42,8 +41,9 @@ if (!$data) {
 }
 //data field must be separately JSON encoded before sending to get past max_input_vars limitation
 
-$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, '../logs/acctPropErrors.log', 1, $returnData, 'error');
+$db = $app->getDatabaseInstance();
 
+if (oasysRejectUnknownAction(__FILE__, $action, $returnData)) exit;
 $action($data, $db, $returnData, $myAuth);
 
 /*
@@ -52,9 +52,10 @@ FUNCTIONS START
 ###############
 */
 
-function updateUserSettings($data, rixPDO &$db, &$returnData, userAuth &$myAuth)
+function updateUserSettings($data, rixPDO &$db, &$returnData, userAuth &$myAuth): void
 {
-    global $myAuth, $settingsDefaults, $settings, $uiLang;
+    global $myAuth, $config, $uiLang;
+	$settingsDefaults = $config->getDefaults();
     $usVals = $data;
 
     // accessDef null check and fix
@@ -100,7 +101,7 @@ function updateUserSettings($data, rixPDO &$db, &$returnData, userAuth &$myAuth)
 
         // FYI: ONLY BOOLEAN can be direct inserted with variable substitution, other types (i.e., string) MUST be prepared to prevent SQL injection vulns or data mangling
         if ($dataFmtType === FORMAT_BOOL) {
-            $db->prepare("UPDATE `users` SET `accessDef` = JSON_SET(`accessDef`, CONCAT('$.userSettings.', ?), {$valToken}) WHERE `id` = ?");
+            $db->prepare("UPDATE `users` SET `accessDef` = JSON_SET(`accessDef`, CONCAT('$.userSettings.', ?), $valToken) WHERE `id` = ?");
             $db->executePrepared([$newKey, $myAuth->userid]);
         } else {
             $db->prepare("UPDATE `users` SET `accessDef` = JSON_SET(`accessDef`, CONCAT('$.userSettings.', ?), ?) WHERE `id` = ?");
@@ -111,12 +112,13 @@ function updateUserSettings($data, rixPDO &$db, &$returnData, userAuth &$myAuth)
     $returnData['authMessage'] = $uiLang->translate("Updated user settings.");
 }
 
-function check($data, rixPDO &$db, &$returnData, userAuth &$myAuth)
+function check($data, rixPDO &$db, &$returnData, userAuth &$myAuth): void
 {
     // the 'check' JS function already performed in userAuth instantiation
 
     // system settings values query
-    global $settingsDefaults, $settings;
+    global $settings, $config;
+	$settingsDefaults = $config->getDefaults();
 
     // get keys
     $userSettings = [];
@@ -138,9 +140,10 @@ function check($data, rixPDO &$db, &$returnData, userAuth &$myAuth)
 # -------------------- #
 # Update User Language #
 # -------------------- #
-function langChange($data, rixPDO &$db, &$returnData, userAuth &$myAuth)
+function langChange($data, rixPDO &$db, &$returnData, userAuth &$myAuth): void
 {
-    global $languages, $uiLang;
+    global $config, $uiLang;
+	$languages = $config->getLanguages();
     $newLang = $data['newLang'];
 
     if (!in_array($newLang, array_keys($languages))) {
@@ -162,7 +165,7 @@ function langChange($data, rixPDO &$db, &$returnData, userAuth &$myAuth)
 # -------------------------- #
 # JS password update handler #
 # -------------------------- #
-function pwdChange($data, rixPDO &$db, &$returnData, userAuth &$myAuth)
+function pwdChange($data, rixPDO &$db, &$returnData, userAuth &$myAuth): void
 {
     global $uiLang;
     $accType = $db->fetchValue("SELECT `acct_type` FROM `users` WHERE `id` = ?", [$myAuth->userid])['data'];
@@ -184,7 +187,7 @@ function pwdChange($data, rixPDO &$db, &$returnData, userAuth &$myAuth)
 # -------------------- #
 # Email change handler #
 # -------------------- #
-function emailChange($data, rixPDO &$db, &$returnData, userAuth &$myAuth)
+function emailChange($data, rixPDO &$db, &$returnData, userAuth &$myAuth): void
 {
     global $uiLang;
     $email = $myAuth->handleInput($_POST['data']);
@@ -201,7 +204,7 @@ function emailChange($data, rixPDO &$db, &$returnData, userAuth &$myAuth)
 }
 
 
-function outputJSON()
+function outputJSON(): void
 {
     global $returnData, $db, $action, $myAuth;
 

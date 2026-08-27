@@ -14,18 +14,18 @@ class StudentT extends Continuous
     /**
      * Distribution parameter bounds limits
      * ν ∈ (0,∞)
-     * @var array
+     * @var array{"ν": string}
      */
-    const PARAMETER_LIMITS = [
+    public const PARAMETER_LIMITS = [
         'ν' => '(0,∞)',
     ];
 
     /**
      * Distribution support bounds limits
      * t ∈ (-∞,∞)
-     * @var array
+     * @var array{"t": string}
      */
-    const SUPPORT_LIMITS = [
+    public const SUPPORT_LIMITS = [
         't' => '(-∞,∞)',
     ];
 
@@ -53,6 +53,16 @@ class StudentT extends Continuous
      *  √νπ Γ |  -  |
      *         \ 2 /
      *
+     * Rearranging the equation above and using Stirling approximation
+     * along with the saddlepoint expansion gives the following form:
+     *
+     * T = eᵗ⁻ᵘ * 1/√𝜏 * 1/√(1+x²/ν)
+     * Where t = npD₀(-ν/2, (ν+1)/2) + δ((ν+1)/2) - δ(ν/2)
+     * and u = ν/2 * log(1+x2⁄ν) = -npD₀(ν/2, (ν+x²)/2) + x²/2
+     *
+     * The implementation is heavily inspired by the R language's C implementation of dt.
+     * R Project for Statistical Computing: https://www.r-project.org/
+     * R Source: https://svn.r-project.org/R/
      *
      * @param float $t t score
      *
@@ -63,20 +73,33 @@ class StudentT extends Continuous
         Support::checkLimits(self::SUPPORT_LIMITS, ['t' => $t]);
 
         $ν = $this->ν;
-        $π = \M_PI;
 
-        // Numerator
-        $Γ⟮⟮ν＋1⟯∕2⟯ = Special::gamma(($ν + 1) / 2);
-        $⟮1＋t²∕ν⟯ = 1 + ($t ** 2 / $ν);
-        $−⟮ν＋1⟯∕2 = -($ν + 1) / 2;
+        static $π = \M_PI;
+        static $DBL_EPSILON = 2.220446049250313e-16;
 
-        // Denominator
-        $√⟮νπ⟯  = sqrt($ν * $π);
-        $Γ⟮ν∕2⟯ = Special::gamma($ν / 2);
-        
-        return ($Γ⟮⟮ν＋1⟯∕2⟯ * $⟮1＋t²∕ν⟯ ** $−⟮ν＋1⟯∕2) / ($√⟮νπ⟯ * $Γ⟮ν∕2⟯);
+        $tnew    = -1 * self::npD0($ν / 2, ($ν + 1) / 2) + Special::stirlingError(($ν + 1) / 2) - Special::stirlingError($ν / 2);
+        $x2n     = $t**2 / $ν;  // in  [0, Inf]
+        $ax      = 0;
+        $lrg_x2n = $x2n > (1 / $DBL_EPSILON);
+
+        if ($lrg_x2n) { // large x**2/n
+            $ax    = \abs($t);
+            $l_x2n = \log($ax) - \log($ν) / 2;
+            $u     = $ν * $l_x2n;
+        } elseif ($x2n > 0.2) {
+            $l_x2n = \log(1 + $x2n) / 2;
+            $u     = $ν * $l_x2n;
+        } else {
+            $l_x2n = \log1p($x2n) / 2;
+            $u = -1* self::npD0($ν / 2, ($ν + $t**2) / 2) + $t**2 / 2;
+        }
+
+        $I_sqrt = $lrg_x2n
+            ? \sqrt($ν) / $ax
+            : \exp(-$l_x2n);
+        return \exp($tnew - $u) * 1 / \sqrt(2 * $π) * $I_sqrt;
     }
-    
+
     /**
      * Cumulative distribution function
      * Calculate the cumulative t value up to a point, left tail.
@@ -89,6 +112,10 @@ class StudentT extends Continuous
      *
      *        Iₓ₍t₎(ν/2, ½) is the regularized incomplete beta function
      *
+     * The implementation is heavily inspired by the R language's C implementation of pt.
+     * R Project for Statistical Computing: https://www.r-project.org/
+     * R Source: https://svn.r-project.org/R/
+     *
      * @param float $t t score
      *
      * @return float
@@ -96,23 +123,37 @@ class StudentT extends Continuous
     public function cdf(float $t): float
     {
         Support::checkLimits(self::SUPPORT_LIMITS, ['t' => $t]);
-
         $ν = $this->ν;
-        if ($t == 0) {
-            return .5;
+        if (\is_infinite($t)) {
+            return ($t < 0) ? 0 : 1;
+        }
+        if (is_infinite($ν)) {
+            $norm = new StandardNormal();
+            return $norm->cdf($t);
         }
 
-        $x⟮t⟯  = $ν / ($t ** 2 + $ν);
-        $ν／2 = $ν / 2;
-        $½    = .5;
-        $Iₓ   = Special::regularizedIncompleteBeta($x⟮t⟯, $ν／2, $½);
-
-        if ($t < 0) {
-            return $½ * $Iₓ;
+        if ($ν > 4e5) {
+            // Approx. from Abramowitz & Stegun 26.7.8 (p.949)
+            $val  = 1 / 4 / $ν;
+            $norm = new StandardNormal();
+            return $norm->cdf($t*(1 - $val)/sqrt(1 + $t*$t*2*$val));
         }
 
-        // $t ≥ 0
-        return 1 - $½ * $Iₓ;
+        $nx = 1 + ($t / $ν) * $t;
+        if ($nx > 1e100) {  // <==>  x*x > 1e100 * n
+            $lval = -0.5 * $ν *(2* \log(\abs($t)) - \log($ν)) - Special::logBeta(0.5 * $ν, 0.5) - \log(0.5 * $ν);
+            $val = \exp($lval);
+        } else {
+            $beta1 = new Beta(.5, $ν / 2);
+            $beta2 = new Beta($ν / 2, 0.5);
+            $val = ($ν > $t * $t) ? .5 - $beta1->cdf($t * $t / ($ν + $t * $t)) + .5 : $beta2->cdf(1 / $nx);
+        }
+
+        $lowerTail = $t > 0;
+        $val /= 2;
+        return $lowerTail
+            ? (0.5 - ($val) + 0.5)
+            : ($val);  // 1 - p
     }
 
     /**
@@ -129,7 +170,7 @@ class StudentT extends Continuous
 
         return $this->inverse(1 - $p / 2);
     }
-    
+
     /**
      * Mean of the distribution
      *
@@ -146,7 +187,7 @@ class StudentT extends Continuous
 
         return \NAN;
     }
-    
+
     /**
      * Median of the distribution
      *
@@ -198,5 +239,54 @@ class StudentT extends Continuous
         }
 
         return \NAN;
+    }
+
+    /**
+     * Saddle-point Expansion Deviance
+     *
+     * Calculate the quantity
+     *                                 ∞
+     *                                ____
+     *                 (x-np)²        \    v²ʲ⁺¹
+     * np * D₀(x/np) = ------  + 2*x * >  -------
+     *                 (x+np)         /    2*j+1
+     * where:                         ____
+     *                                j=1
+     * D₀(ε) = ε * log(ε) + 1 - ε
+     *
+     * and:    (x-np)
+     *     v = ------
+     *         (x+np)
+     *
+     * Source: https://www.r-project.org/doc/reports/CLoader-dbinom-2002.pdf
+     *
+     * @param float $x
+     * @param float $np
+     *
+     * @return float
+     */
+    private static function npD0(float $x, float $np): float
+    {
+        static $DBL_MIN = 2.23e-308;
+
+        if (\abs($x - $np) < 0.1 * ($x + $np)) {
+            $v = ($x - $np) / ($x + $np);
+            $s = ($x - $np) * $v;
+            if (\abs($s) < $DBL_MIN) {
+                return $s;
+            }
+            $Σj = 2 * $x * $v;
+            $v² = $v * $v;
+            for ($j = 1; $j < 1000; $j++) {
+                $Σj *= $v²;
+                $stemp = $s;
+                $s += $Σj / (($j * 2) + 1);
+                if ($s == $stemp) {
+                    return $s;
+                }
+            }
+        }
+
+        return ($x * \log($x / $np) + $np - $x);
     }
 }

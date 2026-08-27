@@ -1,18 +1,5 @@
 "use strict";
 
-// UG legacy, kept in case there will be server side saving ?????
-function saveDocument() {
-	//savingWatcher.setSaved(true);
-	clearSelection();
-	let data = $.extend(true, {}, dd);
-	for (let i in data) {
-		if (data[i].type === 'handle') delete data[i];
-	}
-	data.name = documentName;
-	const params = {action: 'save', overwrite: overwrite, data: data};
-	sendData(params);
-}
-
 function uploadDocument() {
 	let isContent = false;
 	for (let i in dd) { // iterate document data object
@@ -145,14 +132,6 @@ function saveToDisk(b, fName) {
 }
 
 
-function loadFile(file) {
-	const data = {file: file};
-	documentName = file.replace(/\.nxfc$/, '');
-	const params = {action: 'load', data: data};
-	sendData(params);
-}
-
-
 function recreateDocument(data) {
 	savingWatcher.setLoading(true); // avoid change of saved status while loading
 	data = DATAFORMAT.prepareData(data);
@@ -239,98 +218,10 @@ function dyBugPatch(labels) {
 }
 
 
-function onAjaxError(xhr, textStatus) {
-	alert(textStatus);
-}
-
-function sendData(params) {
-	$.ajax({
-		data: params
-	});
-}
-	
-function onAjaxData(res) {
-	if (res.error) {
-		alert('An error occurred while saving the document: ' + res.msg);
-	} else {
-		let data = res.data;
-		let dialogData;
-		switch (res.action) {
-			case 'save':
-				dialogData = {
-					buttons: [
-						{label: 'OK', 'default': true, value: 'ok'}
-					],
-					contents: stringf('File \'%@\' has been saved.', data.destination, data.bytes),
-					title: 'Document saved',
-					width: 400
-				};
-				new nxDialog('saveDialog', dialogData, null);
-				overwrite = 1;
-				break;
-			case 'overwrite':
-				dialogData = {
-					buttons: [
-						{label: 'Cancel', 'cancel': true, value: 'cancel'},
-						{label: 'Rename', value: 'rename'},
-						{label: 'Overwrite', 'default': true, value: 'overwrite'}
-					],
-					contents: stringf('A document with the name "%@" already exists. Do you want to overwrite it?', documentName),
-					title: 'Document already exists',
-					width: 400,
-					callback: overwriteDocument
-				};
-				new nxDialog('overwriteDialog', dialogData, null);
-				break;
-			case 'load':
-				recreateDocument(data);
-				break;
-		}
-	}
-}
-
-function overwriteDocument(button) {
-		if (button === 'overwrite') {
-			overwrite = 1;
-			saveDocument();
-		} else if (button === 'rename') {
-			let dialogData = {
-				buttons: [
-					{label: 'Cancel', 'cancel': true, value: 'cancel'},
-					{label: 'OK', 'default': true, value: 'ok'}
-				],
-				datafields: [
-					'tfName'
-				],
-				focus: 'tfName',
-				contents: '<p>Please eneter a new name for your document<br><input type="text" id="tfName" style="width: 100%; margin-top: 10px;"></p>',
-				title: 'Rename document',
-				width: 400,
-				callback: renameDocument
-			};
-			new nxDialog('renameDialog', dialogData, null);
-		}
-}
-
-function renameDocument(button, newName) {
-	if (button === 'ok' && newName && newName !== '') {
-		documentName = newName;
-		saveDocument();
-	}
-}
-
 function showHelp(btn) {
 	shortcutsPopup.toggle();
 }
 
 function log() {
-	if (logEnabled === false) {
-		return;
-	}
-	let s = stringf.apply(this, arguments);
-	const now = new Date().toLocaleTimeString();
-	s = stringf("[%@] %@", now, s);
-	const data = {name: documentName, log: s + "\r\n"};
-	const params = {action: 'log', data: data};
-	sendData(params);
+	// Intentionally disabled. Concept Maps no longer writes documents or logs to the server.
 }

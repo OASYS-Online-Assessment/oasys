@@ -32,7 +32,7 @@ class Average
         if (empty($numbers)) {
             throw new Exception\BadDataException('Cannot find the average of an empty list of numbers');
         }
-        return array_sum($numbers) / count($numbers);
+        return \array_sum($numbers) / \count($numbers);
     }
 
     /**
@@ -59,18 +59,18 @@ class Average
         if (empty($weights)) {
             return Average::mean($numbers);
         }
-        if (count($numbers) !== count($weights)) {
+        if (\count($numbers) !== \count($weights)) {
             throw new Exception\BadDataException('Numbers and weights must have the same number of elements.');
         }
 
-        $∑⟮xᵢwᵢ⟯ = array_sum(array_map(
+        $∑⟮xᵢwᵢ⟯ = \array_sum(\array_map(
             function ($xᵢ, $wᵢ) {
                 return $xᵢ * $wᵢ;
             },
             $numbers,
             $weights
         ));
-        $∑⟮wᵢ⟯ = array_sum($weights);
+        $∑⟮wᵢ⟯ = \array_sum($weights);
 
         return $∑⟮xᵢwᵢ⟯ / $∑⟮wᵢ⟯;
     }
@@ -90,21 +90,21 @@ class Average
         if (empty($numbers)) {
             throw new Exception\BadDataException('Cannot find the median of an empty list of numbers');
         }
-        if (count($numbers) === 1) {
-            return array_pop($numbers);
+        if (\count($numbers) === 1) {
+            return \array_pop($numbers);
         }
 
         // Reset the array key indexes because we don't know what might be passed in
-        $numbers = array_values($numbers);
+        $numbers = \array_values($numbers);
 
         // For odd number of numbers, take the middle indexed number
-        if (count($numbers) % 2 == 1) {
-            $middle_index = intdiv(count($numbers), 2);
+        if (\count($numbers) % 2 == 1) {
+            $middle_index = \intdiv(\count($numbers), 2);
             return self::kthSmallest($numbers, $middle_index);
         }
 
         // For even number of items, take the mean of the middle two indexed numbers
-        $left_middle_index  = intdiv(count($numbers), 2) - 1;
+        $left_middle_index  = \intdiv(\count($numbers), 2) - 1;
         $left_median        = self::kthSmallest($numbers, $left_middle_index);
         $right_middle_index = $left_middle_index + 1;
         $right_median       = self::kthSmallest($numbers, $right_middle_index);
@@ -141,7 +141,7 @@ class Average
      */
     public static function kthSmallest(array $numbers, int $k): float
     {
-        $n = count($numbers);
+        $n = \count($numbers);
         if ($n === 0) {
             throw new Exception\BadDataException('Cannot find the k-th smallest of an empty list of numbers');
         }
@@ -150,29 +150,29 @@ class Average
         }
 
         // Reset the array key indexes because we don't know what might be passed in
-        $numbers = array_values($numbers);
-        
+        $numbers = \array_values($numbers);
+
         // If the array is 5 elements or smaller, use quicksort and return the element of interest.
         if ($n <= 5) {
-            sort($numbers);
+            \sort($numbers);
             return $numbers[$k];
         }
-        
+
         // Otherwise, we are going to slice $numbers into 5-element slices and find the median of each.
-        $num_slices = ceil($n / 5);
+        $num_slices = \ceil($n / 5);
         $median_array = [];
         for ($i = 0; $i < $num_slices; $i++) {
-            $median_array[] = self::median(array_slice($numbers, 5 * $i, 5));
+            $median_array[] = self::median(\array_slice($numbers, 5 * $i, 5));
         }
-        
+
         // Then we find the median of the medians.
         $median_of_medians = self::median($median_array);
-        
+
         // Next we walk the array and separate it into values that are greater than or less than this "median of medians".
         $lower_upper   = self::splitAtValue($numbers, $median_of_medians);
-        $lower_number = count($lower_upper['lower']);
+        $lower_number = \count($lower_upper['lower']);
         $equal_number = $lower_upper['equal'];
-        
+
         // Lastly, we find which group of values our value of interest is in, and find it in the smaller array.
         if ($k < $lower_number) {
             return self::kthSmallest($lower_upper['lower'], $k);
@@ -182,7 +182,7 @@ class Average
             return self::kthSmallest($lower_upper['upper'], $k - $lower_number - $equal_number);
         }
     }
-    
+
     /**
      * Given an array and a value, separate the array into two groups,
      * those values which are greater than the value, and those that are less
@@ -191,7 +191,11 @@ class Average
      * @param float[] $numbers
      * @param float   $value
      *
-     * @return array
+     * @return array{
+     *     lower: array<float>,
+     *     upper: array<float>,
+     *     equal: int,
+     * }
      */
     private static function splitAtValue(array $numbers, float $value): array
     {
@@ -215,7 +219,7 @@ class Average
             'equal' => $number_equal,
         ];
     }
-    
+
     /**
      * Calculate the mode average of a list of numbers
      * If multiple modes (bimodal, trimodal, etc.), all modes will be returned.
@@ -236,9 +240,9 @@ class Average
         // Count how many times each number occurs.
         // Determine the max any number occurs.
         // Find all numbers that occur max times.
-        $number_strings = array_map('strval', $numbers);
-        $number_counts  = array_count_values($number_strings);
-        $max            = max($number_counts);
+        $number_strings = \array_map('\strval', $numbers);
+        $number_counts  = \array_count_values($number_strings);
+        $max            = \max($number_counts);
         $modes          = array();
         foreach ($number_counts as $number => $count) {
             if ($count === $max) {
@@ -247,20 +251,75 @@ class Average
         }
 
         // Cast back to numbers
-        return array_map('floatval', $modes);
+        return \array_map('\floatval', $modes);
     }
 
     /**
      * Geometric mean
+     *
      * A type of mean which indicates the central tendency or typical value of a set of numbers
      * by using the product of their values (as opposed to the arithmetic mean which uses their sum).
      * https://en.wikipedia.org/wiki/Geometric_mean
+     *
+     * DEFINITION (Mathematical Formula):
      *                    __________
      * Geometric mean = ⁿ√a₀a₁a₂ ⋯
      *
-     * @param  float[] $numbers
+     * Where:
+     *  - n is the count of numbers
+     *  - a₀a₁a₂⋯ represents the product of all numbers
+     *  - ⁿ√ represents the nth root
      *
-     * @return float
+     * IMPLEMENTATION (Log-Space Calculation):
+     *
+     * Rather than computing the product directly and then taking the nth root,
+     * we use a mathematically equivalent but numerically more stable approach:
+     *
+     *                       n
+     *                       ∑ ln(xᵢ)
+     *  Geometric mean = exp(───────)
+     *                          n
+     *
+     * This is mathematically equivalent because of the logarithmic identity:
+     *  log(x₁ · x₂ · ... · xₙ) = log(x₁) + log(x₂) + ... + log(xₙ)
+     *
+     * Therefore:
+     *  (x₁ · x₂ · ... · xₙ)^(1/n) = exp( (log(x₁) + log(x₂) + ... + log(xₙ)) / n )
+     *                               = exp( Σ ln(xᵢ) / n )
+     *
+     * NUMERICAL STABILITY (Why This Implementation):
+     *
+     * The direct approach (product → nth root) is vulnerable to overflow and underflow:
+     *  - OVERFLOW: When computing large products (e.g., 100 values of 10⁶),
+     *    the intermediate product can exceed 1.8e308 (PHP's float maximum),
+     *    causing overflow to INF and returning incorrect results.
+     *  - UNDERFLOW: When computing very small products (e.g., 100 values of 10⁻⁵),
+     *    the intermediate product underflows to zero, causing incorrect results.
+     *
+     * The log-space approach avoids these issues by:
+     *  1. Taking logarithms of each value (ln(10⁶) ≈ 13.8, ln(10⁻⁵) ≈ -11.5)
+     *  2. Summing the logarithms instead of multiplying the original values
+     *  3. Computing the mean of the logarithms (simple division)
+     *  4. Exponentiating the result (always well-defined for bounded inputs)
+     *
+     * This approach handles products from ~10⁻⁶⁰⁰ to ~10⁶⁰⁰, compared to the
+     * ~10⁻³⁰⁸ to ~10³⁰⁸ range of the direct approach.
+     *
+     * EXAMPLE:
+     *  geometricMean([2, 4, 8]) = exp((ln(2) + ln(4) + ln(8)) / 3)
+     *                            = exp((0.693 + 1.386 + 2.079) / 3)
+     *                            = exp(1.386)
+     *                            = 4.0  ✓
+     *
+     * PROPERTIES:
+     *  - All input values must be positive (> 0)
+     *  - For a single value, returns that value
+     *  - For identical values, returns that value
+     *  - Always ≤ arithmetic mean (by AM-GM inequality)
+     *
+     * @param  float[] $numbers Array of positive numbers
+     *
+     * @return float The geometric mean of the input numbers
      *
      * @throws Exception\BadDataException if the input array of numbers is empty
      */
@@ -270,17 +329,14 @@ class Average
             throw new Exception\BadDataException('Cannot find the geometric mean of an empty list of numbers');
         }
 
-        $n       = count($numbers);
-        $a₀a₁a₂⋯ = array_reduce(
-            $numbers,
-            function ($carry, $a) {
-                return $carry * $a;
-            },
-            1
-        );
-        $ⁿ√a₀a₁a₂⋯ = pow($a₀a₁a₂⋯, 1 / $n);
+        $n = \count($numbers);
 
-        return $ⁿ√a₀a₁a₂⋯;
+        $∑ln⟮xᵢ⟯ = \array_sum(\array_map(function ($x) {
+            return \log($x);
+        }, $numbers));
+        $mean_log = $∑ln⟮xᵢ⟯ / $n;
+
+        return \exp($mean_log);
     }
 
     /**
@@ -309,7 +365,7 @@ class Average
             throw new Exception\BadDataException('Cannot find the harmonic mean of an empty list of numbers');
         }
 
-        $negativeValues = array_filter(
+        $negativeValues = \array_filter(
             $numbers,
             function ($x) {
                 return $x < 0;
@@ -319,8 +375,8 @@ class Average
             throw new Exception\BadDataException('Harmonic mean cannot be computed for negative values.');
         }
 
-        $n      = count($numbers);
-        $∑1／xᵢ = array_sum(Map\Single::reciprocal($numbers));
+        $n      = \count($numbers);
+        $∑1／xᵢ = \array_sum(Map\Single::reciprocal($numbers));
 
         return $n / $∑1／xᵢ;
     }
@@ -362,15 +418,15 @@ class Average
             throw new Exception\BadDataException('Cannot find the root mean square of an empty list of numbers');
         }
 
-        $n = count($numbers);
-        $x₁²＋x₂²＋⋯ = array_sum(array_map(
+        $n = \count($numbers);
+        $x₁²＋x₂²＋⋯ = \array_sum(\array_map(
             function ($x) {
                 return $x ** 2;
             },
             $numbers
         ));
 
-        return sqrt($x₁²＋x₂²＋⋯ / $n);
+        return \sqrt($x₁²＋x₂²＋⋯ / $n);
     }
 
     /**
@@ -455,7 +511,7 @@ class Average
      * x cubic = ³/  -  ∑ xᵢ³
      *           √   n ⁱ⁼¹
      *
-     * @param array $numbers
+     * @param array<float> $numbers
      *
      * @return float
      *
@@ -467,10 +523,10 @@ class Average
             throw new Exception\BadDataException('Cannot find the cubic mean of an empty list of numbers');
         }
 
-        $n    = count($numbers);
-        $∑xᵢ³ = array_sum(Map\Single::cube($numbers));
+        $n    = \count($numbers);
+        $∑xᵢ³ = \array_sum(Map\Single::cube($numbers));
 
-        return pow($∑xᵢ³ / $n, 1 / 3);
+        return \pow($∑xᵢ³ / $n, 1 / 3);
     }
 
     /**
@@ -480,21 +536,21 @@ class Average
      * This number of points to be discarded is given as a percentage of the total number of points.
      * https://en.wikipedia.org/wiki/Truncated_mean
      *
-     * Trim count = floor( (trim percent / 100) * sample size )
+     * Trim count = floor((trim percent / 100) * sample size)
      *
      * For example: [8, 3, 7, 1, 3, 9] with a trim of 20%
      * First sort the list: [1, 3, 3, 7, 8, 9]
      * Sample size = 6
-     * Then determine trim count: floot(20/100 * 6 ) = 1
+     * Then determine trim count: floor(20/100 * 6) = 1
      * Trim the list by removing 1 from each end: [3, 3, 7, 8]
      * Finally, find the mean: 5.2
      *
      * @param float[] $numbers
-     * @param int     $trim_percent Percent between 0-99
+     * @param int     $trim_percent Percent between 0-50 indicating percent of observations trimmed from each end of distribution
      *
      * @return float
      *
-     * @throws Exception\OutOfBoundsException if trim percent is not between 0 and 99
+     * @throws Exception\OutOfBoundsException if trim percent is not between 0 and 50
      * @throws Exception\BadDataException if the input array of numbers is empty
      */
     public static function truncatedMean(array $numbers, int $trim_percent): float
@@ -502,17 +558,21 @@ class Average
         if (empty($numbers)) {
             throw new Exception\BadDataException('Cannot find the truncated mean of an empty list of numbers');
         }
-        if ($trim_percent < 0 || $trim_percent > 99) {
-            throw new Exception\OutOfBoundsException('Trim percent must be between 0 and 99.');
+        if ($trim_percent < 0 || $trim_percent > 50) {
+            throw new Exception\OutOfBoundsException('Trim percent must be between 0 and 50.');
         }
 
-        $n          = count($numbers);
-        $trim_count = floor($n * ($trim_percent / 100));
+        $n          = \count($numbers);
+        $trim_count = \floor($n * ($trim_percent / 100));
 
-        sort($numbers);
+        \sort($numbers);
+        if ($trim_percent == 50) {
+            return self::median($numbers);
+        }
+
         for ($i = 1; $i <= $trim_count; $i++) {
-            array_shift($numbers);
-            array_pop($numbers);
+            \array_shift($numbers);
+            \array_pop($numbers);
         }
         return self::mean($numbers);
     }
@@ -548,15 +608,15 @@ class Average
 
         // Special cases for infinite p
         if ($p == -\INF) {
-            return min($numbers);
+            return \min($numbers);
         }
         if ($p == \INF) {
-            return max($numbers);
+            return \max($numbers);
         }
 
         // Standard case for non-infinite p
-        $∑xᵢᵖ   = array_sum(Map\Single::pow($numbers, $p));
-        $∑xᵢᵖ⁻¹ = array_sum(Map\Single::pow($numbers, $p - 1));
+        $∑xᵢᵖ   = \array_sum(Map\Single::pow($numbers, $p));
+        $∑xᵢᵖ⁻¹ = \array_sum(Map\Single::pow($numbers, $p - 1));
 
         return $∑xᵢᵖ / $∑xᵢᵖ⁻¹;
     }
@@ -570,7 +630,7 @@ class Average
      *          \ n ⁱ⁼¹   /
      *
      * Special cases:
-     *  M-∞(x) is min(x)
+     *  M-∞(x) is \min(x)
      *  M₋₁(x) is the harmonic mean
      *  M₀(x) is the geometric mean
      *  M₁(x) is the arithmetic mean
@@ -593,10 +653,10 @@ class Average
 
         // Special cases for infinite p
         if ($p == -\INF) {
-            return min($numbers);
+            return \min($numbers);
         }
         if ($p == \INF) {
-            return max($numbers);
+            return \max($numbers);
         }
 
         // Special case for p = 0 (geometric mean)
@@ -605,10 +665,10 @@ class Average
         }
 
         // Standard case for non-infinite p
-        $n    = count($numbers);
-        $∑xᵢᵖ = array_sum(Map\Single::pow($numbers, $p));
+        $n    = \count($numbers);
+        $∑xᵢᵖ = \array_sum(Map\Single::pow($numbers, $p));
 
-        return pow($∑xᵢᵖ / $n, 1 / $p);
+        return \pow($∑xᵢᵖ / $n, 1 / $p);
     }
 
     /**
@@ -650,7 +710,7 @@ class Average
      */
     public static function simpleMovingAverage(array $numbers, int $n): array
     {
-        $m   = count($numbers);
+        $m   = \count($numbers);
         $SMA = [];
 
         // Counters
@@ -659,7 +719,7 @@ class Average
         $yesterday = 0;  // Yesterday's SMA
 
         // Base case: initial average
-        $SMA[] = array_sum(array_slice($numbers, 0, $n)) / $n;
+        $SMA[] = \array_sum(\array_slice($numbers, 0, $n)) / $n;
 
         // Calculating successive values: New value comes in; old value drops out
         while ($new < $m) {
@@ -691,7 +751,7 @@ class Average
      */
     public static function cumulativeMovingAverage(array $numbers): array
     {
-        $m   = count($numbers);
+        $m   = \count($numbers);
         $CMA = [];
 
         // Base case: first average is just itself
@@ -713,26 +773,26 @@ class Average
      *
      * Each weighted average = ∑(weighted values) / ∑(weights)
      *
-     * @param  array  $numbers
-     * @param  int    $n       n-point moving average
-     * @param  array  $weights Weights for each n points
+     * @param  array<int|float>  $numbers
+     * @param  int               $n       n-point moving average
+     * @param  array<int|float>  $weights Weights for each n points
      *
-     * @return array of averages
+     * @return array<float> of averages
      *
      * @throws Exception\BadDataException if number of weights is not equal to number of n-points
      */
     public static function weightedMovingAverage(array $numbers, int $n, array $weights): array
     {
-        if (count($weights) !== $n) {
+        if (\count($weights) !== $n) {
             throw new Exception\BadDataException('Number of weights must equal number of n-points');
         }
 
-        $m   = count($numbers);
-        $∑w  = array_sum($weights);
+        $m   = \count($numbers);
+        $∑w  = \array_sum($weights);
         $WMA = [];
 
         for ($i = 0; $i <= $m - $n; $i++) {
-            $∑wp   = array_sum(Map\Multi::multiply(array_slice($numbers, $i, $n), $weights));
+            $∑wp   = \array_sum(Map\Multi::multiply(\array_slice($numbers, $i, $n), $weights));
             $WMA[] = $∑wp / $∑w;
         }
 
@@ -749,14 +809,14 @@ class Average
      *   where
      *    α: coefficient that represents the degree of weighting decrease, a constant smoothing factor between 0 and 1.
      *
-     * @param array  $numbers
-     * @param int    $n       Length of the EPA
+     * @param array<int|float>  $numbers
+     * @param int               $n       Length of the EPA
      *
-     * @return array of exponential moving averages
+     * @return array<float> of exponential moving averages
      */
     public static function exponentialMovingAverage(array $numbers, int $n): array
     {
-        $m   = count($numbers);
+        $m   = \count($numbers);
         $α   = 2 / ($n + 1);
         $EMA = [];
 
@@ -805,9 +865,9 @@ class Average
         }
 
         // Standard case x and y > 0
-        list($a, $g) = [$x, $y];
+        [$a, $g] = [$x, $y];
         for ($i = 0; $i <= 10; $i++) {
-            list($a, $g) = [self::mean([$a, $g]), self::geometricMean([$a, $g])];
+            [$a, $g] = [self::mean([$a, $g]), self::geometricMean([$a, $g])];
         }
         return $a;
     }
@@ -853,7 +913,7 @@ class Average
             return $x;
         }
 
-        return ($y - $x) / (log($y) - log($x));
+        return ($y - $x) / (\log($y) - \log($x));
     }
 
     /**
@@ -869,7 +929,7 @@ class Average
      */
     public static function heronianMean(float $A, float $B): float
     {
-        return 1 / 3 * ($A + sqrt($A * $B) + $B);
+        return 1 / 3 * ($A + \sqrt($A * $B) + $B);
     }
 
     /**
@@ -904,17 +964,27 @@ class Average
         $xˣ = $x ** $x;
         $yʸ = $y ** $y;
 
-        return 1 / $ℯ * pow($xˣ / $yʸ, 1 / ($x - $y));
+        return 1 / $ℯ * \pow($xˣ / $yʸ, 1 / ($x - $y));
     }
 
     /**
      * Get a report of all the averages over a list of numbers
      * Includes mean, median mode, geometric mean, harmonic mean, quardratic mean
      *
-     * @param array $numbers
+     * @param array<float> $numbers
      *
-     * @return array [ mean, median, mode, geometric_mean, harmonic_mean,
-     *                 contraharmonic_mean, quadratic_mean, trimean, iqm, cubic_mean ]
+     * @return array{
+     *     mean:                    float,
+     *     median:                  float,
+     *     mode:                    float[],
+     *     geometric_mean:          float,
+     *     harmonic_mean:           float,
+     *     contraharmonic_mean:     float,
+     *     quadratic_mean:          float,
+     *     trimean:                 float,
+     *     iqm:                     float,
+     *     cubic_mean:              float,
+     * }
      *
      * @throws Exception\BadDataException
      * @throws Exception\OutOfBoundsException

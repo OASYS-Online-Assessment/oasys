@@ -2,7 +2,7 @@
 
 
 	register_shutdown_function('outputJSON');
-	require_once __DIR__ . '/../inc/php/settings.php';
+	require_once __DIR__ . "/inc/php/initBackend.php";
 
 	//action is a string that defines what action to perform
 	$action = filter_input(INPUT_POST, 'action');
@@ -44,7 +44,24 @@
 		exit();
 	}
 
+	// The page editor is an editing interface. Resolve permissions from the
+	// requested page id and require the established Content Manager write
+	// permission for every operation; page/group ids supplied by the client
+	// are never used as an authorization boundary.
+	$pageId = $data['id'] ?? null;
+	if (!is_int($pageId) || $pageId <= 0) {
+		$returnData['error'] = 'Invalid page id.';
+		exit;
+	}
+	$permAuth = new permAuth('fetchPage', ['id' => $pageId], $myAuth);
+	if ($permAuth->permCheck(['id' => $pageId]) !== true) {
+		$returnData['error'] = $permAuth->returnData['error'] ?? 'You do not have permission to edit this page.';
+		$returnData['reloadFolder'] = $permAuth->returnData['reloadFolder'] ?? true;
+		exit;
+	}
+
 	require_once "inc/php/pageClass.php";
+	if (oasysRejectUnknownAction(__FILE__, $action, $returnData)) exit;
 	$importer = new pageClass($returnData, $data);
 	$importer->execute($action);
 

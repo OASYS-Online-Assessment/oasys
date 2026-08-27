@@ -48,6 +48,7 @@ function onDOMReady() {
     // init language dropdown list
     langDropList = new jsDropList('lang', 'usdd_langsId', {
         listTitle: UILANG.m('Choose language'),
+        theme: 'backend',
         onChange: function(src, val) {
             startLangChange(val);
         }
@@ -333,7 +334,7 @@ function ajaxSuccess(res) {
                 cancel: true,
                 value: 'ok'
             }],
-            contents: '<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.fatalError,
+            contents: formatActionErrorMessage('<strong>' + UILANG.m('action_not_completed') + '</strong><br />' + res.fatalError),
             title: UILANG.m("Error"),
             icon: "../images/error.png",
             iconWidth: 64,
@@ -362,7 +363,7 @@ function ajaxSuccess(res) {
                 cancel: true,
                 value: 'ok'
             }],
-            contents: '<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br><p>' + res.error + '</p>',
+            contents: formatActionErrorMessage('<strong>' + UILANG.m('Sorry! The action cannot be completed.') + '</strong><br><p>' + res.error + '</p>'),
             title: UILANG.m("Error"),
             icon: "../images/error.png",
             iconWidth: 64,
@@ -465,6 +466,7 @@ function ajaxSuccess(res) {
                     case 4: // SINGLE CHOICE INTEGER
                     case 5: // SINGLE CHOICE STRING
                         curSettingsObj[setting] = new jsDropList('setVal' + setting, 'usdd_' + setting, {
+                            theme: 'backend',
                             onChange: function(setName, val) {
                                 // usetBtnObj.enable();
                                 newUserVals[setName.replace('usdd_', '')] = val;

@@ -111,7 +111,7 @@ function addGroup(array $data, rixPDO &$db, array &$returnData)
 	}
 
 	// convert to json and insert value into new user accessDef field
-	$adef_json = json_encode($jArr);
+	$adef_json = json_encode($jArr, JSON_PRETTY_PRINT);
 
 	// keyed list of root table names and their associated access control table
 	$tblListArr = ['itemFolders' => 'itemFolderAccess', 'testFolders' => 'testFolderAccess', 'loginsFolders' => 'loginsFolderAccess'];
@@ -201,15 +201,17 @@ function addUser(array $data, rixPDO &$db, array &$returnData)
 	// final password string - blank out if LDAP or other remote auth type
 	$finalPass = $acctType === "LOCAL" ? password_hash($password, PASSWORD_DEFAULT) : "";
 
-	//write new user into db
-	$db->prepare('INSERT INTO `users` (`id`, `name`, `password`, `email`, `status`, `acct_type`) VALUES(?, ?, ?, ?, ?, ?)');
-	$db->executePrepared([null, $newUser, $finalPass, $newEmail, "1", $acctType]);
-
-	foreach (glob('inc/js/*generic.json') as $pFile) {
+	// Build the complete permission template before creating any database records.
+	$jArr = ['c_items' => [], 'items' => []];
+	$permissionFiles = glob('inc/js/*generic.json') ?: [];
+	foreach ($permissionFiles as $pFile) {
 		$c_permItems = json_decode(file_get_contents($pFile) ?? '', true);
+		if (!is_array($c_permItems)) {
+			$returnData['error'] = "Unable to create user because the permission schema is invalid.";
+			return;
+		}
 
 		// create base JSON accessDef structure from items permission template
-		$jArr = [];
 		foreach ($c_permItems as $k1 => $v1) {
 			$jArr['c_items'][$k1] = false; // this sets the concept permission and defaults all to (bool) false
 			foreach ($v1 as $k2 => $v2) {
@@ -217,29 +219,46 @@ function addUser(array $data, rixPDO &$db, array &$returnData)
 			}
 		}
 
-		// convert to json and insert value into new user accessDef field
-		$adef_json = json_encode($jArr);
-		if ($adef_json !== "[]") {
-			$db->prepare("UPDATE `users` SET `accessDef` = ? WHERE `name` = ?");
-			$db->executePrepared([$adef_json, $newUser]);
-		} else {
-			$db->prepare("UPDATE `users` SET `accessDef` = '{\"c_items\": {}, \"items\": {}}' WHERE `name` = ?");
-			$db->executePrepared([$newUser]);
-		}
+	}
+	$adefJson = json_encode($jArr);
+	if ($adefJson === false) {
+		$returnData['error'] = "Unable to create user because the permission schema could not be encoded.";
+		return;
+	}
 
-		// get new user ID
-		$newId = $db->fetchValue("SELECT `id` FROM `users` WHERE `name` = ?", [$newUser])['data'];
+	if ($db->startTransaction() !== true) {
+		$returnData['error'] = "Unable to start user creation transaction.";
+		return;
+	}
 
-		// return new user's name
-		$newName = $db->fetchValue("SELECT `name` FROM `users` WHERE `id` = ?", [$newId])['data'];
+	try {
+		$db->insert('users', [
+			'id' => null,
+			'name' => $newUser,
+			'password' => $finalPass,
+			'email' => $newEmail,
+			'accessDef' => $adefJson,
+			'status' => 1,
+			'acct_type' => $acctType
+		]);
+		$dbResult = $db->results();
+		if ($dbResult['error']) throw new RuntimeException("Unable to create user.");
+		$newId = intval($dbResult['id']);
 
-		// set usergroupaccess value based on if real group was sent in or not
 		if ($groupId > 0) {
+			$groupExists = $db->fetchValue("SELECT `id` FROM `userGroups` WHERE `id` = ?", [$groupId]);
+			if ($groupExists['rows'] === 0) throw new RuntimeException("The selected user group no longer exists.");
 			$db->insert('userGroupAccess', ['userId' => $newId, 'usergroupId' => $groupId]);
+			if ($db->results()['error']) throw new RuntimeException("Unable to assign the selected user group.");
 		}
+
+		if ($db->commit() !== true) throw new RuntimeException("Unable to commit user creation.");
 
 		$returnData['data']['userId'] = $newId;
-		$returnData['data']['nu_edt_uname'] = $newName;
+		$returnData['data']['nu_edt_uname'] = $newUser;
+	} catch (Throwable $e) {
+		$db->rollback();
+		$returnData['error'] = $e->getMessage();
 	}
 }
 
@@ -313,10 +332,15 @@ function deleteUser(array $data, rixPDO &$db, array &$returnData)
 			return;
 		}
 
-		// If there is not at least one other enabled superadmin account, do not allow disabling
-		$saDisCount = $db->fetchValue("SELECT COUNT(`status`) FROM users WHERE id IN (SELECT userId FROM userGroupAccess WHERE usergroupId = ?) AND `status` = 0", [$saGroupId])['data'];
+		// Deletion must leave at least one other enabled superadmin account.
+		$remainingEnabledSa = $db->fetchValue(
+			"SELECT COUNT(*) FROM users
+			 WHERE id IN (SELECT userId FROM userGroupAccess WHERE usergroupId = ?)
+			 AND status = 1 AND id <> ?",
+			[$saGroupId, $uid2delete]
+		)['data'];
 
-		if (($saDisCount + 1) === $saCount && $myAuth->userid === $uid2delete) {
+		if (intval($remainingEnabledSa) < 1) {
 			$returnData['error'] = "<br>At least one superadmin user must exist and be enabled at all times. <br><br><strong>User was NOT DELETED.</strong>";
 			return;
 		}
@@ -422,7 +446,7 @@ function fetchUsers(array $data, rixPDO &$db, array &$returnData)
 
 		// query for all users
 		case '-1':
-			$query = "SELECT * FROM `users`";
+			$query = "SELECT * FROM `users` ORDER BY `name`";
 			$result = $db->fetchTable($query);
 			break;
 
@@ -436,17 +460,40 @@ function fetchUsers(array $data, rixPDO &$db, array &$returnData)
 
 	global $myAuth;
 
-	$saId = $db->fetchValue("SELECT `id` FROM `userGroups` WHERE `name` = ?", ['superadmin'])['data'];
-	foreach ($result['data'] as $key => &$uVal) {
-		$uVal['isAdminOnly'] = $myAuth->checkAdmin($uVal['id']);
-		$uVal['isSuper'] = $myAuth->checkSA($uVal['id']);
-
-		// remove superadmin accounts from results if the operator is just an admin
-		if ($myAuth->checkSA() === false) {
-			$ugroups = $db->fetchColumn("SELECT `usergroupId` FROM `userGroupAccess` WHERE `userId` = ?", [$uVal['id']])['data'];
-			if (in_array($saId, $ugroups)) unset($result['data'][$key]);
+	$roleMap = [];
+	$userIds = array_column($result['data'], 'id');
+	if ($userIds) {
+		$roleRows = $db->fetchTable(
+			"SELECT u.id,
+				MAX(CASE WHEN g.name = 'admin' THEN 1 ELSE 0 END) AS isAdmin,
+				MAX(CASE WHEN g.name = 'superadmin' THEN 1 ELSE 0 END) AS isSuper
+			 FROM users u
+			 LEFT JOIN userGroupAccess uga ON uga.userId = u.id
+			 LEFT JOIN userGroups g ON g.id = uga.usergroupId
+			 WHERE u.id IN " . $db->variableString(count($userIds)) . "
+			 GROUP BY u.id",
+			$userIds
+		)['data'];
+		foreach ($roleRows as $roleRow) {
+			$roleMap[(string)$roleRow['id']] = [
+				'isAdmin' => (bool)$roleRow['isAdmin'],
+				'isSuper' => (bool)$roleRow['isSuper']
+			];
 		}
 	}
+
+	$operatorCanSeeSuperadmins = $myAuth->checkSA();
+	foreach ($result['data'] as $key => &$uVal) {
+		$userAccessDef = json_decode($uVal['accessDef'] ?? '', true);
+		$userRole = $roleMap[(string)$uVal['id']] ?? ['isAdmin' => false, 'isSuper' => false];
+		$uVal['isAdminOnly'] = $userRole['isAdmin'];
+		$uVal['isElevated'] = (bool)($userAccessDef['items']['adminElevated'] ?? false);
+		$uVal['isSuper'] = $userRole['isSuper'];
+
+		// remove superadmin accounts from results if the operator is just an admin
+		if (!$operatorCanSeeSuperadmins && $uVal['isSuper']) unset($result['data'][$key]);
+	}
+	unset($uVal);
 
 	$collectedData = [];
 	$itemArray = [];
@@ -454,7 +501,9 @@ function fetchUsers(array $data, rixPDO &$db, array &$returnData)
 		$itemArray['hiddenID'] = $value['id'];
 		$itemArray['name']['data'] = $value['name'];
 		$itemArray['name']['id'] = $value['id'];
+		$itemArray['acct_type'] = $value['acct_type'];
 		$itemArray['isAdminOnly'] = $value['isAdminOnly'];
+		$itemArray['isElevated'] = $value['isElevated'];
 		$itemArray['isSuper'] = $value['isSuper'];
 		// build array set record by record
 		array_push($collectedData, $itemArray);
@@ -475,9 +524,17 @@ function passReset(array $data, rixPDO &$db, array &$returnData)
 	}
 
 	$uid = $data['userId'];
-	$pass = $data['newPass'];
+	$pass = (string)$data['newPass'];
+	if ($pass === '' || strlen($pass) > 50) {
+		$returnData['error'] = "Password must contain between 1 and 50 characters.";
+		return;
+	}
 
 	$newPwdHash = password_hash($pass, PASSWORD_DEFAULT);
-	$db->update('users', ['password' => $newPwdHash], 'id=?', [$uid]);
+	$db->update('users', [
+		'password' => $newPwdHash,
+		'bad_logins' => 0,
+		'last_bad_pass' => null
+	], 'id=?', [$uid]);
 	$returnData['data'] = "Password successfully updated!";
 }

@@ -1,11 +1,11 @@
 "use strict";
 
 /*
- nxButton v3.26
+ nxButton v3.28
 
  Depencies:
 	 jQuery 1.7 or newer
-	 jsPointerHandler v2.1.0 or newer
+	 jsPointerHandler v2.2.8 or newer
  */
 
 (function ($) {
@@ -42,6 +42,7 @@
 			iconPosition = 'left;'
 		}
 		const callback = data.callback || null;
+		const passEvent = data.passEvent || false;
 		let callBackParams = data.params || null;
 		const eventType = data.eventType || null;
 		const style = data.style || null;
@@ -240,7 +241,8 @@
 			},
 			hoverClass: 'nxButtonHovered',
 			pressClass: 'nxButtonPressed',
-			activeClass: 'nxButtonActive'
+			activeClass: 'nxButtonActive',
+			capturePointer: true
 		});
 
 		if (data['default']) {
@@ -288,17 +290,21 @@
 			if (selected || disabled) return;
 			active = true;
 			e.stopPropagation();
-			document.activeElement.blur();
 		}
 
 		function mouseup(e) {
 			debug('mouseup');
+			if (active) document.activeElement.blur();
 			if (active && callback) {
 				if (callBackParams === null) {
+					let callbackValue = value;
 					if (typeof(value) === 'function') {
-						callback.call(this, value.call(this));
+						callbackValue = value.call(this);
+					}
+					if (passEvent) {
+						callback.call(this, callbackValue, e);
 					} else {
-						callback.call(this, value);
+						callback.call(this, callbackValue);
 					}
 				} else {
 					callback.apply(this, callBackParams);
@@ -478,15 +484,19 @@
 			button.addClass('nxButtonActive');
 		};
 
-		this.keyup = function () {
+		this.keyup = function (e) {
 			if (selected || disabled) return;
 			button.removeClass('nxButtonActive');
 			if (callback) {
 				if (callBackParams === null) {
+					let callbackValue = value;
 					if (typeof(value) === 'function') {
-						callback.call(this, value.call(this));
+						callbackValue = value.call(this);
+					}
+					if (passEvent) {
+						callback.call(this, callbackValue, e);
 					} else {
-						callback.call(this, value);
+						callback.call(this, callbackValue);
 					}
 				} else {
 					callback.apply(this, callBackParams);
@@ -587,6 +597,13 @@
 	v3.26:
 		- added missing debug information on mouseup event
 
+	v3.27:
+		- capture the active pointer until release
+		- defer blurring the active input until release so virtual-keyboard layout changes cannot retarget the click
+
+	v3.28:
+		- added passEvent option to pass the jsPointerHandler event as the callback's second argument
+
 
 
 	 *** USAGE ***
@@ -604,6 +621,7 @@
 	 data:
 		 label:			string of text to show on button
 		 callback:		the function to call when button is clicked
+		 passEvent:		if true, callback receives the jsPointerHandler event as its second argument
 		 eventType:		the event to dispatch instead of calling a callback function
 		 value:			a custom string to send back on activation; necessary to identify the sender if more than one button uses the same handler
 		 params:		array of custom parameters to send back on click (value will not be sent if params is used)

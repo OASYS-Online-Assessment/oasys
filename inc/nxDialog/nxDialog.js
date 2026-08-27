@@ -1,5 +1,5 @@
 /*
- nxDialog, v1.68
+ nxDialog, v1.7
 
  dependencies: jQuery, jQueryUI, nxButton
 
@@ -171,6 +171,7 @@ async function showDialog(dialogData) {
 		const fieldOptions = data.fieldOptions || {};
 		const fieldInputCallback = data.fieldInputCallback || null; // possibility for a callback on an external fundtion when fieldInput is triggered (in order to update dialog content)
 		const fieldInstances = {};
+		const type = normalizeDialogType(data.type || data.variant || data.messageType || '');
 		const icon = data.icon || false;
 		let iconWidth = data.iconWidth || null;
 		let iconHeight = data.iconHeight || null;
@@ -182,6 +183,8 @@ async function showDialog(dialogData) {
 		const veil = $('#veil_' + id);
 		veil.css("z-index", zIndex);
 		const box = $('#' + id);
+		const dialogType = type || inferDialogType(title, icon, id);
+		if (dialogType) box.addClass(`nxDialog-${dialogType}`);
 		let dialogBody = box.find('.nxDialogBody');
 		let dialogIconWrapper = box.find('.nxDialogIconWrapper');
 		if (contentId !== '') {
@@ -212,6 +215,9 @@ async function showDialog(dialogData) {
 					if (iconHeight) box.find('.nxDialogIcon').css('height', iconHeight);
 				}
 			}
+			if (dialogType && dialogIconWrapper.is(':empty')) {
+				dialogIconWrapper.html(`<span class="nxDialogSemanticIcon" aria-hidden="true"></span>`);
+			}
 
 			//insert extended fields into container elements
 			for (i in fieldTypes) {
@@ -224,6 +230,9 @@ async function showDialog(dialogData) {
 						fieldInstances[i] = new jsDropList(container, `${id}_${i}_dropList`, fieldOptions[i]);
 						break;
 					case 'numberInput':
+						fieldOptions[i].onChange = function () {
+							fieldInput(null, false);
+						};
 						fieldInstances[i] = new jsNumberInput(container, `${id}_${i}_numberInput`, fieldOptions[i]);
 						break;
 				}
@@ -352,15 +361,15 @@ async function showDialog(dialogData) {
 							break;
 					}
 				}
-				if (!v) return false;
-				return (!v.match(/^\s*$/));
+				if (v === null || typeof v === 'undefined' || v === '' || (typeof v === 'number' && Number.isNaN(v))) return false;
+				return (!String(v).match(/^\s*$/));
 			});
 			let contentCheck;
 			if (blackListLogic === "and") {
 				contentCheck = true;
 				for (let i in blackList) {
 					let row = blackList[i];
-					let v = $('#' + i).val();
+					let v = fieldTypes[i] ? fieldInstances[i].getValue() : $('#' + i).val();
 					if (row.indexOf(v) !== -1) {
 						contentCheck = false;
 					}
@@ -369,7 +378,7 @@ async function showDialog(dialogData) {
 				contentCheck = false;
 				for (let i in blackList) {
 					let row = blackList[i];
-					let v = $('#' + i).val();
+					let v = fieldTypes[i] ? fieldInstances[i].getValue() : $('#' + i).val();
 					if (row.indexOf(v) === -1) {
 						contentCheck = true;
 					}
@@ -530,7 +539,7 @@ async function showDialog(dialogData) {
 					callback.apply(this, parameters);
 				}
 			}
-			if (sender === 'dummy' || buttonOptions[sender].keepOpen !== true) {
+			if (sender === 'dummy' || buttonOptions[sender]?.keepOpen !== true) {
 				window.nxDialogTopMost = previousDialog;
 				$(document).off('keydown.' + id);
 				$(document).off('keyup.' + id);
@@ -570,12 +579,23 @@ async function showDialog(dialogData) {
 			e.stopImmediatePropagation();
 		}
 
+        function normalizeInitialPosition() {
+            const rect = box[0].getBoundingClientRect();
+            box.css({
+                left: rect.left + 'px',
+                top: rect.top + 'px',
+                transform: 'none'
+            });
+        }
+
 		this.dismiss = dismiss;
 		this.disableButton = disableButton;
 		this.enableButton = enableButton;
 		this.refreshInputEvents = refreshInputEvents;
+        this.normalizeInitialPosition = normalizeInitialPosition;
 
-		window.nxDialogManager.instances[id] = this; //register dialog instance
+
+        window.nxDialogManager.instances[id] = this; //register dialog instance
 
 		if (returnPromise === true) {
 			return new Promise(function (resolve) {
@@ -588,6 +608,21 @@ async function showDialog(dialogData) {
 		} else {
 			return this;
 		}
+	}
+
+	function normalizeDialogType(type) {
+		type = String(type || '').toLowerCase();
+		const validTypes = ['error', 'warning', 'success', 'info', 'confirm', 'form'];
+		return validTypes.includes(type) ? type : '';
+	}
+
+	function inferDialogType(title, icon, id) {
+		const haystack = `${title || ''} ${id || ''} ${icon || ''}`.toLowerCase();
+		if (haystack.includes('error')) return 'error';
+		if (haystack.includes('warning') || haystack.includes('warn')) return 'warning';
+		if (haystack.includes('success')) return 'success';
+		if (haystack.includes('info')) return 'info';
+		return '';
 	}
 
 	window.nxDialog = nxDialog;
@@ -618,4 +653,6 @@ async function showDialog(dialogData) {
 		- fixed a problem where a dialog with a text field would recharge the web page rather than submitting the form
 	1.68 (2025-08-21)
 		- added a brief delay to initially set the overflow class, to ensure the dialog is fully rendered
+	1.69 (2026-01-12)
+		- added normalizeInitialPosition as method for correct initial positioning (when TinyMCE is used in the dialog)
  */

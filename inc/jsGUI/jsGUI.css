@@ -55,17 +55,19 @@
 	margin: 0 0 0 0;
 	bottom: -1px;
 	top: -24px;
-	width: calc(100%);
+	width: calc(100% + 1px);
 	height: 24px;
-	padding: 2px 0 2px 0;
-	color: #FFF;
+	padding: 0;
+	color: #ffffff;
 	/*z-index: 10;*/
-	font: 9pt "Open Sans";
-	background-color: #7b7b7b;
+	font: 12px "Open Sans";
+	background: linear-gradient(180deg, #2f91b8 0%, #247da1 100%);
 	text-transform: uppercase;
 	text-align: center;
 	font-weight: 600;
 	line-height: 24px;
+	border-bottom: 1px solid #1f6f90;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 .jsFlexBoxTitle > span {
@@ -77,7 +79,7 @@
 
 .jsFlexBoxInner {
 	position: absolute;
-	top: 4px;
+	top: 0;
 	bottom: 0;
 	overflow: auto;
 	padding: 15px 15px 15px 15px;
@@ -96,12 +98,13 @@
 
 .jsFlexBoxPanel {
 	position: absolute;
-	width: 100%;
+	width: calc(100% + 1px);
 	height: 30px!important; /* todo:modify JS*/
-	border-bottom: 1px solid #f1f1f1;
-	background-color: #e5e5e5;
-	top: 4px;
+	border-bottom: 1px solid #d7e3ed;
+	background: #f4f8fb;
+	top: 0;
 	overflow: hidden;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .jsFlexBoxTitle + .jsFlexBoxPanel {
@@ -335,47 +338,6 @@ input[type="text"][readonly], input[type="number"][readonly], input[type="passwo
 
 .jsLabel {
 	font: 14px "Open Sans";
-}
-
-/* @end */
-
-
-/* @group jsDashWidget */
-
-.jsDashWidget {
-	margin: 8px;
-	border-radius: 8px;
-	border: 2px solid lightgray;
-	background-color: white;
-	display: flex;
-	flex-direction: column;
-	overflow:hidden;
-	box-shadow: 4px 1px 12px 0 rgba(0, 0, 0, 0.13);
-	-webkit-box-shadow: 4px 1px 12px 0 rgba(0, 0, 0, 0.13);
-	-moz-box-shadow: 4px 1px 12px 0 rgba(0, 0, 0, 0.13);
-}
-
-.jsDashWidgetTitle{
-	border-bottom: 2px solid #d3d3d3;
-	height: 40px;
-	display: flex;
-	align-self: flex-start;
-	width: 100%;
-}
-.jsDashWidgetTitleText{
-	font-size: 1.2em;
-	line-height: 40px;
-	vertical-align: middle;
-}
-.jsDashWidgetIcon{
-	width: 24px;
-	height: 24px;
-	padding: 0;
-	margin: 8px 12px;
-}
-.jsDashWidgetContentBox{
-	padding: 8px 0;
-	height: fit-content;
 }
 
 /* @end */

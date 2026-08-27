@@ -1,0 +1,237 @@
+/* ===== User overview widget (usrz) ===== */
+
+/* container */
+.usrz-body{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  color:#2a2f35;
+  font-size:13px;
+  padding:4px;
+}
+
+/* === User overview grid: always 3 × 2; tiles exactly 136px tall (outer) === */
+.usrz-tiles{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-flow: row;
+  grid-auto-rows: auto;          /* row height comes from tile height */
+  gap:10px;
+  width:100%;
+  box-sizing:border-box;
+  min-width:0;                   /* prevent min-content overflow */
+}
+
+/* === Tile: pinned title at top; exact outer height = 136px === */
+.usrz-tile{
+  box-sizing: border-box;        /* include padding + border in height */
+  height: 136px;
+  min-height: 136px;
+  max-height: 136px;
+  background:#F8FAFC;
+  border:1px solid #e6edf5;
+  border-radius:12px;
+  padding:12px 10px;             /* top padding defines title Y-position */
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;    /* title sticks to the top slot */
+  gap:8px;
+  box-shadow:0 1px 2px rgba(13,18,28,0.03);
+  overflow:hidden;               /* no vertical spill */
+  min-width:0;
+  max-width:100%;
+}
+
+/* Title: same vertical slot in every tile */
+.usrz-tTitle{
+  width:100%;
+  margin:0;
+  font-weight:700;
+  text-align:center;
+  line-height:22px;              /* fixed line box for the title row */
+  min-height:22px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* Subtitle (optional) */
+.usrz-sub{
+  font-size:12px;
+  color:#5a6b7c;
+  text-align:center;
+  max-width:100%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* Pills / Chips (don’t widen tiles; ellipsis when tight) */
+.usrz-pill,
+.usrz-chip{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  max-width:100%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* pill buttons */
+.usrz-pill{
+  min-width:48px;
+  padding:6px 14px;
+  line-height:20px;
+  border-radius:9999px;
+  background:#e9f5f3;
+  border:1px solid #cde7e3;
+  color:#0d5b51;
+  font-weight:600;
+  text-decoration:none;
+  user-select:none;
+  outline:none;
+}
+a.usrz-pill:hover{ filter:brightness(.98); text-decoration:none; }
+.usrz-pill.ok     { background:#e7f6ee; color:#176b3a; border-color:#c3e8d3; }
+.usrz-pill.warn   { background:#fff3d6; color:#7a4d00; border-color:#f1da9f; }
+.usrz-pill.danger { background:#ffe7e7; color:#8a1f1f; border-color:#f3b6b6; }
+
+/* chips (if used) */
+.usrz-badges{ text-align:center; margin-top:2px; }
+.usrz-chip{
+  gap:6px;
+  padding:4px 10px;
+  line-height:18px;
+  border-radius:10px;
+  background:#f0f3ff;
+  border:1px solid #d7defa;
+  color:#29366b;
+  text-decoration:none;
+  font-weight:700;
+  font-size:12px;
+}
+.usrz-chip:hover{ filter:brightness(.98); text-decoration:none; }
+
+/* inline icon spacing */
+.usrz-ic{ margin-right:6px; }
+
+/* ===== Dialogs (tables + filter) ===== */
+
+.usrz-dialogWrap{
+  max-height:66vh;
+  overflow:hidden;
+  padding:2px;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+
+.usrz-filterRow{
+  display:flex; justify-content:flex-end; align-items:center;
+  margin:2px 0 8px 0;
+}
+.usrz-filterInput{
+  width:320px; max-width:100%;
+  padding:6px 10px; border:1px solid #d9e2ec; border-radius:8px;
+  background:#fff; color:#243b53; outline:none;
+  font-size:13px;
+  box-shadow:0 1px 2px rgba(13,18,28,.03);
+}
+.usrz-filterInput::placeholder{ color:#9aa8b6; }
+
+.usrz-tableWrap{ overflow:hidden; min-height:0; }
+
+.usrz-dialogTbl{
+  width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed;
+  display:flex; flex-direction:column; min-height:0; max-height:58vh;
+}
+.usrz-dialogTbl thead{
+  display:table; width:100%; table-layout:fixed; flex:0 0 auto;
+}
+.usrz-dialogTbl tbody{
+  display:block; overflow:auto; min-height:0; flex:1 1 auto;
+}
+.usrz-dialogTbl tbody tr{
+  display:table; width:100%; table-layout:fixed;
+}
+.usrz-dialogTbl thead th{
+  background:#eef3fb; border-bottom:1px solid #e1e8f5;
+  text-align:left; padding:8px; color:#15243f; font-weight:700;
+}
+.usrz-dialogTbl tbody td{
+  border-bottom:1px solid #f0f0f0; padding:8px; vertical-align:middle;
+  color:#243244;
+}
+.usrz-dialogTbl .usrz-num{ text-align:right; font-variant-numeric:tabular-nums; }
+
+.usrz-dialogTbl th.usrz-th-right{ text-align:right; }
+
+.usrz-dialogTbl--groups thead tr,
+.usrz-dialogTbl--groups tbody tr{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 120px;
+}
+.usrz-dialogTbl--groups th:last-child,
+.usrz-dialogTbl--groups td:last-child{
+  text-align:center;
+  padding-right:22px;
+}
+.usrz-membersCell{ text-align:center; white-space:nowrap; }
+
+/* avoid horizontal scrolling by allowing wrap */
+.usrz-dialogTbl th,
+.usrz-dialogTbl td{
+  word-break: break-word;
+  max-width: 1px;   /* let content wrap instead of stretching columns */
+}
+
+.usrz-dialogTbl--groups th,
+.usrz-dialogTbl--groups td{ max-width:none; }
+
+/* ===== Pretty tooltip for group members count ===== */
+#usrzTooltip{
+  position:fixed; pointer-events:none; z-index:999999;
+  background:#111827; color:#F9FAFB;
+  padding:8px 10px; border-radius:8px;
+  font-size:12px; line-height:1.25; max-width:380px;
+  box-shadow:0 8px 24px rgba(0,0,0,.18), 0 2px 8px rgba(0,0,0,.12);
+  transform:translate(-50%,-8px);
+  opacity:0; transition:opacity .12s ease, transform .12s ease;
+  white-space:normal;
+}
+#usrzTooltip.is-visible{ opacity:1; transform:translate(-50%,0); }
+#usrzTooltip::after{
+  content:""; position:absolute; left:50%; bottom:-6px; transform:translateX(-50%);
+  width:10px; height:10px; background:#111827;
+  box-shadow:2px 2px 2px rgba(0,0,0,.06);
+  transform-origin:center; clip-path: polygon(50% 0, 0 100%, 100% 100%);
+}
+#usrzTooltip .usrz-tipTitle{ font-weight:700; margin-bottom:4px; color:#E5E7EB; }
+#usrzTooltip .usrz-tipList{ display:block; color:#F3F4F6; }
+
+/* Subtle hover for members count */
+.usrz-membersCell .usrz-membersCount{
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:24px; padding:2px 8px; border-radius:999px;
+  background:#eef6fb; color:#1b6486; font-weight:700;
+  transition:background .15s ease, color .15s ease;
+}
+.usrz-membersCell .usrz-membersCount:hover{ background:#eef3fb; }
+
+/* Mobile tweaks */
+@media (max-width:520px){
+  .usrz-filterInput{ width:100%; }
+  .usrz-dialogTbl thead th,
+  .usrz-dialogTbl tbody td{ padding:6px; }
+}
+
+/* Accessibility: focus rings */
+a.usrz-pill:focus,
+a.usrz-chip:focus,
+.usrz-membersCell .usrz-membersCount:focus{
+  outline:2px solid #93c5fd; outline-offset:2px; border-radius:8px;
+}
+
+.usrz-numHdr{ text-align:center !important; }

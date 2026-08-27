@@ -25,18 +25,15 @@
 	$filterSettings = true;
 	$allowCache = true; //allow caching of the loader data
 
-	require_once 'inc/php/database.php'; //contains the database connection credentials
-	require_once 'inc/php/rixPDO.php'; //wrapper around PDO functions (c.f. docs folder for manual)
-	require_once 'inc/php/settings.php';
-	require_once 'inc/php/settingsCommonFunctions.php';
-	require_once 'editor/inc/php/MediaTool.php';
+	require_once __DIR__ . '/inc/php/initSettings.php';
+	require_once __DIR__ . '/inc/php/actionAllowlist.php';
+	require_once __DIR__ . '/editor/inc/php/MediaTool.php';
 
 	//all data that is returned by this script will be put into $returnData array which is sent back in JSON encoded form
 	$returnData = array();
 	$returnData['action'] = $action; //when returning we must specify which action was performed
 	$returnData['error'] = false; //if there is an error, this will contain a string with the error message
 
-	$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/logs/loader_errors.txt');
 	$results = $db->results();
 	if ($results['error']) {
 		$returnData['error'] = 'mySQL connection error';
@@ -45,6 +42,7 @@
 
 	$manifest = [];
 	$eTag = '';
+	if (oasysRejectUnknownAction(__FILE__, $action, $returnData)) exit;
 	$action($data, $db, $returnData);
 
 	/*
@@ -61,10 +59,26 @@
 
 		if ($data['type'] === 'switchMode') {
 			if ($data['mode'] === 'login' && isset($data['landingPagePath'])) {
-				getManifest($data['mode'], ['landingPagePath' => $data['landingPagePath']]);
+				$landingPagePath = \Oasys\OasysApp::resolveLandingPageDirectory((string)$data['landingPagePath']);
+				if ($landingPagePath === false) {
+					$returnData['error'] = "Error: invalid parameter 'landingPagePath'!";
+					http_response_code(400);
+					exit();
+				}
+				$data['landingPagePath'] = $landingPagePath;
+				getManifest($data['mode'], ['landingPagePath' => $landingPagePath]);
+			} elseif ($data['mode'] === 'login' && !empty($data['customLandingPage'])) {
+				getManifest($data['mode'], ['customLandingPage' => true]);
 			} elseif ($data['mode'] === 'test') {
 				checkParams($data, array('skinPath'));
-				getManifest($data['mode'], ['skinPath' => $data['skinPath']]);
+				$skinPath = \Oasys\OasysApp::resolveSkinDirectory((string)$data['skinPath']);
+				if ($skinPath === false) {
+					$returnData['error'] = "Error: invalid parameter 'skinPath'!";
+					http_response_code(400);
+					exit();
+				}
+				$data['skinPath'] = $skinPath;
+				getManifest($data['mode'], ['skinPath' => $skinPath]);
 			} else {
 				if ($data['mode'] === 'global') {
 					//in global mode we must disallow caching, as it transfers settings which is prone to change
@@ -184,7 +198,7 @@
 
 			case 'skins':
 
-				$contents['skins'] = getSkins();
+				$contents['skins'] = \Oasys\OasysSettings::findSkins();
 				break;
 
 			case 'settings':
@@ -193,16 +207,16 @@
 				/* not all settings must be sent to front end out of security concerns */
 				$contents['settings']['loginLanguage'] = $settings['loginLanguage'];
 				$contents['settings']['passwordField'] = $settings['passwordField'];
-				$contents['settings']['defaultPassword'] = $settings['defaultPassword'];
 				$contents['settings']['allowContextMenu'] = $settings['allowContextMenu'];
 				$contents['settings']['debugSystem'] = $settings['debugSystem'];
 				$contents['settings']['developmentMode'] = $settings['developmentMode'];
-				$contents['settings']['rootURL'] = $settings['rootURL'];
+				$contents['settings']['rootURL'] = $settings['JSrootURL'];
 				$contents['settings']['landingPage'] = $settings['landingPage'];
 				$contents['settings']['title'] = $settings['title'];
 				$contents['settings']['sendFrequency'] = $settings['sendFrequency'];
 				$contents['settings']['ajaxTimeout'] = $settings['ajaxTimeout'];
 				$contents['settings']['retryCount'] = $settings['retryCount'];
+				$contents['settings']['optimiseDataTransfer'] = $settings['optimiseDataTransfer'];
 				$contents['settings']['customLoginURL'] = $settings['customLoginURL'];
 				if (isset($settings['menuLanguages'])) {
 					$contents['settings']['menuLanguages'] = $settings['menuLanguages'];
@@ -275,9 +289,13 @@
 						}
 					}
 				} else {
-					$manifest[] = ['url' => 'inc/css/login.css', 'type' => 'css', 'unload' => true];
+					if (empty($info['customLandingPage'])) {
+						$manifest[] = ['url' => 'inc/css/login.css', 'type' => 'css', 'unload' => true];
+					} else {
+						$manifest[] = ['url' => 'inc/css/customLandingPage.css', 'type' => 'css', 'unload' => true];
+					}
 					$manifest[] = ['url' => 'inc/html/login.snippet', 'type' => 'html', 'target' => 'contentWrapper', 'unload' => true];
-					$manifest[] = ['url' => 'inc/js/login.js', 'type' => 'js', 'onReady' => 'login_init', 'unload' => true];
+					$manifest[] = ['url' => 'inc/js/login.js', 'type' => 'js', 'onReady' => 'login_init', 'onUnload' => 'login_cleanup', 'unload' => true];
 					$manifest[] = ['url' => 'images/OASYS_logo_vertical_color-10.svg', 'type' => 'image', 'unload' => true];
 					$manifest[] = ['url' => 'images/LUCET.svg', 'type' => 'image', 'unload' => true];
 				}
@@ -321,6 +339,11 @@
 			case 'score':
 				$manifest[] = ['url' => 'inc/css/score.css', 'type' => 'css', 'unload' => true];
 				$manifest[] = ['url' => 'inc/js/score.js', 'type' => 'js', 'onReady' => 'score_init', 'unload' => true];
+				break;
+
+			case 'finish':
+				$manifest[] = ['url' => 'inc/css/finish.css', 'type' => 'css', 'unload' => true];
+				$manifest[] = ['url' => 'inc/js/finish.js', 'type' => 'js', 'onReady' => 'finish_init', 'onUnload' => 'finish_cleanup', 'unload' => true];
 				break;
 
 			case 'error':
@@ -462,16 +485,15 @@
 		//calculate and set Content-Length header
 		$length = 52; // initial length for '{"action":"loadMediaFiles","sender":"OASYS","data":{'
 		$first = true;
-		$mediaTool = new mediaTool();
 		foreach ($list as $item) {
 			if (!$first) {
 				$length += 1; // comma
 			}
 			$first = false;
 			$length += strlen($item['id']) + 28; // for '"id":{"mimeType":"","data":""}'
-			$length += strlen($mediaTool->getMimeType($item['id'], $item['checksum'] ?? ''));
+			$length += strlen(MediaTool::getMimeType($item['id'], $item['checksum'] ?? ''));
 			// estimate base64 length
-			$mediaSize = $mediaTool->getFileSize($item['id'], $item['checksum'] ?? '');
+			$mediaSize = MediaTool::getFileSize($item['id'], $item['checksum'] ?? '');
 			$base64Size = 4 * ceil($mediaSize / 3);
 			$length += $base64Size;
 		}
@@ -482,7 +504,6 @@
 		echo '{"action":"loadMediaFiles","sender":"OASYS","data":{';
 
 		//fetch the media files from disk or database
-		$mediaTool = new mediaTool();
 		$first = true;
 		foreach ($list as $item) {
 			if (!$first) {
@@ -490,7 +511,7 @@
 			}
 			$first = false;
 			echo '"' . $item['id'] . '":{"mimeType":"';
-			echo $mediaTool->getMimeType($item['id'], $item['checksum'] ?? '');
+			echo MediaTool::getMimeType($item['id'], $item['checksum'] ?? '');
 			echo '","data":"';
 			if (function_exists('ob_flush')) @ob_flush();
 			flush();
@@ -503,7 +524,7 @@
 				['line-length' => 0] // no line breaks
 			);
 
-			$mediaTool->getMediaStream($item['id'], $item['checksum'] ?? '', $out);
+			MediaTool::getMediaStream($item['id'], $item['checksum'] ?? '', $out);
 
 			//remove base64 filter in order to output JSON info correctly
 			stream_filter_remove($filter);

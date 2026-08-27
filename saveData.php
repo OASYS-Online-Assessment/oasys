@@ -4,15 +4,11 @@
 	register_shutdown_function('outputJSON');
 	$returnData = array();
 
-	global $filterSettings;
-	$filterSettings = true;
-
-	require_once __DIR__ . '/inc/php/database.php'; //contains the database connection credentials
-	require_once __DIR__ . '/inc/php/rixPDO.php'; //wrapper around PDO functions (c.f. docs folder for manual)
-	require_once __DIR__ . '/inc/php/settings.php';
+	require_once __DIR__ . '/inc/php/initSettings.php';
 	require_once __DIR__ . '/inc/php/rixTools.php';
 	require_once __DIR__ . '/inc/php/OasysFrontendState.php';
 	require_once __DIR__ . '/inc/php/exceptions/StateExpiredException.php';
+	require_once __DIR__ . '/inc/php/OasysBehaviour.php';
 
 	use Oasys\FrontEnd\OasysFrontendState;
 	use Oasys\exceptions\StateExpiredException;
@@ -69,7 +65,7 @@
 	$returnData['response'] = $response;
 	$returnData['checksum'] = $response + $data['challenge'];
 
-	if (!$data['test']['saveResults']) {
+	if ($state->savingDisabled === true) {
 		/*
 		If this is a test login, that does not save to the database, all we need is the server timestamp, so we exit
 		again here, right away.	We need to send the payloadId, which should always be negative for nonsaving tests, so
@@ -78,9 +74,6 @@
 		$returnData['payloadId'] = $data['payloadId'];
 		exit();
 	}
-
-	//make a connection to the database and define the log file in which database errors are to be recorded
-	$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/logs/saveData_errors.txt', 1, $returnData, 'error', ['emulatePrepares' => false]);
 
 	//check if system is not in maintenance state
 	$query = "SELECT `status` FROM systemState WHERE sys_section='frontend'";
@@ -92,11 +85,13 @@
 
 	//check if there are any instructions for the frontend
 	$res = $db->fetchValue('SELECT instructions FROM activity WHERE passwordId = ? AND testId = ?', [$data['test']['passwordId'], $data['test']['testId']]);
+	$instructions = [];
 	if ($res['rows'] > 0 && $res['data'] !== null) {
 		//json decode the instructions and write an empty array if the decoding fails
 		$returnData['instructions'] = json_decode($res['data'], true) ?? [];
 		// now erase the instructions so that they are not sent again
 		$db->update('activity', ['instructions' => NULL], "passwordId = ? AND testId = ?", [$data['test']['passwordId'], $data['test']['testId']]);
+		$instructions = $returnData['instructions'];
 	}
 
 	if (isset($data['metadata'])) {
@@ -122,6 +117,20 @@
 	}
 
 	saveData($data, $db, $returnData);
+
+	/* If there are instructions, depending on the command we may need to take some action on the server side as well
+	   (e.g. behaviour log) */
+	foreach ($instructions as $instruction) {
+		if ($instruction['command'] === 'timeUp') {
+			OasysBehaviour::write($data['test']['passwordId'], $data['test']['testId'], [
+				'loginId' => $data['test']['loginId'],
+				'timeLeft' => 0,
+				'eventType' => 'behaviour',
+				'subType' => $instruction['reason'] ?? 'timeUp'
+			]);
+		}
+	}
+
 
 	//the $db and $returnData variables MUST be given by reference
 	function saveData($data, &$db, &$returnData): void
@@ -214,10 +223,37 @@
 			 * Since the timer was stopped, we now need to set a new login timestamp and timeLeftAtLogin value.
 			 */
 			checkParams($data, ['timeLeftAtFailure']);
-			$res = $db->fetchValue("SELECT tsActiveServer FROM activity WHERE passwordId = ? AND testId = ?", [$data['test']['passwordId'], $data['test']['testId']]);
-			$tsActiveServer = $res['data'];
+			$res = $db->fetchRow("SELECT tsActiveServer, timeLeftAtLogin, TIMESTAMPDIFF(SECOND, tsLoginServer, tsActiveServer) AS secondsSinceLogin FROM activity WHERE passwordId = ? AND testId = ?", [$data['test']['passwordId'], $data['test']['testId']]);
+			$tsActiveServer = $res['data']['tsActiveServer'];
+			$timeLeftAtLogin = $res['data']['timeLeftAtLogin'];
+			$secondsSinceLogin = $res['data']['secondsSinceLogin'];
 
-			$loginData = ['timeLeftAtLogin' => $data['timeLeftAtFailure'], 'timeLeft' => $data['timeLeftAtFailure'], 'passwordId' => $data['test']['passwordId'], 'testId' => $data['test']['testId']];
+			$timeLeftAtFailure = max(0, (int)$data['timeLeftAtFailure']);
+			$timeLeftAtLastContact = max(0, (int)$timeLeftAtLogin - max(0, $secondsSinceLogin));
+
+			//sanitize timeLeftAtFailure to not be higher than what server calculates
+			if ($timeLeftAtFailure > $timeLeftAtLastContact) {
+				$instructions = json_encode([['command' => 'timeUp', 'reason' => 'hackingAttempt']]);
+
+				//the following line is commented out for now until we are sure there are no false positives
+				//TODO: uncomment the commented part of the next line
+				$db->update('activity', [/*'timeLeftAtLogin' => 0, 'timeLeft' => 0,*/ 'instructions' => $instructions], "passwordId = ? AND testId = ?", [$data['test']['passwordId'], $data['test']['testId']]);
+
+				$logData = [];
+				$logData['loginId'] = $data['test']['loginId'];
+				$logData['passwordId'] = $data['test']['passwordId'];
+				$logData['testId'] = $data['test']['testId'];
+				$logData['serialNumber'] = $data['test']['serialNumber'];
+				$logData['tsClient'] = milliseconds2DateString($data['tsClient']);
+				$logData['timeLeft'] = $timeLeftAtFailure;
+				$logData['log'] = "time left hacking attempt detected: client reported $timeLeftAtFailure seconds left at failure, server calculated $timeLeftAtLastContact seconds left at last contact ($tsActiveServer)";
+				$db->insert("logClient", $logData);
+
+				$returnData = [];
+				exit();
+			}
+
+			$loginData = ['timeLeftAtLogin' => $timeLeftAtFailure, 'timeLeft' => $timeLeftAtFailure, 'passwordId' => $data['test']['passwordId'], 'testId' => $data['test']['testId']];
 			$query = "UPDATE activity SET timeLeftAtLogin = :timeLeftAtLogin, timeLeft = :timeLeft, tsLoginServer = NOW(3) WHERE passwordId = :passwordId AND testId = :testId";
 			$db->prepare($query);
 			$db->executePrepared($loginData);
@@ -228,7 +264,7 @@
 			$logData['testId'] = $data['test']['testId'];
 			$logData['serialNumber'] = $data['test']['serialNumber'];
 			$logData['tsClient'] = milliseconds2DateString($data['tsClient']);
-			$logData['timeLeft'] = $data['timeLeftAtFailure'];
+			$logData['timeLeft'] = $timeLeftAtFailure;
 			$logData['log'] = "connection to server reestablished (last activity before failure logged at $tsActiveServer)";
 			$returnData['debug'] = $logData;
 			$db->insert("logClient", $logData);
@@ -266,6 +302,8 @@
 				} elseif ($event['type'] === 'behaviour') {
 					switch ($event['subType']) {
 						case 'login':
+							//use time limit specified in state if it exists
+							$data['test']['timeLimit'] = $state->timeLimit ?? $data['test']['timeLimit'];
 							setLogin($event, $db, $data['test'], $payloadId);
 							break;
 					}
@@ -380,9 +418,14 @@
 				 * even if the testee has manually increased his time limit in an attempt to cheat
 				 */
 				$activityData['timeLeft'] = 0;
-				$returnData['instructions'] = [['command' => 'timeUp', 'reason' => null]];
-
+				$returnData['instructions'] = [['command' => 'timeUp', 'reason' => 'timeLeftSanityCheckFailed']];
 			}
+		}
+
+		//check if activity has been terminated by a previous admin command
+		$res = $db->fetchValue("SELECT timeLeft FROM activity WHERE passwordId = ? AND testId = ?", [$test['passwordId'], $test['testId']]);
+		if ($res['rows'] === 1 && $res['data'] === 0) {
+			$activityData['timeLeft'] = 0;
 		}
 
 		//force logoff client if out of schedule or test manually deactivated
@@ -393,6 +436,7 @@
 		if ($options['forceLogoff'] ?? false) {
 			$restrictions = $options['restrictions'];
 			$forceLogoff = false;
+			$restrictionType = '';
 
 			//check date range
 			if ($restrictions['dateRange'] !== false) {
@@ -400,12 +444,14 @@
 					$start = strtotime($restrictions['dateRange']['start']);
 					if ($start > time()) {
 						$forceLogoff = true;
+						$restrictionType = 'dateRange';
 					}
 				}
 				if ($restrictions['dateRange']['end'] !== false) {
 					$end = strtotime($restrictions['dateRange']['end']);
 					if ($end < time()) {
 						$forceLogoff = true;
+						$restrictionType = 'dateRange';
 					}
 				}
 			}
@@ -417,12 +463,14 @@
 					$start = DateTime::createFromFormat('H:i', $restrictions['timeRestriction']['start']);
 					if ($start > $currentTime) {
 						$forceLogoff = true;
+						$restrictionType = 'timeRestriction';
 					}
 				}
 				if ($restrictions['timeRestriction']['end'] !== false) {
 					$end = DateTime::createFromFormat('H:i', $restrictions['timeRestriction']['end']);
 					if ($end < $currentTime) {
 						$forceLogoff = true;
+						$restrictionType = 'timeRestriction';
 					}
 				}
 			}
@@ -432,11 +480,17 @@
 			if ($restrictions['testDays'] !== false) {
 				if (!preg_match("/$currentDay/", $restrictions['testDays']['days'])) {
 					$forceLogoff = true;
+					$restrictionType = 'testDays';
 				}
 			}
 
-			if ($res['data']['active'] !== 1 || $forceLogoff === true) {
+			if ($forceLogoff === true) {
 				$returnData['forceLogoff'] = true;
+				$returnData['forceLogoffReason'] = 'restriction';
+				$returnData['restrictionType'] = $restrictionType;
+			} else if ($res['data']['active'] === 0) {
+				$returnData['forceLogoff'] = true;
+				$returnData['forceLogoffReason'] = 'deactivated';
 			}
 		}
 		return $activityData;

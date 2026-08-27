@@ -13,28 +13,21 @@
 		$data = json_decode($data ?? '', true);
 	}
 
-	global $filterSettings;
-
-	//if the action is 'preview', we will load all settings, otherwise we will only load system settings
-	if ($action !== 'preview') {
-		$filterSettings = true;
-	}
-
-	require_once 'inc/php/database.php'; //contains the database connection credentials
-	require_once 'inc/php/rixPDO.php'; //wrapper around PDO functions (c.f. docs folder for manual)
-	require_once 'inc/php/Crypt.php';
-	require_once 'inc/php/settings.php';
-	require_once 'inc/php/parser.php';
-	require_once 'inc/php/rixTools.php';
-	require_once 'inc/php/OasysScriptParser.php';
-	require_once 'inc/php/OasysTest.php';
-	require_once 'inc/php/OasysActivity.php';
-	require_once 'inc/php/OasysCredentials.php';
-	require_once 'inc/php/loginData.php';
-	require_once 'inc/php/helperRoutines.php';
-	require_once 'inc/php/OasysFrontendState.php';
+	require_once __DIR__ . '/inc/php/initSettings.php';
+	require_once __DIR__ . '/inc/php/actionAllowlist.php';
+	require_once __DIR__ . '/inc/php/Crypt.php';
+	require_once __DIR__ . '/inc/php/parser.php';
+	require_once __DIR__ . '/inc/php/OasysScriptParser.php';
+	require_once __DIR__ . '/inc/php/OasysTest.php';
+	require_once __DIR__ . '/inc/php/OasysActivity.php';
+	require_once __DIR__ . '/inc/php/OasysCredentials.php';
+	require_once __DIR__ . '/inc/php/loginData.php';
+	require_once __DIR__ . '/inc/php/helperRoutines.php';
+	require_once __DIR__ . '/inc/php/OasysFrontendState.php';
+	require_once __DIR__ . '/inc/php/OasysLdapAuthenticator.php';
 
 	use Oasys\FrontEnd\OasysFrontendState;
+	use Oasys\OasysLdapAuthenticator;
 
 	//all data that is returned by this script will be put into $returnData array which is sent back in JSON encoded form
 	$returnData = [];
@@ -56,25 +49,19 @@
 		$parentState = null;
 	}
 
-	//make a connection to the database and define the log file in which database errors are to be recorded
-	$db = new rixPDO($sql_db, $sql_user, $sql_password, $sql_host, __DIR__ . '/logs/login_errors.txt', 1, $returnData, 'error');
-	$results = $db->results();
-	if ($results['error']) {
-		$returnData['error'] = 'mySQL connection error';
-		die();
-	}
-
 	//check if system is not in maintenance state
 	$query = "SELECT `status` FROM systemState WHERE sys_section='frontend'";
 	$results = $db->fetchValue($query);
 	if ($results['rows'] === 0 || $results['data'] === 1) {
 		$returnData['error'] = 'systemInMaintenance';
+		$state->eraseState();
 		die();
 	}
 
 	//call function whose name is given by the $action variable
 	//(the name of the function must obviously exactly match the string in $action)
 	//an action function will always be given the $data sent by the client, a pointer to the database object and a pointer to the global $returnData array
+	if (oasysRejectUnknownAction(__FILE__, $action, $returnData)) exit;
 	$action($data, $db, $returnData);
 
 	/*
@@ -89,6 +76,12 @@
 		//this checks if the $data sent has all the necessary key/value pairs, in this case we are checking for param1 and param2 keys
 		//if the check fails, the script will be aborted and an error sent back to the client
 		checkParams($data, ['login', 'password', 'tsClient', 'serialNumber']);
+		$lockStatus = getFrontendLoginLockStatus($db, $data['login']);
+		if ($lockStatus['locked'] === true) {
+			$returnData['data'] = ['loginError' => 'loginTemporarilyLocked', 'lockMinutes' => $lockStatus['minutesRemaining']];
+			$state->eraseState();
+			die();
+		}
 
 		$unencryptedPassword = $data['password'];
 		$data['password'] = Crypt::encryptString($data['password']);
@@ -109,10 +102,7 @@
 		$query = "SELECT id, name, overrides, template, loginType FROM logins WHERE name=?";
 		$results = $db->fetchRow($query, [$data['login']]);
 		if ($results['rows'] === 0) {
-			$log = ['message' => "Invalid login", 'data' => json_encode(['login' => $data['login']])];
-			$db->insert("logErrors", $log);
-			$returnData['data'] = ['loginError' => 'invalidLogin'];
-			die();
+			rejectFrontendLoginAttempt($db, $returnData, $state, $data['login'], 'unknownLogin');
 		}
 
 		$isTemplate = false;
@@ -131,8 +121,7 @@
 			$isSAML = true;
 			//temporary measure for v3.5 of OASYS
 			logError($db, "SAML login not supported in normal login page", ['login' => $data['login']]);
-			$returnData['data'] = ['loginError' => 'invalidLogin'];
-			die();
+			rejectFrontendLoginAttempt($db, $returnData, $state, $data['login'], 'unsupportedLoginType');
 		} elseif ($results['data']['template'] === 'template') {
 			$isTemplate = true;
 		}
@@ -145,6 +134,24 @@
 		}
 		unset ($results['data']['id']); //autoincrement id of test taker should not be visible in front end data
 		decodeData($results['data'], 'overrides');
+		//fill in missing default override properties
+		$defaultOverrides = [
+			"disableTimer" => false,
+			"disableSaving" => false,
+			"allowNavigation" => false,
+			"additionalTime" => 0,
+			"demoMode" => false,
+			"forwardUrl" => '',
+			"loginForwarding" => false
+		];
+		addMissingPropertyDefaults($results['data']['overrides'], $defaultOverrides);
+		//check if overrides include a login forwarding
+		if ($results['data']['overrides']['loginForwarding'] === true && isset($results['data']['overrides']['forwardUrl'])) {
+			$returnData['data'] = ['loginError' => 'loginForwarding', 'forwardUrl' => $results['data']['overrides']['forwardUrl']];
+			$state->eraseState();
+			die();
+		}
+
 		$returnData['data']['login'] = $results['data'];
 		$returnData['data']['login']['studentLogin'] = false;
 
@@ -153,10 +160,7 @@
 		$results = $db->fetchRow($query, [$loginId, $data['password']]);
 		if ($results['rows'] === 0) {
 			if ($isStudentLogin === false) {
-				$log = ['message' => "Invalid password", 'data' => json_encode(['login' => $data['login']])];
-				$db->insert("logErrors", $log);
-				$returnData['data'] = ['loginError' => 'invalidLogin'];
-				die();
+				rejectFrontendLoginAttempt($db, $returnData, $state, $data['login'], 'invalidPassword');
 			} else {
 				//this is the normal situation of a student login, proceed with $isStudentLogin === true
 			}
@@ -169,16 +173,14 @@
 					$parentId = $parentState->studentId;
 					if ($parentId !== $loginId) {
 						logError($db, "Student login id mismatch", ['login' => $data['login']]);
-						$returnData['data'] = ['loginError' => 'invalidLogin'];
-						die();
+						rejectFrontendLoginAttempt($db, $returnData, $state, $data['login'], 'studentMismatch');
 					} else {
 						//parent state checks out, we convert this to a normal login so we can proceed
 						$isStudentLogin = false;
 					}
 				} else {
 					logError($db, "Direct login to student test blocked", ['login' => $data['login']]);
-					$returnData['data'] = ['loginError' => 'invalidLogin'];
-					die();
+					rejectFrontendLoginAttempt($db, $returnData, $state, $data['login'], 'studentDirectBlocked');
 				}
 			}
 		}
@@ -189,44 +191,41 @@
 			$query = "SELECT COUNT(*) FROM passwords WHERE loginID=? AND name=?";
 			$results = $db->fetchRow($query, [$loginId, $data['password']]);
 			if ($results['rows'] === 0) {
-				$log = ['message' => "Invalid test password", 'data' => json_encode(['login' => $data['login']])];
-				$db->insert("logErrors", $log);
-				$returnData['data'] = ['loginError' => 'invalidLogin'];
-				die();
+				rejectFrontendLoginAttempt($db, $returnData, $state, $data['login'], 'invalidTestPassword');
 			}
 			$returnData['data']['login']['studentLogin'] = true;
 			$returnData['data']['student']['login'] = $returnData['data']['login']['name'];
 			if ($isLDAP) {
-				$ldapLoggedIn = checkLDAPLogin($data['login'], $unencryptedPassword, $db);
-				if ($ldapLoggedIn < 0) {
+				$ldapStatus = checkLDAPLogin($data['login'], $unencryptedPassword, $db);
+				if (in_array($ldapStatus, [
+					OasysLdapAuthenticator::INVALID_CREDENTIALS,
+					OasysLdapAuthenticator::PASSWORD_EXPIRED
+				], true)) {
+					rejectFrontendLoginAttempt($db, $returnData, $state, $data['login'], 'ldapInvalidCredentials');
+				} elseif ($ldapStatus !== OasysLdapAuthenticator::SUCCESS) {
 					$returnData['data'] = ['loginError' => 'ldapError'];
+					$state->eraseState();
 					die();
-				} elseif ($ldapLoggedIn > 0) {
-					$returnData['data'] = ['loginError' => 'invalidLogin'];
-					die();
-				} else {
-					//login successful, now fetch student info
-					$query = "SELECT info, displayName FROM logins WHERE `id`=?";
-					$results = $db->fetchRow($query, [$loginId]);
-					if ($results['rows'] === 0) {
-						logError($db, "Invalid login after successful LDAP login", ['login' => $data['login']]);
-						$returnData['data'] = ['loginError' => 'invalidLogin'];
-						die();
-					}
-					$returnData['data']['student'] = $results['data'];
 				}
+
+				//login successful, now fetch student info
+				$query = "SELECT info, displayName FROM logins WHERE `id`=?";
+				$results = $db->fetchRow($query, [$loginId]);
+				if ($results['rows'] === 0) {
+					logError($db, "Invalid login after successful LDAP login", ['login' => $data['login']]);
+					rejectFrontendLoginAttempt($db, $returnData, $state, $data['login'], 'loginCorruptionAfterLDAP');
+				}
+				$returnData['data']['student'] = $results['data'];
 			} elseif ($isSAML) {
 				logError($db, "SAML login not supported in normal login page", ['login' => $data['login']]);
-				$returnData['data'] = ['loginError' => 'invalidLogin'];
-				die();
+				rejectFrontendLoginAttempt($db, $returnData, $state, $data['login'], 'unsupportedStudentSamlLogin');
 			} else {
 				/* it's a direct login, so let's check the password */
 				$query = "SELECT info, displayName FROM logins WHERE `id`=? AND `password`=?";
 				$results = $db->fetchRow($query, [$loginId, $data['password']]);
 				if ($results['rows'] === 0) {
 					logError($db, "Invalid login", ['login' => $data['login']]);
-					$returnData['data'] = ['loginError' => 'invalidLogin'];
-					die();
+					rejectFrontendLoginAttempt($db, $returnData, $state, $data['login'], 'invalidDirectPassPassword');
 				}
 				$returnData['data']['student'] = $results['data'];
 			}
@@ -235,6 +234,12 @@
 			$oasysCredentials = new OasysCredentials();
 			$returnData['data']['student']['id'] = $loginId;
 			$returnData['data']['student']['tests'] = $oasysCredentials->getTestsForStudentLogin($loginId);
+			$state->studentLanguage = $data['language'] ?? null;
+			$returnData['data']['tsClient'] = $data['tsClient'];
+			$returnData['data']['tsServer'] = round(microtime(true), 3);
+			if (isset($data['language'])) {
+				$returnData['data']['language'] = $data['language'];
+			}
 			return; //do not proceed with the rest of the script if it's a student login -> redirect to welcome page
 		}
 
@@ -249,8 +254,8 @@
 			$loginFields = $results['data'];
 
 			//now we need to find the last used index for clones of this template and increment it by 1
-			$query = 'SELECT SUBSTR(MAX(name), LENGTH(?) + 1) lastIndex FROM logins WHERE name RLIKE ?';
-			$params = [$loginFields['name'] . "_", "^" . $loginFields['name'] . "_[0-9]+"];
+			$query = 'SELECT SUBSTR(MAX(name), LENGTH(?) + 1) lastIndex FROM logins WHERE parentTemplateId=? AND name RLIKE ?';
+			$params = [$loginFields['name'] . "_", (int)$loginFields['id'], "^" . $loginFields['name'] . "_[0-9]+"];
 			$results = $db->fetchValue($query, $params);
 			if ($results['rows'] === 0) {
 				$newIdx = str_pad("1", 8, "0", STR_PAD_LEFT);
@@ -259,9 +264,12 @@
 			}
 
 			//cloning the testee and updating return data accordingly
+			$templateId = (int)$loginFields['id'];
 			unset($loginFields['id']); //autoincrement id must be removed before inserting into database
 			$loginFields['name'] = $loginFields['name'] . "_$newIdx";
+			$loginFields['parent'] = null;
 			$loginFields['template'] = 'cloned';
+			$loginFields['parentTemplateId'] = $templateId;
 
 			$results = $db->insert("logins", $loginFields);
 			$loginId = $results['id']; //new autoincrement id for cloned login
@@ -290,6 +298,7 @@
 		decodeData($pwData, 'structure');
 		if (!isset($pwData['structure']) || count($pwData['structure']) == 0) {
 			$returnData['data'] = ['loginError' => 'invalidTestData'];
+			$state->eraseState();
 			die();
 		}
 		$returnData['data']['password']['structure'] = $pwData['structure'];
@@ -315,16 +324,17 @@
 				 * Case 1: there is already activity for this test, but there is still time left
 				 * Case 2: there is no activity for this test yet
 				 */
-				$testData = getTestData($testId, $db, $returnData, $passwordId);
-				$returnData['data']['test'] = $testData;
 				/*
-				 * Check if test is currently accessible (date/time constraints, disabled test etc.)
+				 * Check if the test is currently accessible before fetching its contents.
 				 */
-				if (!checkSchedule($testData)) {
+				$testAccessData = getTestAccessData($testId, $db, $returnData);
+				if (!checkSchedule($testAccessData)) {
 					$returnData['data']['loginError'] = 'testLocked'; //date/time constraints prevent access
-				} elseif ($testData['active'] !== 1) {
+				} elseif ($testAccessData['active'] !== 1) {
 					$returnData['data']['loginError'] = 'testDeactivated'; //test is manually disabled
 				} else {
+					$testData = getTestData($testId, $db, $returnData, $passwordId);
+					$returnData['data']['test'] = $testData;
 					/*
 					 * test is accessible, now check if it has already some activity
 					 */
@@ -352,6 +362,7 @@
 								$returnData['data']['loginError'] = 'loginInUse';
 								$returnData['data']['lastActivity'] = $activity['tsActiveServer'];  //last activity by other computer
 								$returnData['data']['timeUntilRelease'] = $interval;    //number of seconds until login becomes free again
+								$state->eraseState();
 								die();
 							}
 						}
@@ -386,12 +397,18 @@
 				 */
 
 				$returnData['data']['loginError'] = 'testClosed';
+				$state->eraseState();
 
 				/*
 				 * In this case we do not break here, so that the foreach loop will continue with the
 				 * next test if there is one.
 				 */
 			}
+		}
+
+		if (!isset($returnData['data']['test'])) {
+			$state->eraseState();
+			die();
 		}
 
 		if (($returnData['data']['test']['options']['saveResults'] ?? false) === false || ($returnData['data']['login']['overrides']['disableSaving'] ?? false) === true) {
@@ -402,9 +419,23 @@
 		}
 		$state->loginId = $loginId;
 		$state->passwordId = $passwordId;
-		if ($savingDisabled === true) {
-			$state->savingDisabled = $savingDisabled;
+		$state->savingDisabled = $savingDisabled;
+
+		//save the use of a timer and the timeLimit to the state
+		$timeLimit = $returnData['data']['test']['options']['timeLimit'] ?? 0;
+		if ($returnData['data']['test']['options']['useTimer'] === true) {
+			if ($returnData['data']['login']['overrides']['disableTimer'] === true) {
+				$timeLimit = 0;
+			}
+		} else {
+			$timeLimit = 0;
 		}
+		if ($returnData['data']['login']['overrides']['additionalTime'] > 0 && $timeLimit > 0) {
+			$additionalTimeMultiplier = $returnData['data']['login']['overrides']['additionalTime'] / 100;
+			$minutesToAdd = $additionalTimeMultiplier * $timeLimit;
+			$timeLimit += $minutesToAdd;
+		}
+		$state->timeLimit = $timeLimit;
 
 		if (isset($testId)) {
 			$state->testId = $testId;
@@ -416,106 +447,84 @@
 		 */
 	}
 
-	function checkLDAPLogin(string $username, string $password, &$db): int
+	function normalizeLoginThrottleKey(string $login): string
+	{
+		return strtolower(trim($login));
+	}
+
+	function rejectFrontendLoginAttempt(rixPDO &$db, array &$returnData, OasysFrontendState $state, string $login, string $reason): void
+	{
+		$lockStatus = registerFrontendLoginFailure($db, $login, $reason);
+		if ($lockStatus['locked'] === true) {
+			$returnData['data'] = ['loginError' => 'loginTemporarilyLocked', 'lockMinutes' => $lockStatus['minutesRemaining']];
+		} else {
+			$returnData['data'] = ['loginError' => 'invalidLogin'];
+		}
+		$state->eraseState();
+		die();
+	}
+
+	function registerFrontendLoginFailure(rixPDO &$db, string $login, string $reason): array
 	{
 		global $settings;
-		$app_user = $settings['ldap_appUser'];
-		$app_pass = Crypt::decryptString($settings['ldap_appPass']);
-		$ldap_server = $settings['ldap_server'];
-		$search_base = $settings['ldap_searchBase'];
+		$loginKey = normalizeLoginThrottleKey($login);
+		$encodedLogin = rawurlencode($loginKey);
+		$encodedReason = rawurlencode($reason);
+		$data = "scope=login;login=$encodedLogin;reason=$encodedReason";
+		$db->insert("logErrors", ['message' => 'frontendLoginFailure', 'data' => $data]);
 
-		putenv('LDAPTLS_REQCERT=never'); // this is required to ignore SSL certificate as we have not imported the chain
-		$conn_status = ldap_connect($ldap_server);
-		if ($conn_status === false) {
-			logError($db, "Couldn't connect to LDAP server", ['server' => $ldap_server]);
-			return -1; //couldn't connect to LDAP server
+		$window = $settings['frontendFailedAttemptWindow'];
+		$countByLoginQuery = "SELECT COUNT(*) FROM logErrors
+			WHERE message='frontendLoginFailure'
+			AND tsServer >= (NOW() - INTERVAL $window SECOND)
+			AND data LIKE ?";
+		$countByLogin = (int)($db->fetchValue($countByLoginQuery, ["%scope=login;login=$encodedLogin;%"])['data'] ?? 0);
+		if ($countByLogin >= $settings['frontendMaxFailedAttempts'] && frontendLockMinutesRemaining($db, "scope=login;login=$encodedLogin;") === 0) {
+			$db->insert("logErrors", ['message' => 'frontendLoginLock', 'data' => "scope=login;login=$encodedLogin;"]);
 		}
 
-		//set protocol version 3. Important to support passwords with certain special characters e.g. the EURO sign
-		ldap_set_option($conn_status, LDAP_OPT_PROTOCOL_VERSION, 3);
+		return getFrontendLoginLockStatus($db, $login);
+	}
 
-		//disable referrals due to security issues
-		ldap_set_option($conn_status, LDAP_OPT_REFERRALS, 0);
-
-		$bind_status = ldap_bind($conn_status, $app_user, $app_pass);
-		if ($bind_status === false) {
-			logError($db, "Couldn't bind to LDAP as application user", ['error' => ldap_error($conn_status)]);
-			ldap_close($conn_status);
-			return -2; //couldn't bind to LDAP as application user
+	function frontendLockMinutesRemaining(rixPDO &$db, string $scopeData): int
+	{
+		global $settings;
+		$lockTsQuery = "SELECT UNIX_TIMESTAMP(tsServer) FROM logErrors
+			WHERE message='frontendLoginLock' AND data LIKE ?
+			ORDER BY id DESC LIMIT 1";
+		$lastLockTimestamp = (int)($db->fetchValue($lockTsQuery, ["%$scopeData%"])['data'] ?? 0);
+		if ($lastLockTimestamp === 0) {
+			return 0;
 		}
-
-		// variable query string - the %1 in the imported settings string is substituted with the $username value
-		$settingsQuery = $settings['ldap_query'];
-		$query = str_replace('%1', $username, $settingsQuery);
-
-		$search_status = ldap_search($conn_status, $search_base, $query, array('dn', 'msds-userpasswordexpirytimecomputed'));
-
-		//if an error occurred during search
-		if ($search_status === false) {
-			logError($db, "LDAP search failed", ['error' => ldap_error($conn_status), 'query' => $query, 'base' => $search_base]);
-			return -3;
+		$remaining = $settings['frontendLoginLockoutSeconds'] - (time() - $lastLockTimestamp);
+		if ($remaining <= 0) {
+			return 0;
 		}
+		return (int)ceil($remaining / 60);
+	}
 
-		//pull the search results
-		$result = ldap_get_entries($conn_status, $search_status);
-		if ($result === false) {
-			logError($db, "LDAP search failed", ['error' => ldap_error($conn_status)]);
-			return -4;
-		}
+	function getFrontendLoginLockStatus(rixPDO &$db, string $login): array
+	{
+		$loginKey = normalizeLoginThrottleKey($login);
+		$encodedLogin = rawurlencode($loginKey);
+		$remainingMinutes = frontendLockMinutesRemaining($db, "scope=login;login=$encodedLogin;");
+		return [
+			'locked' => $remainingMinutes > 0,
+			'minutesRemaining' => $remainingMinutes
+		];
+	}
 
-		//check if there is either no match or more than 1 match
-		if ((int) @$result['count'] === 0) {
-			logError($db, "Username not found on LDAP", ['username' => $username]);
-			return 1; //Username not found on LDAP
-		} else if ((int) @$result['count'] > 1) {
-			logError($db, "Duplicate usernames found on LDAP", ['error' => @$result['count']]);
-			return 2; //Duplicate usernames found on LDAP
-		}
-
-		//read DN and convert expiry date
-		$userdn = $result[0]['dn'];
-		$ms_expiry = $result[0]['msds-userpasswordexpirytimecomputed'][0] ?? null;
-		if (!is_null($ms_expiry)) {
-			$expiryDate = bcsub(bcdiv($ms_expiry, '10000000'), '11644473600');
-		}
-
-		// if DN entry is empty
-		if (trim((string) $userdn) == '') {
-			logError($db, "Empty DN found on LDAP", ['error' => ldap_error($conn_status)]);
-			return -5; //Empty DN found on LDAP
-		}
-
-		// manually suppress error warning
-		$prevHandler = set_error_handler(function ($severity, $message) {
-			if ($severity === E_WARNING &&
-				(str_contains($message, 'ldap_bind(') || str_contains($message, 'ldap_start_tls('))) {
-				// swallow this specific warning
-				return true; // handled
+	function checkLDAPLogin(string $username, #[\SensitiveParameter] string $password, &$db): string
+	{
+		global $settings;
+		return OasysLdapAuthenticator::authenticate(
+			$username,
+			$password,
+			$settings,
+			static function (string $message, array $context) use (&$db): void {
+				logError($db, $message, $context);
 			}
-			return false; // let PHP handle other warnings normally
-		});
-
-		$auth_status = @ldap_bind($conn_status, $userdn, $password);
-
-		// Always restore the previous handler
-		restore_error_handler();
-
-		//if login fails
-		if ($auth_status === false) {
-
-			if (isset($expiryDate) && time() > $expiryDate) {
-				// if password has expired
-				logError($db, "LDAP password expired", ['username' => $username, 'expiryDate' => date('Y-m-d H:i:s', $expiryDate)]);
-				return 3; //Password expired
-			} else {
-				// if login has failed due to any other reason (probably wrong password)
-				logError($db, "LDAP incorrect password", ['username' => $username]);
-				return 4; //Incorrect password
-			}
-		}
-
-		ldap_close($conn_status);
-		return 0; //login successful
+		);
 	}
 
 	function checkSchedule($testData): bool
@@ -568,9 +577,54 @@
 		return $loginAllowed;
 	}
 
+	function restoreStudentLogin(array $data, rixPDO &$db, array &$returnData): void
+	{
+		global $state;
+
+		checkParams($data, ['serialNumber', 'tsClient']);
+		$studentId = $state->studentId;
+		if (!is_numeric($studentId)) {
+			$returnData['data'] = ['restored' => false];
+			$state->eraseState();
+			return;
+		}
+
+		$query = "SELECT `name`, `info`, `displayName`, `loginType` FROM logins WHERE `id`=?";
+		$results = $db->fetchRow($query, [(int)$studentId]);
+		if ($results['rows'] !== 1 || !in_array($results['data']['loginType'], ['directPass', 'LDAP', 'SAML'], true)) {
+			$returnData['data'] = ['restored' => false];
+			$state->eraseState();
+			return;
+		}
+
+		$login = $results['data'];
+		unset($login['info'], $login['displayName'], $login['loginType']);
+		$login['studentLogin'] = true;
+
+		$student = [
+			'id' => (int)$studentId,
+			'info' => $results['data']['info'],
+			'displayName' => $results['data']['displayName'],
+		];
+		$oasysCredentials = new OasysCredentials();
+		$student['tests'] = $oasysCredentials->getTestsForStudentLogin((int)$studentId);
+
+		$returnData['data'] = [
+			'restored' => true,
+			'login' => $login,
+			'student' => $student,
+			'tsClient' => $data['tsClient'],
+			'tsServer' => round(microtime(true), 3),
+		];
+		$language = $state->studentLanguage;
+		if (is_string($language) && $language !== '') {
+			$returnData['data']['language'] = $language;
+		}
+	}
+
 	function preview(array $data, rixPDO &$db, array &$returnData): void
 	{
-		global $settings, $skins, $state, $myAuth;
+		global $settings, $config, $skins, $state, $myAuth;
 
 		// a preview must not be allowed in a browser that is not logged into the editor
 		$pageName = "login";
@@ -607,6 +661,7 @@
 				$action = 'previewTest';
 				checkParams($data, ['testId']);
 				$permsData = ['dbId' => $data['testId']];
+				$state->testId = $data['testId'];
 				break;
 			default:
 				$returnData['error'] = 'previewAccessDenied';
@@ -619,7 +674,31 @@
 			die();
 		}
 
+		// A compiler error leaves the editor source available, but all derived
+		// columns are NULL. Do not pass such a page into the normal renderer,
+		// which expects a complete parsed/fields/options/scripts set.
+		if ($data['previewMode'] === 'item') {
+			$invalidPages = $db->fetchValue(
+				'SELECT COUNT(*) FROM items WHERE (id=? OR id=(SELECT link FROM items WHERE id=?)) AND (`parsed` IS NULL OR `fields` IS NULL OR `options` IS NULL OR `scripts` IS NULL)',
+				[$data['itemId'], $data['itemId']]
+			);
+			if ((int)($invalidPages['data'] ?? 0) > 0) {
+				$returnData['error'] = 'noContent';
+				die();
+			}
+		} elseif ($data['previewMode'] === 'itemGroup') {
+			$invalidPages = $db->fetchValue(
+				'SELECT COUNT(*) FROM items WHERE groupId=? AND (`parsed` IS NULL OR `fields` IS NULL OR `options` IS NULL OR `scripts` IS NULL)',
+				[$data['groupId']]
+			);
+			if ((int)($invalidPages['data'] ?? 0) > 0) {
+				$returnData['error'] = 'noContent';
+				die();
+			}
+		}
+
 		$state->preview = $data['previewMode'];
+		$state->savingDisabled = true; //disable saving of results in preview mode
 
 		/* fake login data */
 		$overrides = ['allowNavigation' => false, 'demoMode' => false, 'disableSaving' => true, 'disableTimer' => false];
@@ -695,8 +774,17 @@
 	}
 
 	function logError(rixPDO &$db, string $message, ?array $data): void{
-		$log = ['message' => $message, 'data' => json_encode($data)];
-		$db->insert("logErrors", $log);
+		$encodedData = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}';
+		$truncate = static fn(string $value): string => function_exists('mb_strcut')
+			? mb_strcut($value, 0, 255, 'UTF-8')
+			: substr($value, 0, 255);
+		$result = $db->insert("logErrors", [
+			'message' => $truncate($message),
+			'data' => $truncate($encodedData)
+		]);
+		if (($result['error'] ?? true) !== false) {
+			error_log('[OASYS] Could not insert an entry into logErrors.');
+		}
 	}
 
 	// this will always be called when the script ends even if a fatal error occurred
@@ -716,6 +804,23 @@
 			$documentRoot = filter_input(INPUT_SERVER, "DOCUMENT_ROOT");
 			$file = str_replace($documentRoot, '', $error['file']);
 			$returnData['fatalError'] = "<p>Fatal error [type {$error['type']}] on line {$error['line']} of<br><code class='tinyCode'>$file</code></p><p>{$error['message']}</p>";
+		}
+		if ($action === 'login' && (
+			!empty($returnData['data']['loginError'])
+			|| ($returnData['error'] ?? false) !== false
+			|| ($returnData['fatalError'] ?? false) !== false
+		)) {
+			$loginErrorData = [];
+			if (!empty($returnData['data']['loginError'])) {
+				$loginErrorData['loginError'] = $returnData['data']['loginError'];
+				if ($loginErrorData['loginError'] === 'loginForwarding' && isset($returnData['data']['forwardUrl'])) {
+					$loginErrorData['forwardUrl'] = $returnData['data']['forwardUrl'];
+				}
+				if ($loginErrorData['loginError'] === 'loginTemporarilyLocked' && isset($returnData['data']['lockMinutes'])) {
+					$loginErrorData['lockMinutes'] = $returnData['data']['lockMinutes'];
+				}
+			}
+			$returnData['data'] = $loginErrorData;
 		}
 		if ($settings['debugSystem'] && $handledExceptions) {
 			$returnData['handledExceptions'] = $handledExceptions;

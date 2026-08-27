@@ -134,7 +134,7 @@
                 // remove the rest of the UI
                 $('#toolSwitch').css('display','none');
                 $('#leftPanel').css('display','none');
-                $('#main').css({'left':'0px','top':'70px'});
+                $('#main').css({'left':'0px','top':$('header').outerHeight()+'px'});
                 $('#canvas').css({cursor: 'default'});
                 // mouse and keyboard are blocked in events.js by OASYSCOM.getContext() conditions
                 loadDocData ();

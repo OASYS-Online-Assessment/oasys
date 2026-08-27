@@ -15,9 +15,9 @@ namespace MathPHP\SampleData;
  */
 class UsArrests
 {
-    const LABELS = ['murder', 'assault', 'urbanPop', 'rape'];
+    private const LABELS = ['murder', 'assault', 'urbanPop', 'rape'];
 
-    const DATA = [
+    private const DATA = [
         'Alabama'        => [13.2, 236, 58, 21.2],
         'Alaska'         => [10.0, 263, 48, 44.5],
         'Arizona'        => [8.1, 294, 80, 31.0],
@@ -74,37 +74,38 @@ class UsArrests
      * Raw data without labels
      * [[13.2, 236, 58, 21.2], [10.0, 263, 48, 44.5], ... ]
      *
-     * @return number[][]
+     * @return int[][]|float[][]
      */
     public function getData(): array
     {
-        return array_values(self::DATA);
+        return \array_values(self::DATA);
     }
 
     /**
      * Raw data with each observation labeled
      * ['Alabama' => ['murder' => 13.2, 'assault' => 236, 'urbanPop' => 58, 'rape' => 21.2], ... ]
      *
-     * @return number[][]
+     * @return array<string, array<string, int|float>>
      */
     public function getLabeledData(): array
     {
-        return array_map(
+        return \array_map(
             function (array $data) {
-                return array_combine(self::LABELS, $data);
+                /** @var array<string, int|float> */
+                return \array_combine(self::LABELS, $data);
             },
             self::DATA
         );
     }
 
     /**
-     * State names names
+     * State names
      *
      * @return string[]
      */
     public function getStates(): array
     {
-        return array_keys(self::DATA);
+        return \array_keys(self::DATA);
     }
 
     /**
@@ -113,54 +114,59 @@ class UsArrests
      *
      * @param string $state
      *
-     * @return number[]
+     * @return int[]|float[]
      */
     public function getStateData(string $state): array
     {
-        return array_combine(self::LABELS, self::DATA[$state]);
+        /** @var array<string, int|float> */
+        return \array_combine(self::LABELS, self::DATA[$state]);
     }
 
     /**
      * Murder observations for all states
      * ['Alabama' => 13.2, 'Alaska' => 10.1, ... ]
      *
-     * @return number[]
+     * @return array<string, float>
      */
     public function getMurder(): array
     {
-        return array_combine($this->getStates(), array_column(self::DATA, 0));
+        /** @var array<string, float> */
+        return \array_combine($this->getStates(), \array_column(self::DATA, 0));
     }
 
     /**
      * Assault observations for all states
      * ['Alabama' => 236, 'Alaska' => 263, ... ]
      *
-     * @return number[]
+     * @return array<string, int>
      */
     public function getAssault(): array
     {
-        return array_combine($this->getStates(), array_column(self::DATA, 1));
+        /** @var array<string, int> */
+        return \array_combine($this->getStates(), \array_column(self::DATA, 1));
     }
 
     /**
      * UrbanPop observations for all states
      * ['Alabama' => 58, 'Alaska' => 48, ... ]
      *
-     * @return number[]
+     * @return array<string, int>
      */
     public function getUrbanPop(): array
     {
-        return array_combine($this->getStates(), array_column(self::DATA, 2));
+        /** @var array<string, int> */
+        return \array_combine($this->getStates(), \array_column(self::DATA, 2));
     }
 
     /**
      * Rape observations for all states
      * ['Alabama' => 21.2, 'Alaska' => 44.5, ... ]
      *
-     * @return number[]
+     * @return array<string, float>
      */
     public function getRape(): array
     {
-        return array_combine($this->getStates(), array_column(self::DATA, 3));
+        /** @var array<string, float> */
+        return \array_combine($this->getStates(), \array_column(self::DATA, 3));
     }
 }

@@ -2,8 +2,6 @@
 
 function login_init() {
 	debug_log("login", `login_init()`);
-	//noinspection JSDeprecatedSymbols
-	$('#ed_login').focus();
 	loader_registerEvent(window, 'beforeunload', global_cleanState, true);
 
 	testee.language = defaults.language;
@@ -21,8 +19,25 @@ function login_init() {
 			}
 		}
 	}
+	if (login_hasCustomLandingPage()) {
+		const customLanguages = {};
+		for (const language in loginPage.menuLanguages) {
+			if (typeof (customLandingPage.contents[language]) === 'string') {
+				customLanguages[language] = window.languages[language].name;
+			}
+		}
+		if (objectLength(customLanguages) === 0) {
+			for (const language in customLandingPage.contents) {
+				if (typeof (window.languages[language]) !== 'undefined') {
+					customLanguages[language] = window.languages[language].name;
+				}
+			}
+		}
+		loginPage.menuLanguages = customLanguages;
+	}
 
 	if (typeof (loginPage.menuLanguages[testee.language]) === 'undefined') testee.language = getKey(loginPage.menuLanguages, 0);
+	if (login_hasCustomLandingPage()) login_renderCustomLandingPage();
 
 	if (typeof (testee.login) === 'undefined' && parameters.login) {
 		testee.login = parameters.login;
@@ -32,17 +47,13 @@ function login_init() {
 	if (typeof (testee.password) === 'undefined' && parameters.password) {
 		testee.password = parameters.password;
 		$('#tfPassword').val(testee.password);
-	} else if (settings.defaultPassword !== '') {
-		testee.password = settings.defaultPassword;
-		$('#tfPassword').val(testee.password).attr('type', 'hidden');
-		$('#lbl_password').hide();
 	}
-
-	// prevent odd behaviour on touch devices when virtual keyboard is hidden on attempt to press "Start" button
-	$('#tfLogin, #tfPassword').on('pointerup', null, function (e) {
-		e.preventDefault();
-		e.stopImmediatePropagation();
-	});
+	if (window.restoreStudentState === true) {
+		login_restoreStudentState();
+		return;
+	}
+	//noinspection JSDeprecatedSymbols
+	$('#tfLogin').focus();
 
 	if ((testee.login && testee.password) || parameters.action === 'preview') {
 		//if no login or password is provided, but the action is set to preview we will have to create a test structure from the groupId
@@ -55,7 +66,8 @@ function login_init() {
 function login_buildForm() {
 	debug_log("login", `login_buildForm()`);
 
-	if (loginPage.submitButton) return;
+	if (loginPage.submitButton || loginPage.formBuilt) return;
+	loginPage.formBuilt = true;
 
 	/*
 		If login and password are given as parameter, the login form will never be made visible
@@ -65,21 +77,23 @@ function login_buildForm() {
 	 */
 	$('#login_main').css('visibility', 'visible');
 
-	const submitButtonData = {
-		label: global_getText('login', 'start'),
-		callback: login_submit,
-		theme: 'orange',
-		disabled: true,
-		frameStyle: {
-			float: 'right',
-			'margin-top': '10px'
-		}
-	};
-	loginPage.submitButton = new nxButton($('#formDiv'), 'submitButton', submitButtonData);
+	if (!login_hasCustomLandingPage()) {
+		const submitButtonData = {
+			label: global_getText('login', 'start'),
+			callback: login_submit,
+			theme: 'orange',
+			disabled: true,
+			frameStyle: {
+				float: 'right',
+				'margin-top': '10px'
+			}
+		};
+		loginPage.submitButton = new nxButton($('#formDiv'), 'submitButton', submitButtonData);
+	}
 
 	loginPage.languageButtons = {};
 
-	if (objectLength(loginPage.menuLanguages) > 1) {
+	if (!login_hasCustomLandingPage() && objectLength(loginPage.menuLanguages) > 1 && $('#languageButtons').length > 0) {
 		for (let i in loginPage.menuLanguages) {
 			const languageButtonData = {
 				iconHeight: 64,
@@ -98,14 +112,24 @@ function login_buildForm() {
 		$('#tfPassword').attr('type', 'text');
 	}
 
-	login_onTfInput();
-	$('#tfLogin, #tfPassword').on('input', login_onTfInput);
+	if (!login_hasCustomLandingPage()) {
+		login_onTfInput();
+		$('#tfLogin, #tfPassword').on('input', login_onTfInput);
+	}
 
-	login_languageSelected(testee.language);
+	if (login_hasCustomLandingPage()) {
+		testee.fallbackLanguage = languages[testee.language].fallback;
+		for (let i in loginPage.languageButtons) {
+			loginPage.languageButtons[i].buttonSelected(i === testee.language);
+		}
+	} else {
+		login_languageSelected(testee.language);
+	}
 }
 
 function login_onTfInput(e) {
 	debug_log("login", `login_onTfInput(e)`);
+	if (!loginPage.submitButton) return;
 	if ($('#tfLogin').val() !== "" && $('#tfPassword').val() !== "") {
 		loginPage.submitButton.enable();
 	} else {
@@ -116,14 +140,8 @@ function login_onTfInput(e) {
 function login_returnPressed(e) {
 	debug_log("login", `login_returnPressed(e)`);
 	if (e.target.id === 'tfLogin') {
-		if (settings.defaultPassword !== '') {
-			if ($('#tfLogin').val() !== "" && $('#tfPassword').val() !== "") {
-				login_submit();
-			}
-		} else {
-			//noinspection JSDeprecatedSymbols
-			$('#tfPassword').focus();
-		}
+		//noinspection JSDeprecatedSymbols
+		$('#tfPassword').focus();
 	} else if (e.target.id === 'tfPassword') {
 		if ($('#tfLogin').val() !== "" && $('#tfPassword').val() !== "") {
 			login_submit();
@@ -138,11 +156,112 @@ function login_languageSelected(newLanguage) {
 	for (let i in loginPage.languageButtons) {
 		loginPage.languageButtons[i].buttonSelected(i === testee.language);
 	}
-	$('.localisation').each(function (idx, element) {
-		element = $(element);
-		element.html(global_getText('login', element.attr('data-localisationid')));
+	if (login_hasCustomLandingPage()) {
+		loginPage.formBuilt = false;
+		login_renderCustomLandingPage();
+		login_buildForm();
+	} else {
+		$('.localisation').each(function (idx, element) {
+			element = $(element);
+			element.html(global_getText('login', element.attr('data-localisationid')));
+		});
+		loginPage.submitButton.setLabel(global_getText('login', 'start'));
+	}
+}
+
+function login_hasCustomLandingPage() {
+	return customLandingPage !== null &&
+		typeof (customLandingPage) === 'object' &&
+		typeof (customLandingPage.contents) === 'object' &&
+		objectLength(customLandingPage.contents) > 0;
+}
+
+function login_customLandingContent(language) {
+	if (typeof (customLandingPage.contents[language]) === 'string') {
+		return customLandingPage.contents[language];
+	}
+	const fallbackLanguage = window.languages[language]?.fallback;
+	if (fallbackLanguage && typeof (customLandingPage.contents[fallbackLanguage]) === 'string') {
+		return customLandingPage.contents[fallbackLanguage];
+	}
+	return customLandingPage.contents[getKey(customLandingPage.contents, 0)] || '';
+}
+
+function login_replaceCustomKeyword(content, keyword, replacement) {
+	const expression = new RegExp('\\[@\\s*' + keyword + '\\s*@\\]', 'gi');
+	return content.replace(expression, replacement);
+}
+
+function login_unwrapCustomControl(selector) {
+	const $control = $(selector);
+	const $wrapper = $control.closest('.non-editable-variable');
+	if ($wrapper.length > 0) $wrapper.replaceWith($control);
+}
+
+function login_renderCustomLandingPage() {
+	let content = login_customLandingContent(testee.language);
+	content = login_replaceCustomKeyword(content, 'OASYSROOT', settings.rootURL);
+	content = login_replaceCustomKeyword(content, 'LOGIN',
+		'<input tabindex="1" id="tfLogin" type="text" name="login" autocomplete="off" autocapitalize="none" spellcheck="false">');
+	content = login_replaceCustomKeyword(content, 'PASSWORD',
+		'<input tabindex="2" id="tfPassword" type="password" name="password" autocomplete="off" autocapitalize="none" spellcheck="false">');
+	content = login_replaceCustomKeyword(content, 'LANGUAGE-CHOOSER', '<select id="languageChooser" aria-label="Language"></select>');
+
+	const loginValue = $('#tfLogin').length > 0 ? $('#tfLogin').val() : testee.login;
+	const passwordValue = $('#tfPassword').length > 0 ? $('#tfPassword').val() : testee.password;
+	const $loginMain = $('#login_main').empty().html(content);
+	login_unwrapCustomControl('#tfLogin');
+	login_unwrapCustomControl('#tfPassword');
+	login_unwrapCustomControl('#languageChooser');
+	if (typeof (loginValue) !== 'undefined') $('#tfLogin').val(loginValue);
+	if (typeof (passwordValue) !== 'undefined') $('#tfPassword').val(passwordValue);
+
+	const $languageChooser = $('#languageChooser');
+	for (const language in loginPage.menuLanguages) {
+		$('<option>', {
+			value: language,
+			text: loginPage.menuLanguages[language],
+			selected: language === testee.language
+		}).appendTo($languageChooser);
+	}
+	$languageChooser.on('change', function () {
+		login_languageSelected($(this).val());
 	});
-	loginPage.submitButton.setLabel(global_getText('login', 'start'));
+
+	$loginMain.find('[data-label][data-login], [data-label][data-password]').each(function () {
+		const $source = $(this);
+		const $button = $('<button>', {
+			type: 'button',
+			'class': $source.attr('class'),
+			text: $source.attr('data-label')
+		});
+		$button.addClass('customLandingStartButton');
+		for (const attribute of ['data-label', 'data-login', 'data-password', 'style']) {
+			if (typeof ($source.attr(attribute)) !== 'undefined') $button.attr(attribute, $source.attr(attribute));
+		}
+		$button.on('click', function () {
+			const reusableLogin = $button.attr('data-login');
+			const reusablePassword = $button.attr('data-password');
+			testee.login = typeof (reusableLogin) !== 'undefined' && reusableLogin !== ''
+				? reusableLogin
+				: ($('#tfLogin').val() ?? '');
+			testee.password = typeof (reusablePassword) !== 'undefined' && reusablePassword !== ''
+				? reusablePassword
+				: ($('#tfPassword').val() ?? '');
+			login_submit(true);
+		});
+		$source.replaceWith($button);
+	});
+
+	$('#customLandingPageCSS').remove();
+	if (typeof (customLandingPage.customCSS) === 'string' && customLandingPage.customCSS.trim() !== '') {
+		const customCSS = login_replaceCustomKeyword(customLandingPage.customCSS, 'OASYSROOT', settings.rootURL);
+		$('<style>', {id: 'customLandingPageCSS', text: customCSS}).appendTo('head');
+	}
+}
+
+function login_cleanup() {
+	$('#customLandingPageCSS').remove();
 }
 
 function login_submit(automatedLogin) {
@@ -152,8 +271,8 @@ function login_submit(automatedLogin) {
 		testee.login = $('#tfLogin').val();
 		testee.password = $('#tfPassword').val();
 	}
-	testee.login = $.trim(testee.login);
-	testee.password = $.trim(testee.password);
+	testee.login = $.trim(testee.login ?? '');
+	testee.password = $.trim(testee.password ?? '');
 	testee.parentSerialNumber = window.parent.testee.serialNumber !== testee.serialNumber ? window.parent.testee.serialNumber : null;
 	const loginDetails = {
 		login: testee.login,
@@ -161,6 +280,7 @@ function login_submit(automatedLogin) {
 		serialNumber: testee.serialNumber,
 		parentSerialNumber: testee.parentSerialNumber,
 		tsClient: new Date().getTime() / 1000,
+		language: testee.language,
 		variables: parameters.variables || {}
 	};
 	if (typeof (parameters.data) !== "undefined") {
@@ -175,6 +295,15 @@ function login_submit(automatedLogin) {
 		loginDetails.previousTestId = state.skipTest;
 	}
 	loader_startAjax('login', parameters.action ?? 'login', loginDetails);
+}
+
+function login_restoreStudentState() {
+	debug_log("login", 'login_restoreStudentState()');
+	loader_registerAjaxHandler('login', "login.php", true, false, login_ajaxSuccess);
+	loader_startAjax('login', 'restoreStudentLogin', {
+		serialNumber: testee.serialNumber,
+		tsClient: new Date().getTime() / 1000
+	});
 }
 
 function login_openEditor() {
@@ -193,17 +322,54 @@ function login_ajaxSuccess(res) {
 		}
 	}
 	switch (res.action) {
+		case 'restoreStudentLogin':
+			if (res.data?.restored !== true) {
+				window.restoreStudentState = false;
+				global_forgetStudentState();
+				login_buildForm();
+				break;
+			}
+			testee.login = res.data.login.name;
+			window.student = res.data.student;
+			window.student.login = res.data.login;
+			if (res.data.language) {
+				testee.language = res.data.language;
+			}
+			res.data.tsClientResponse = new Date().getTime() / 1000;
+			timer = {
+				settings: {
+					tsDelta: Math.round((res.data.tsClientResponse + res.data.tsClient) / 2 - res.data.tsServer),
+					tsPrecision: (res.data.tsClientResponse - res.data.tsClient) / 2
+				},
+				status: {}
+			};
+			global_rememberStudentState();
+			loader_switchMode('dashboard');
+			break;
+
 		case 'preview':
 		case 'login':
 			const data = res.data;
 			if (data.loginError) {
-				$('#login_main').css('visibility', 'visible');
-				let callback = () => login_buildForm();
-				if (typeof (parameters.framed) !== "undefined" || parameters.framed === 1) {
-					callback = () => global_returnToParent();
+				if (data.loginError === 'loginForwarding') {
+					hiddenForm('loginForwarding', 'POST', data.forwardUrl, '_self', ['login', 'password']);
+					const forwardForm = document.forms['loginForwarding'];
+					forwardForm.elements['login'].value = testee.login;
+					forwardForm.elements['password'].value = testee.password;
+					forwardForm.submit();
+				} else {
+					$('#login_main').css('visibility', 'visible');
+					let callback = () => login_buildForm();
+					if (typeof (parameters.framed) !== "undefined" || parameters.framed === 1) {
+						callback = () => global_returnToParent();
+					}
+					let msg = global_getText('login', data.loginError);
+					if (data.loginError === 'loginTemporarilyLocked') {
+						//replace {lockMinutes} in msg with data.lockMinutes
+						msg = msg.replace('{lockMinutes}', data.lockMinutes);
+					}
+					global_errorDialog(msg, null, callback);
 				}
-				const msg = global_getText('login', data.loginError);
-				global_errorDialog(msg, null, callback);
 				break;
 			}
 			data.tsClientResponse = new Date().getTime() / 1000;
@@ -251,6 +417,7 @@ function login_ajaxSuccess(res) {
 					},
 					status: {}
 				};
+				global_rememberStudentState();
 				loader_switchMode('dashboard');
 			}
 			break;

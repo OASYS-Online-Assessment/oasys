@@ -59,7 +59,7 @@
 		defaultValue = '0';
 		const dlData = {
 			onChange: onChange,
-			elements: options.values[state.questionLanguage],
+			elements: options.values[language],
 			initialValue: currentValue,
 			readOnly: options.readOnly,
 			dataId: options.id,

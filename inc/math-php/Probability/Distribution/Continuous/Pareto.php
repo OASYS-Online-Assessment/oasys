@@ -14,9 +14,9 @@ class Pareto extends Continuous
      * Distribution parameter bounds limits
      * a ∈ (0,∞)
      * b ∈ (0,∞)
-     * @var array
+     * @var array{"a": string, "b": string}
      */
-    const PARAMETER_LIMITS = [
+    public const PARAMETER_LIMITS = [
         'a' => '(0,∞)',
         'b' => '(0,∞)',
     ];
@@ -24,9 +24,9 @@ class Pareto extends Continuous
     /**
      * Distribution support bounds limits
      * x ∈ (0,∞)
-     * @var array
+     * @var array{"x": string, "a": string, "b": string}
      */
-    const SUPPORT_LIMITS = [
+    public const SUPPORT_LIMITS = [
         'x' => '(0,∞)',
         'a' => '(0,∞)',
         'b' => '(0,∞)',
@@ -73,7 +73,7 @@ class Pareto extends Continuous
         }
 
         $abᵃ  = $a * $b ** $a;
-        $xᵃ⁺¹ = pow($x, $a + 1);
+        $xᵃ⁺¹ = \pow($x, $a + 1);
         return $abᵃ / $xᵃ⁺¹;
     }
     /**
@@ -98,7 +98,7 @@ class Pareto extends Continuous
         if ($x < $b) {
             return 0;
         }
-        return 1 - pow($b / $x, $a);
+        return 1 - \pow($b / $x, $a);
     }
 
     /**
@@ -144,7 +144,7 @@ class Pareto extends Continuous
         $b = $this->b;
 
         if ($a <= 1) {
-            return INF;
+            return \INF;
         }
 
         return $a * $b / ($a - 1);

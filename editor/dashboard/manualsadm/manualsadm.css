@@ -1,0 +1,60 @@
+.manualsadm .manuadm-body{display:flex;flex-direction:column;gap:10px;height:100%;padding:6px;color:#333;font-size:14px}
+
+.manualsadm .manuadm-buttons{display:flex;flex-direction:column;gap:8px}
+
+.manualsadm .manuadm-main{
+    display:flex;align-items:center;gap:10px;
+    padding:10px;border:1px solid #e1e1e1;border-radius:10px;
+    background:#f8fbfe;text-decoration:none;height:50px;
+}
+.manualsadm .manuadm-main:hover{background:#f1f7fc}
+.manualsadm .manuadm-ico{color:#227DAA;flex:0 0 auto}
+.manualsadm .manuadm-title{font-weight:700;line-height:1.2;word-break:break-word}
+
+.manualsadm .manuadm-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.manualsadm .manuadm-link{color:#1b6486;text-decoration:none}
+.manualsadm .manuadm-link:hover{text-decoration:underline}
+
+.nxDialog .manuadm-helpList{list-style:disc;margin:0 0 .5em 1.25rem;padding-left:0}
+
+.manualsadm a {color: #227DAA; text-decoration: none;}
+
+.manualsadm .manuadm-buttons{display:flex;flex-direction:column;gap:8px}
+
+/* admin button accent + different icon color */
+.manualsadm .manuadm-main.is-admin{background:#fff7f0;border-color:#f0d6b8}
+.manualsadm .manuadm-main.is-admin:hover{background:#ffefdf}
+.manualsadm .manuadm-main.is-admin .manuadm-ico{color:#b35300}
+.manualsadm a.manuadm-main.is-admin,
+.manualsadm a.manuadm-main.is-admin:visited { color:#b35300; }
+
+.manualsadm a.manuadm-main.is-admin:hover,
+.manualsadm a.manuadm-main.is-admin:focus { color:#b35300; }
+
+.manualsadm .manuadm-list{margin-top:2px;gap:2px}
+.manualsadm .manuadm-list li{list-style:none;margin:0;padding:0}
+
+.manualsadm .manuadm-link{
+    display:block;
+    padding:2px 6px;
+    font-size:12px;
+    line-height:1.3;
+    border:1px solid #e9e9e9;
+    border-radius:4px;
+    background:#fff;
+    color:#1b6486;
+    text-align:center;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    text-decoration:none;
+}
+
+.manualsadm .manuadm-link::before,
+.manualsadm .manuadm-link::after{content:none}
+
+.manualsadm .manuadm-link:hover{
+    background:#f6f9fc;
+    border-color:#d7e7f4;
+    text-decoration:none;
+}

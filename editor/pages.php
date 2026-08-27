@@ -6,6 +6,7 @@
 	$pageName = "pages"; // set to the related 'editor button' string name (e.g., 'items')
 	$isSubMod = false; // set true if a module page in a subdirectory
 	$isActionFile = false; // set true if an "xxxActions.php" file
+    require_once __DIR__ . "/inc/php/initBackend.php";
 	require_once 'inc/php/authCommonFunctions.php'; // required for authentication inclusion
 	require_once 'inc/php/cacheIncludes.php'; // required for cache handling
 ?>
@@ -34,6 +35,7 @@
 
 		/* tinyMCE (only for those that need an editor */
 		includeJS("../inc/tinymce/js/tinymce/tinymce.min.js");
+		includeJS("../inc/tinymcePlugins/tabindent.js");
 		includeJS("../inc/tinymcePlugins/mediabrowser.js");
 		includeJS("../inc/tinymcePlugins/imagebrowser.js");
 
@@ -99,13 +101,9 @@
 		/* settings */
 		include_once 'inc/php/settings2JS.php';
 
-		echo "<script>\n";
-		if (isset($_GET['id'])) {
-			echo "\tconst pageId = {$_GET['id']};\n";
-		} else {
-			echo "\tconst pageId = -1;\n";
-		}
-		echo "</script>\n";
+		$pageId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+		$pageId = ($pageId === false || $pageId === null) ? -1 : $pageId;
+		echo '<script>const pageId = ' . json_encode($pageId, JSON_THROW_ON_ERROR) . ";</script>\n";
 
 		/* interactions */
 		$blockManifest = file_get_contents("interactions/manifest.json");

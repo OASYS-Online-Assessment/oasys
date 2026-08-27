@@ -32,6 +32,10 @@ window.interactionConfigs.slider = {
 			"id": "step",
 			"type": "propsSpinnerRow",
 			"settings": {"label": "values interval", "path": ["step"], "step": 1, "min": 1, "useGrid": true}
+		}, {
+			"id": "subDivisions",
+			"type": "propsSpinnerRow",
+			"settings": {"label": "sub divisions", "path": ["subDivisions"], "step": 1, "min": 1, "max": 1000, "useGrid": true}
 		}]
 	}, {
 		"id": "info",

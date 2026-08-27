@@ -4,24 +4,35 @@
 
 	class.rixPDO.php
 	wrapper around PDO for mySQL
-	version 1.87
+	version 2.02
 
-	version history:
-		v1.80   2025-02-14  add bulkUpdate method, added types for variables and functions (PHP 8.2 conform)
-		v1.81   2025-04-01  switched to strict types and fixed bug with log handle (good find, Adam)
-		v1.82	2025-05-15	added quote method
-							added support for automatically using system time zone
-		v1.83	2025-05-16	added support for setting UTC offset rather than system time zone
-		v1.84	2025-09-29	fixed a problem when connection fails (code executed after exception that should not be executed)
-		v1.85	2025-12-12	added debugging mode and replaced $transactionInProgess with $this->con->inTransaction() calls
-		v1.86	2026-02-09	fixed 2 bugs in fetchPrepared that have been hiding unnoticed for 6 years
-		v1.87	2026-04-09  added microsecond resolution to log file timestamps
+	version history at the end of the file
+
 	*/
 
 	declare(strict_types=1);
 
+	use Random\RandomException;
+
 	class rixPDO
 	{
+		/** Error information is returned only by the results() method, they will not be handled (default). */
+		public const int ERROR_HANDLING_RETURN = 0;
+		/** Error message is written into the referenced $errorVar variable when results() is called, then the script stops with die(). */
+		public const int ERROR_HANDLING_VAR = 1;
+		/** Error message is output with the die($msg) command which will halt the execution and write the error information to the output buffer. */
+		public const int ERROR_HANDLING_DIE = 2;
+		/** Error information is thrown as a RuntimeException when results() is called. */
+		public const int ERROR_HANDLING_EXCEPTION = 3;
+
+		/** Do not set time zone in session — leave the MariaDB default untouched. */
+		public const int FORCE_TIME_ZONE_NONE = 0;
+		/** Check the offset from UTC in PHP and apply it to MariaDB on each connection for the session (default). */
+		public const int FORCE_TIME_ZONE_PHP_OFFSET = 1;
+		/** Set session time zone to system time zone. */
+		public const int FORCE_TIME_ZONE_SYSTEM = 2;
+
+		private static array $instances = [];
 		private bool $debug = false;
 		private string $debugId;
 		private mixed $host;
@@ -29,7 +40,8 @@
 		private string $user;
 		private string $db;
 		private ?array $flags;
-		private ?PDO $con;
+		private ?array $attributes;
+		private ?PDO $con = null;
 		private bool $error;
 		private string $errorMsg;
 		private int|string $errorCode;
@@ -48,42 +60,55 @@
 		private mixed $logHandle;
 		private ?array $parameters;
 
-		function __construct($db, $user, $password, $host = 'localhost', $logFile = null, $errorHandling = 0, &$errorVar = null, $errorVarKey = "", $flags = [])
+		public static function getInstance(string $key, array &$config): self
 		{
+			if (!isset(self::$instances[$key])) {
+				self::$instances[$key] = new self($config);
+			}
+
+			return self::$instances[$key];
+		}
+
+		private function __construct(array &$config)
+		{
+			$db = $config['db'] ?? null;
+			$user = $config['user'] ?? null;
+			$password = $config['password'] ?? null;
+			$host = $config['host'] ?? 'localhost';
+			$logFile = $config['logFile'] ?? null;
+			$errorHandling = $config['errorHandling'] ?? self::ERROR_HANDLING_RETURN;
+			$errorVarKey = $config['errorVarKey'] ?? "";
+			$flags = $config['flags'] ?? [];
+			$attributes = $config['attributes'] ?? [];
+			if (array_key_exists('errorVar', $config)) {
+				$errorVar =& $config['errorVar'];
+			} else {
+				$errorVar = null;
+			}
 
 			try {
 				$this->debugId = bin2hex(random_bytes(4));
-			} catch (\Random\RandomException $e) {
+			} catch (RandomException $e) {
 				$this->debugId = uniqid();
 			}
 			if ($this->debug) {
 				error_log("rixPDO constructor on $db [$this->debugId]");
 			}
+			if (!is_string($db) || !is_string($user) || !is_string($password)) {
+				throw new InvalidArgumentException("Database connection parameters are not set.");
+			}
 			$this->host = $host;
 			$this->user = $user;
 			$this->password = $password;
 			$this->flags = $flags;
-
-			if (!isset($this->flags['emulatePrepares'])) {
-				/*
-					false => this might cost some time, but enables PHP 5.3+ to fetch native data types
-					true => this is necessary to get timestamps with microsecond resolution, etc.
-				 */
-				$this->flags['emulatePrepares'] = false;
-			}
+			$this->attributes = $attributes;
 
 			if (!isset($this->flags['timeout'])) {
 				$this->flags['timeout'] = 10;
 			}
 
-			/* by default use time zone offset from PHP, set to false to not tamper with time zone settings of MariaDB
-				accepted values:
-				'PHP_offset' => check offset from UTC in PHP and apply it to MariaDB on each connection for the session
-				'system' => set session time zone to system time zone
-				false => do not set time zone in session
-			*/
 			if (!isset($this->flags['forceTimeZone'])) {
-				$this->flags['forceTimeZone'] = 'PHP_offset';
+				$this->flags['forceTimeZone'] = self::FORCE_TIME_ZONE_PHP_OFFSET;
 			}
 
 			$this->db = $db;
@@ -98,9 +123,17 @@
 			$this->results();
 			/*
 			 * error handling values:
-			 *  0 => error information is returned only by the results() method, they will not be handled (this is the default setting)
-			 *  1 => error message is written into the referenced $errorVar variable when results() is called, then the script stops with die()
-			 *  2 => error message is output with the die($msg) command which will halt the execution and write the error information to the output buffer
+			 *  ERROR_HANDLING_RETURN
+			 * 		error information is returned only by the results() method, they will not be handled (this is the
+			 * 		default setting)
+			 *  ERROR_HANDLING_VAR
+			 * 		error message is written into the referenced $errorVar variable when results() is called, then the
+			 * 		script stops with die()
+			 *  ERROR_HANDLING_DIE
+			 * 		error message is output with the die($msg) command which will halt the execution and write the error
+			 * 		information to the output buffer
+			 *  ERROR_HANDLING_EXCEPTION
+			 * 		error information is thrown as RuntimeException when results() is called
 			 */
 		}
 
@@ -147,10 +180,26 @@
 				$this->logHandle = false;
 			}
 			try {
-				$this->con = new PDO("mysql:host=$this->host;dbname=$this->db;charset=utf8mb4", $this->user, $this->password, [PDO::ATTR_TIMEOUT => $this->flags['timeout'], PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES => $this->flags['emulatePrepares']]);
-				if ($this->flags['forceTimeZone'] === 'system') {
+				// Existing attributes
+				$pdoAttributes = [
+					PDO::ATTR_TIMEOUT => $this->flags['timeout'],
+					PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+					PDO::ATTR_EMULATE_PREPARES => false //switch off emulated prepares (by default they would be on)
+				];
+
+				/* check if user-provided attributes include a different error mode and remove it if so!
+					RixPDO relies on using exceptions, so a different error mode would break functionality. */
+				if (array_key_exists(PDO::ATTR_ERRMODE, $this->attributes)) {
+					unset($this->attributes[PDO::ATTR_ERRMODE]);
+				}
+
+				// Merge with user-provided attributes, user-provided attributes will override existing ones if keys conflict
+				$pdoAttributes = array_replace($pdoAttributes, $this->attributes);
+
+				$this->con = new PDO("mysql:host=$this->host;dbname=$this->db;charset=utf8mb4", $this->user, $this->password, $pdoAttributes);
+				if ($this->flags['forceTimeZone'] === self::FORCE_TIME_ZONE_SYSTEM) {
 					$this->execute("SET time_zone = 'SYSTEM'");
-				} elseif ($this->flags['forceTimeZone'] === 'PHP_offset') {
+				} elseif ($this->flags['forceTimeZone'] === self::FORCE_TIME_ZONE_PHP_OFFSET) {
 					$offset = (new DateTime())->format('P');
 					$this->execute("SET time_zone = '$offset'");
 				}
@@ -211,7 +260,7 @@
 					$res['error'] .= "<p>Called from line {$res['backtrace']['line']} of:<br><code class='tinyCode'>{$res['backtrace']['file']}</code></p>";
 				}
 				$res['error'] .= "<p>$this->errorMsg</p>";
-				if ($this->errorHandling === 1 && $this->errorVar !== null) {
+				if ($this->errorHandling === self::ERROR_HANDLING_VAR && $this->errorVar !== null) {
 					if ($this->errorVarKey !== '') {
 						$this->errorVar[$this->errorVarKey] = $res['error'];
 						if (count($this->additionalErrorData) > 0) {
@@ -223,8 +272,10 @@
 						$this->errorVar[$this->errorVarKey] = $res['error'];
 					}
 					die();
-				} elseif ($this->errorHandling === 2) {
+				} elseif ($this->errorHandling === self::ERROR_HANDLING_DIE) {
 					die($res['error']);
+				} elseif ($this->errorHandling === self::ERROR_HANDLING_EXCEPTION) {
+					throw new RuntimeException($res['error'], is_int($this->errorCode) ? $this->errorCode : 0);
 				}
 			} else {
 				$res['rows'] = $this->rows;
@@ -240,18 +291,36 @@
 			$this->disconnect();
 		}
 
+		private function __clone()
+		{
+		}
+
+		public function __wakeup(): void
+		{
+			throw new RuntimeException("Cannot unserialize singleton.");
+		}
+
 		private function disconnect(): void
 		{
 			if ($this->debug) {
 				error_log("rixPDO disconnect [$this->debugId]");
 			}
-			if ($this->con->inTransaction()) {
+			if ($this->con !== null && $this->con->inTransaction()) {
 				$this->rollback();
 			}
 			$this->con = null;
 			if (isset($this->logHandle) && is_resource($this->logHandle)) {
 				fclose($this->logHandle);
 			}
+		}
+
+		private function hasConnection(): bool
+		{
+			if ($this->con !== null) {
+				return true;
+			}
+			$this->setError(0, "No database connection!");
+			return false;
 		}
 
 		/*
@@ -295,6 +364,9 @@
 			}
 			$this->clear();
 			$this->query = $query;
+			if (!$this->hasConnection()) {
+				return $this->results();
+			}
 			try {
 				$this->statement = $this->con->prepare($query);
 			} catch (PDOException $e) {
@@ -323,6 +395,7 @@
 				error_log("rixPDO executePrepared [$this->debugId]");
 			}
 			if ($this->error) return $this->results();
+			if (!$this->hasConnection()) return $this->results();
 			$this->parameters = $parameters;
 			try {
 				$this->statement->execute($parameters);
@@ -487,44 +560,37 @@
 						$lineArray = array();
 						while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
 							$keys = array_keys($row);
+							if (count($keys) === 0) {
+								$this->setError(0, "No columns found in result set!");
+								return $this->results();
+							}
 							if ($key === null || !isset($row[$key])) {
 								$lineArray[] = $row[$keys[0]];
 							} else {
+								$valueKey = null;
+								foreach ($keys as $candidateKey) {
+									if ($candidateKey !== $key && ($secondaryKey === null || $candidateKey !== $secondaryKey)) {
+										$valueKey = $candidateKey;
+										break;
+									}
+								}
+								if ($valueKey === null) {
+									$this->setError(0, "No value column found in result set!");
+									return $this->results();
+								}
 								if (!$aggregateRows) {
 									if ($secondaryKey === null || !isset($row[$secondaryKey])) {
-										if ($key == $keys[0]) {
-											$lineArray[$row[$key]] = $row[$keys[1]];
-										} else {
-											$lineArray[$row[$key]] = $row[$keys[0]];
-										}
+										$lineArray[$row[$key]] = $row[$valueKey];
 									} else {
-										if ($keys[0] != $key && $keys[0] != $secondaryKey) {
-											$lineArray[$row[$key]][$row[$secondaryKey]] = $row[$keys[0]];
-										} else if ($keys[1] != $key && $keys[1] != $secondaryKey) {
-											$lineArray[$row[$key]][$row[$secondaryKey]] = $row[$keys[1]];
-										} else {
-											$lineArray[$row[$key]][$row[$secondaryKey]] = $row[$keys[2]];
-										}
+										$lineArray[$row[$key]][$row[$secondaryKey]] = $row[$valueKey];
 									}
 								} else {
 									if ($secondaryKey === null || !isset($row[$secondaryKey])) {
-										if ($key == $keys[0]) {
-											$lineArray[$row[$key]][] = $row[$keys[1]];
-										} else {
-											$lineArray[$row[$key]][] = $row[$keys[0]];
-										}
+										$lineArray[$row[$key]][] = $row[$valueKey];
 									} else {
-										if ($keys[0] != $key && $keys[0] != $secondaryKey) {
-											$lineArray[$row[$key]][$row[$secondaryKey]][] = $row[$keys[0]];
-										} else if ($keys[1] != $key && $keys[1] != $secondaryKey) {
-											$lineArray[$row[$key]][$row[$secondaryKey]][] = $row[$keys[1]];
-										} else {
-											$lineArray[$row[$key]][$row[$secondaryKey]][] = $row[$keys[2]];
-										}
+										$lineArray[$row[$key]][$row[$secondaryKey]][] = $row[$valueKey];
 									}
 								}
-
-
 							}
 						}
 						$this->data = $lineArray;
@@ -700,6 +766,11 @@
 				return $this->results();
 			}
 			$this->statement->fetch(PDO::FETCH_BOUND);
+			if ($fileData === null) {
+				//if the file data is null, it means that no file was found in the database
+				$this->setError(0, "No file found in database!");
+				return $this->results();
+			}
 
 			if (is_array($headers)) {
 				//check if $headers is indeed an array. In that case send the headers to the output buffer and echo out the file data
@@ -708,12 +779,19 @@
 						header($headerLine);
 					}
 				}
-				echo $fileData;
+				/* since PHP 8.1, PDO mySQL drivers return the file data as a resource, so we have to use fpassthru to
+					stream it into the output buffer, unless PDO::ATTR_STRINGIFY_FETCHES is set
+				*/
+				if ($this->getAttribute(PDO::ATTR_STRINGIFY_FETCHES)) {
+					echo $fileData;
+				} else {
+					fpassthru($fileData);
+				}
 				return $this->results();
 			} elseif ($headers === true) {
 				//if $headers is not an array of strings to be set, then we check if a boolean with the value TRUE is sent
 				//if so, the caller of this method wants to get the file data back in a variable instead of echo'ing it.
-				if (is_string($fileData)) {
+				if ($this->getAttribute(PDO::ATTR_STRINGIFY_FETCHES)) {
 					return $fileData;
 				} else {
 					return stream_get_contents($fileData);
@@ -746,6 +824,13 @@
 			if ($this->debug) {
 				error_log("rixPDO insert [$this->debugId] into $table");
 			}
+			try {
+				$table = $this->quoteQualifiedIdentifier($table);
+			} catch (InvalidArgumentException $e) {
+				$this->clear();
+				$this->setError($e->getCode(), $e->getMessage(), $e->getFile(), $e->getLine());
+				return $this->results();
+			}
 			//verify if $input is an array of arrays and correct it if it's not
 			$nonArray = false;
 			foreach ($input as $row) {
@@ -764,10 +849,6 @@
 				$rowCount = count($data);
 				if ($rowCount == 0) {
 					$this->setError(0, "No data to insert into database!");
-					return $this->results();
-				}
-				if ($table == '') {
-					$this->setError(0, "No table specified!");
 					return $this->results();
 				}
 				$keyCount = count($data[0]);
@@ -796,16 +877,28 @@
 					}
 					$data[$idx] = $row;
 				}
-				$keysString = $this->keyString($data[0]);
+				try {
+					$keysString = $this->identifierString(array_keys($data[0]));
+				} catch (InvalidArgumentException $e) {
+					$this->clear();
+					$this->setError($e->getCode(), $e->getMessage(), $e->getFile(), $e->getLine());
+					return $this->results();
+				}
 				if ($onDuplicateKey === 'ignore') {
 					$query = "INSERT IGNORE INTO $table $keysString VALUES $valuesString";
 				} else if ($onDuplicateKey === 'replace') {
 					$query = "REPLACE INTO $table $keysString VALUES $valuesString";
 				} else if ($onDuplicateKey === 'update' && is_array($updateKeys) && count($updateKeys) > 0) {
 					$updateStringList = array();
-					$updateKeys = $this->addBackticks($updateKeys);
-					foreach ($updateKeys as $updateKey) {
-						$updateStringList[] = "$updateKey=VALUES($updateKey)";
+					try {
+						foreach ($updateKeys as $updateKey) {
+							$updateKey = $this->quoteIdentifier($updateKey);
+							$updateStringList[] = "$updateKey=VALUES($updateKey)";
+						}
+					} catch (InvalidArgumentException $e) {
+						$this->clear();
+						$this->setError($e->getCode(), $e->getMessage(), $e->getFile(), $e->getLine());
+						return $this->results();
 					}
 					$updateString = implode(', ', $updateStringList);
 					$query = "INSERT INTO $table $keysString VALUES $valuesString ON DUPLICATE KEY UPDATE $updateString";
@@ -832,6 +925,41 @@
 			}
 			$this->rows = $affectedRows;
 			return $this->results();
+		}
+
+		private function quoteIdentifier($identifier): string
+		{
+			$identifier = strval($identifier);
+			if (!preg_match('/\A[A-Za-z_][A-Za-z0-9_]*\z/', $identifier)) {
+				throw new InvalidArgumentException("Invalid SQL identifier!");
+			}
+			return "`$identifier`";
+		}
+
+		private function quoteQualifiedIdentifier($identifier): string
+		{
+			$identifier = strval($identifier);
+			if ($identifier === '') {
+				throw new InvalidArgumentException("No table specified!");
+			}
+			$parts = explode('.', $identifier);
+			foreach ($parts as $k => $part) {
+				$parts[$k] = $this->quoteIdentifier($part);
+			}
+			return implode('.', $parts);
+		}
+
+		private function identifierString($identifiers, $parantheses = true): string
+		{
+			$keys = [];
+			foreach ($identifiers as $identifier) {
+				$keys[] = $this->quoteIdentifier($identifier);
+			}
+			$s = implode(', ', $keys);
+			if ($parantheses) {
+				$s = "($s)";
+			}
+			return $s;
 		}
 
 		/*
@@ -878,7 +1006,14 @@
 				error_log("rixPDO variableString [$this->debugId]");
 			}
 			if (is_array($arr)) {
-				$s = $this->keyString($arr, false, $parentheses, ':');
+				if (array_is_list($arr)) {
+					$s = implode(', ', array_fill(0, count($arr), '?'));
+					if ($parentheses) {
+						$s = "($s)";
+					}
+				} else {
+					$s = $this->keyString($arr, false, $parentheses, ':');
+				}
 			} else {
 				$n = intval($arr);
 				$s = implode(', ', array_fill(0, $n, '?'));
@@ -916,7 +1051,50 @@
 			if ($this->debug) {
 				error_log("rixPDO quote [$this->debugId]");
 			}
+			if (!$this->hasConnection()) return false;
 			return $this->con->quote($string, $parameterType);
+		}
+
+		public function getAttribute(int $attribute): mixed
+		{
+			if ($this->debug) {
+				error_log("rixPDO getAttribute [$this->debugId]: $attribute");
+			}
+			if (!$this->hasConnection()) return $this->results();
+			try {
+				return $this->con->getAttribute($attribute);
+			} catch (Exception $e) {
+				$this->setError($e->getCode(), $e->getMessage(), $e->getFile(), $e->getLine());
+				return $this->results();
+			}
+		}
+
+		public function setAttribute(int $attribute, mixed $value): bool|array
+		{
+			if ($this->debug) {
+				error_log("rixPDO setAttribute [$this->debugId]: $attribute");
+			}
+
+			if ($attribute === PDO::ATTR_ERRMODE && $value !== PDO::ERRMODE_EXCEPTION) {
+				$this->setError(0, "rixPDO requires PDO::ATTR_ERRMODE to be PDO::ERRMODE_EXCEPTION.");
+				return $this->results();
+			}
+
+			if (!is_array($this->attributes)) {
+				$this->attributes = [];
+			}
+
+			$this->attributes[$attribute] = $value;
+
+			if (!$this->hasConnection()) return $this->results();
+
+			try {
+				$this->con->setAttribute($attribute, $value);
+				return true;
+			} catch (Exception $e) {
+				$this->setError($e->getCode(), $e->getMessage(), $e->getFile(), $e->getLine());
+				return $this->results();
+			}
 		}
 
 
@@ -963,6 +1141,7 @@
 				$this->statement->execute();
 				$result = $this->statement;
 				$this->rows = $result->rowCount();
+				if (!$this->hasConnection()) return $this->results();
 				$this->id = $this->con->lastInsertId();
 			} catch (PDOException $e) {
 				$this->setError($e->getCode(), $e->getMessage(), $e->getFile(), $e->getLine());
@@ -1031,6 +1210,7 @@
 				$this->statement->execute();
 				$result = $this->statement;
 				$this->rows = $result->rowCount();
+				if (!$this->hasConnection()) return $this->results();
 				$this->id = $this->con->lastInsertId();
 			} catch (PDOException $e) {
 				$this->setError($e->getCode(), $e->getMessage(), $e->getFile(), $e->getLine());
@@ -1144,6 +1324,7 @@
 			if ($this->debug) {
 				error_log("rixPDO startTransaction [$this->debugId]");
 			}
+			if (!$this->hasConnection()) return $this->results();
 			if ($this->con->beginTransaction()) {
 				return true;
 			} else {
@@ -1164,6 +1345,7 @@
 			if ($this->debug) {
 				error_log("rixPDO commit [$this->debugId]");
 			}
+			if (!$this->hasConnection()) return $this->results();
 			if (!$this->con->inTransaction()) {
 				if ($this->debug) {
 					error_log("rixPDO commit called but no transaction in progress [$this->debugId]");
@@ -1191,6 +1373,7 @@
 			if ($this->debug) {
 				error_log("rixPDO rollback [$this->debugId]");
 			}
+			if (!$this->hasConnection()) return $this->results();
 			if (!$this->con->inTransaction()) {
 				if ($this->debug) {
 					error_log("rixPDO rollback called but no transaction in progress [$this->debugId]");
@@ -1206,21 +1389,179 @@
 			}
 		}
 
-		/*
-		 * method disableForeignKeyChecks
-		 *
-		 * disables foreign key checks
-		 * Only use this if you know EXACTLY why you are doing it and what it implicates!
-		 *
-		 */
+	/*
+	 * method executeBatch
+	 *
+	 * executes multiple SQL statements in a single SQL string
+	 * IMPORTANT: This method requires PDO::ATTR_EMULATE_PREPARES to be enabled, otherwise an exception is thrown
+	 *
+	 * Parameters:
+	 * 		$sql			a string containing multiple SQL statements separated by semicolons
+	 *
+	 * Returns an array with execution results and any errors encountered while executing individual statements
+	 *
+	 */
 
-		public function disableForeignKeys(): array
-		{
-			if ($this->debug) {
-				error_log("rixPDO disableForeignKeys [$this->debugId]");
-			}
-			return $this->execute("SET FOREIGN_KEY_CHECKS=0");
+	public function executeBatch($sql): array
+	{
+		if ($this->debug) {
+			error_log("rixPDO executeBatch [$this->debugId]");
 		}
+
+		$this->clear();
+		$this->query = strval($sql);
+
+		if (!$this->hasConnection()) {
+			return $this->results();
+		}
+
+		try {
+			if (!$this->con->getAttribute(PDO::ATTR_EMULATE_PREPARES)) {
+				throw new RuntimeException("executeBatch() requires PDO::ATTR_EMULATE_PREPARES to be enabled");
+			}
+		} catch (RuntimeException $e) {
+			throw $e;
+		} catch (Exception $e) {
+			$this->setError($e->getCode(), $e->getMessage(), $e->getFile(), $e->getLine());
+			return $this->results();
+		}
+
+		$rowsetReports = [];
+		$rowsetIdx = 0;
+		$totalErrors = 0;
+		$totalAffectedRows = 0;
+
+		try {
+			$this->statement = $this->con->prepare($this->query);
+			$this->statement->execute();
+
+			$hasMoreRowsets = true;
+			while ($hasMoreRowsets) {
+				$rowsetIdx++;
+				$rowsetError = false;
+				$rowsData = [];
+				$affectedRows = 0;
+
+				try {
+					$affectedRows = $this->statement->rowCount();
+					$totalAffectedRows += $affectedRows;
+
+					// Fetch all rows in the current result set to get potential data and to surface row-level errors
+					while (($row = $this->statement->fetch(PDO::FETCH_ASSOC)) !== false) {
+						$rowsData[] = $row;
+					}
+
+					$errorInfo = $this->statement->errorInfo();
+					if (is_array($errorInfo) && isset($errorInfo[0]) && $errorInfo[0] !== '00000') {
+						$totalErrors++;
+						$rowsetReports[] = [
+							'rowset' => $rowsetIdx,
+							'error' => true,
+							'errorCode' => $errorInfo[1] ?? 0,
+							'errorMsg' => $errorInfo[2] ?? 'Unknown SQL error',
+							'sqlState' => $errorInfo[0]
+						];
+						$rowsetError = true;
+					}
+				} catch (PDOException $e) {
+					$totalErrors++;
+					$rowsetReports[] = [
+						'rowset' => $rowsetIdx,
+						'error' => true,
+						'errorCode' => $e->getCode(),
+						'errorMsg' => $e->getMessage(),
+						'errorFile' => $e->getFile(),
+						'errorLine' => $e->getLine()
+					];
+					$rowsetError = true;
+				}
+
+				if (!$rowsetError) {
+					$report = [
+						'rowset' => $rowsetIdx,
+						'error' => false,
+						'rows' => $affectedRows
+					];
+					if (count($rowsData) > 0) {
+						$report['data'] = $rowsData;
+					}
+					$rowsetReports[] = $report;
+				}
+
+				try {
+					$hasMoreRowsets = $this->statement->nextRowset();
+				} catch (PDOException $e) {
+					$rowsetIdx++;
+					$totalErrors++;
+					$rowsetReports[] = [
+						'rowset' => $rowsetIdx,
+						'error' => true,
+						'errorCode' => $e->getCode(),
+						'errorMsg' => $e->getMessage(),
+						'errorFile' => $e->getFile(),
+						'errorLine' => $e->getLine()
+					];
+					$hasMoreRowsets = false;
+				}
+			}
+		} catch (PDOException $e) {
+			$totalErrors++;
+			$rowsetReports[] = [
+				'rowset' => $rowsetIdx > 0 ? $rowsetIdx : 1,
+				'error' => true,
+				'errorCode' => $e->getCode(),
+				'errorMsg' => $e->getMessage(),
+				'errorFile' => $e->getFile(),
+				'errorLine' => $e->getLine()
+			];
+		} finally {
+			$this->statement?->closeCursor();
+		}
+
+		$this->rows = $totalAffectedRows;
+		$this->data = [
+			'rowsets' => $rowsetReports,
+			'totalErrors' => $totalErrors
+		];
+
+		if ($totalErrors > 0) {
+			$firstError = null;
+			foreach ($rowsetReports as $report) {
+				if ($report['error']) {
+					$firstError = $report;
+					break;
+				}
+			}
+			if ($firstError) {
+				$this->setError(
+					$firstError['errorCode'],
+					"Batch Rowset {$firstError['rowset']} Error: " . $firstError['errorMsg'],
+					$firstError['errorFile'] ?? '',
+					$firstError['errorLine'] ?? -1
+				);
+			} else {
+				$this->setError(0, "Batch execution completed with $totalErrors error(s)");
+			}
+		}
+
+		return $this->results();
+	}
+
+	/*
+	 * method disableForeignKeyChecks
+	 *
+	 * disables foreign key checks
+	 * Only use this if you know EXACTLY why you are doing it and what it implicates!
+	 *
+	 */
+
+	public function disableForeignKeys(): array
+	{
+		if ($this->debug) {
+			error_log("rixPDO disableForeignKeys [$this->debugId]");
+		}
+		return $this->execute("SET FOREIGN_KEY_CHECKS=0");
+	}
 
 		/*
 		 * method enableForeignKeyChecks
@@ -1238,4 +1579,24 @@
 			return $this->execute("SET FOREIGN_KEY_CHECKS=1");
 		}
 	}
+
+/*
+	 *
+Version History:
+
+v2.00	2026-06-15	Complete overhaul of the class:
+	- class is now a keyed singleton
+	- some security problems were patched
+	- support for all standard PDO attributes
+	- getAttribute and setAttribute methods
+	- exception based error handling
+
+v2.01	2026-06-17
+	- added logic where numeric arrays sent to variableString no longer get named placeholders which breaks when prepares are emulated
+	- switched off emulated prepares by default
+	- added executeBatch() method
+v2.02	2026-06-18
+	- modifications in executeBatch() method
+
+*/
 

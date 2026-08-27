@@ -1,5 +1,6 @@
 "use strict";
 let waitDialog;
+const secureCookieHttpError = 'Secure cookies are enabled, but OASYS is being accessed over HTTP. Please use HTTPS or disable secure cookies.';
 
 // immediately set handler to try and prevent accidental navigation away from reset page (when in rview)
 window.history.replaceState(null, null, window.location.href); // prevent re-posting of data
@@ -224,6 +225,7 @@ function onDOMReady() {
     // SSO login button event handler
     $('#SSOloginButton').click(function(e) {
         e.preventDefault();
+        if (showSecureCookieHttpError()) return;
         window.location.replace('sso.php?a=login&s=editor');
     });
 
@@ -367,10 +369,23 @@ function startCodeSubmit() {
 }
 
 function startLogin() {
+    if (showSecureCookieHttpError()) return;
+
     startAjax("login", {
         username: $('#login_username').val(),
         password: $('#login_password').val()
     });
+}
+
+function showSecureCookieHttpError() {
+    if (settings.cookieSecure !== true || window.location.protocol === 'https:') return false;
+
+    waitDialog.hide();
+    $('#returnMsg').show().text(UILANG.m(secureCookieHttpError));
+    $('#login_password').val('');
+    $('#loginButton').prop('disabled', true);
+    $('#login_username').focus();
+    return true;
 }
 
 /*
@@ -420,8 +435,6 @@ function ajaxSuccess(res) {
         $('#login_username').select();
         $('#login_password').val('');
         $('#loginButton').prop("disabled", true);
-
-        return;
     } else {
         // blank out return message box when all is normal
         $('#returnMsg').html("");
@@ -479,6 +492,7 @@ function ajaxSuccess(res) {
         $('.loginRow').show();
     }
 
+    // main unhiding of login display
     $('#UI').show();
 
     // if email subsystem active, show 'forgot' link
@@ -524,8 +538,6 @@ function ajaxSuccess(res) {
 
         $('#returnMsg').show();
         $('#returnMsg').html(lcodeStruct[sparam.get('lcode')]);
-        stopRefreshRepost()
-
-
+        stopRefreshRepost();
     }
 }

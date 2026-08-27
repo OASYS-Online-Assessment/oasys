@@ -12,10 +12,10 @@ use MathPHP\Probability\Distribution\Continuous\StudentT;
  */
 class Outlier
 {
-    const ONE_SIDED       = 'one';
-    const TWO_SIDED       = 'two';
-    const ONE_SIDED_LOWER = 'lower';
-    const ONE_SIDED_UPPER = 'upper';
+    public const ONE_SIDED       = 'one';
+    public const TWO_SIDED       = 'two';
+    public const ONE_SIDED_LOWER = 'lower';
+    public const ONE_SIDED_UPPER = 'upper';
 
     /**
      * The Grubbs' Statistic (G) of a series of data
@@ -56,27 +56,37 @@ class Outlier
      */
     public static function grubbsStatistic(array $data, string $typeOfTest = self::TWO_SIDED): float
     {
+        // Grubbs' test requires at least 3 observations
+        if (\count($data) < 3) {
+            throw new Exception\BadDataException("Grubbs' test requires at least 3 observations");
+        }
+
         $μ = Average::mean($data);
         $σ = Descriptive::standardDeviation($data);
 
+        // Standard deviation of zero means all values are identical - no outliers can exist
+        if ($σ == 0) {
+            throw new Exception\BadDataException("Standard deviation is zero - cannot perform Grubbs' test on identical values");
+        }
+
         if ($typeOfTest === self::TWO_SIDED) {
-            $max❘Yᵢ − μ❘ = max(Single::abs(Single::subtract($data, $μ)));
+            $max❘Yᵢ − μ❘ = \max(Single::abs(Single::subtract($data, $μ)));
             return $max❘Yᵢ − μ❘ / $σ;
         }
 
         if ($typeOfTest === self::ONE_SIDED_LOWER) {
-            $yMin = min($data);
+            $yMin = \min($data);
             return ($μ - $yMin) / $σ;
         }
 
         if ($typeOfTest === self::ONE_SIDED_UPPER) {
-            $yMax = max($data);
+            $yMax = \max($data);
             return ($yMax - $μ) / $σ;
         }
 
-        throw new Exception\BadParameterException("{$typeOfTest} is not a valid Grubbs; test");
+        throw new Exception\BadParameterException("{$typeOfTest} is not a valid Grubbs' test");
     }
-    
+
     /**
      * The critical Grubbs Value
      *
@@ -95,7 +105,8 @@ class Outlier
      *
      * @param float  $𝛼 Significance level
      * @param int    $n Size of the data set
-     * @param string $typeOfTest ('one' or 'two') one or two-tailed test
+     * @param string $typeOfTest ('one', 'two', 'lower', or 'upper') one or two-tailed test
+     *                           Note: 'lower' and 'upper' are aliases for 'one' (one-sided test)
      *
      * @return float
      *
@@ -103,15 +114,20 @@ class Outlier
      */
     public static function grubbsCriticalValue(float $𝛼, int $n, string $typeOfTest): float
     {
+        // Grubbs' test requires at least 3 observations
+        if ($n < 3) {
+            throw new Exception\BadDataException("Grubbs' test requires at least 3 observations");
+        }
+
         self::validateGrubbsCriticalValueTestType($typeOfTest);
 
         $studentT = new StudentT($n - 2);
 
-        $T = $typeOfTest === self::ONE_SIDED
+        $T = \in_array($typeOfTest, [self::ONE_SIDED, self::ONE_SIDED_LOWER, self::ONE_SIDED_UPPER])
             ? $studentT->inverse($𝛼 / $n)
             : $studentT->inverse($𝛼 / (2 * $n));
 
-        return (($n - 1) / sqrt($n)) * sqrt($T ** 2 / ($n - 2 + $T ** 2));
+        return (($n - 1) / \sqrt($n)) * \sqrt($T ** 2 / ($n - 2 + $T ** 2));
     }
 
     /* ********************** *
@@ -125,9 +141,9 @@ class Outlier
      *
      * @throws Exception\BadParameterException
      */
-    private static function validateGrubbsCriticalValueTestType(string $typeOfTest)
+    private static function validateGrubbsCriticalValueTestType(string $typeOfTest): void
     {
-        if (!in_array($typeOfTest, [self::ONE_SIDED, self::TWO_SIDED])) {
+        if (!\in_array($typeOfTest, [self::ONE_SIDED, self::TWO_SIDED, self::ONE_SIDED_LOWER, self::ONE_SIDED_UPPER])) {
             throw new Exception\BadParameterException("{$typeOfTest} is not a valid Grubbs' test");
         }
     }

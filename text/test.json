@@ -184,5 +184,11 @@
     "DE": "Eine oder mehrere Interaktionen in dieser Seite sind ungültig. Bitte kontaktieren Sie den technischen Support!",
     "FR": "Une ou plusieurs interactions sur cette page sont invalides. Veuillez contacter le support technique !",
     "LU": "Eng oder méi Interaktiounen op dëser Säit sinn ongëlteg. Kontaktéiert wgl. den technesche Support!"
+  },
+  "hackingAttempt": {
+	"EN": "A hacking attempt has been detected. Please contact the technical support!",
+	"DE": "Ein Hackerangriff wurde erkannt. Bitte kontaktieren Sie den technischen Support!",
+	"FR": "Une tentative de piratage a été détectée. Veuillez contacter le support technique !",
+	"LU": "Eng Hack-Attacke gouf detektéiert. Kontaktéiert wgl. den technesche Support!"
   }
 }
