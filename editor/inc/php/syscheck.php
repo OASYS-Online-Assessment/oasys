@@ -170,7 +170,7 @@ if (!function_exists('oasys_syscheck')) {
             'Php PDO SQLITE Module' => ['pdo_sqlite', true],
             'Php CURL Module'      => ['curl',        true],
             'Php FILEINFO Module'  => ['fileinfo',    true],
-            'Php openSSL Module'   => ['openssl',     false], // optional -> warn if missing
+            'Php openSSL Module'   => ['openssl',     true],
             'Php LDAP Module'      => ['ldap',        false], // optional -> warn if missing
         ];
         foreach ($reqExts as $label => [$ext, $required]) {
@@ -348,13 +348,17 @@ if (!function_exists('oasys_syscheck')) {
             $curDDL = 'v' . str_pad($matches[1], 3, '0', STR_PAD_LEFT);
         }
 
-        $expectedDDL = (function () use ($config, $db) {
+        $expectedDDL = (function () use ($curDDL) {
             $dbDir = dirname(__DIR__, 3) . '/database';
             $patchDirs = array_filter(scandir($dbDir), function ($item) use ($dbDir) {
                 return is_dir($dbDir . '/' . $item) && preg_match('/^v\d+(\.\d+)*$/', $item);
             });
             sort($patchDirs, SORT_NATURAL);
             $latestPatchDir = end($patchDirs);
+
+            if ($latestPatchDir === false) {
+                return $curDDL; // fallback to current if no patch dirs found and assume we are current
+            }
 
             return $latestPatchDir;
         })();
