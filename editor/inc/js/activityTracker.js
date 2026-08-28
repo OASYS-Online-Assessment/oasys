@@ -1237,7 +1237,7 @@ async function openActivityJourney(scope, loginId, passwordId, testId) {
         activityTrackerRefreshButton.hide();
         kbHandler.registerShortcut('up', () => navigateActivityJourney(-1));
         kbHandler.registerShortcut('down', () => navigateActivityJourney(1));
-        gui.statusBar.setStatus(`: ${activityJourneyContextLabel()}`, false, 'black');
+        gui.statusBar.setStatus(`: ${activityJourneyContextLabel()}`);
         $('#statusBar > strong').css('margin-right', 0);
         renderActivityJourneyList();
         const first = activityJourney.runs[0];
@@ -1284,7 +1284,7 @@ function closeActivityJourney() {
     gui.main.show();
     lPanel.show();
     rPanel.show();
-    gui.statusBar.setStatus('', false, 'black');
+    gui.statusBar.setStatus('');
     $('#statusBar > strong').css('margin-right', '10px');
     kbHandler.registerShortcut('up', '');
     kbHandler.registerShortcut('down', '');

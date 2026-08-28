@@ -194,7 +194,8 @@ function createMenuButtons() {
 
 	//Flagging Version
 	$('#viewsPanel').append('<p class="menuSeparator"></p>');
-	const versionNumber = String(settings.vshort ?? '');
+	const versionNumber = String(settings.v ?? settings.vshort ?? '');
+	const shortVersionNumber = String(settings.vshort ?? settings.v ?? '');
 	const isBetaVersion = /\bbeta\b/i.test([settings.v, settings.vshort].filter(Boolean).join(' '));
 	const $versionInfo = $('<div>', {
 		id: 'versionInfo',
@@ -215,6 +216,35 @@ function createMenuButtons() {
 		}));
 	}
 	$('#viewsPanel').append($('<div>', {class: 'versionInfoWrapper'}).append($versionInfo));
+	$('header#header').append($('<div>', {
+		class: 'oasysHeaderVersionMark',
+		text: shortVersionNumber,
+		'aria-hidden': 'true'
+	}));
+	const headerElement = document.querySelector('header#header');
+	const versionMarkElement = headerElement?.querySelector('.oasysHeaderVersionMark');
+	if (headerElement && versionMarkElement) {
+		let versionMarkFrame = 0;
+		const updateVersionMarkVisibility = () => {
+			cancelAnimationFrame(versionMarkFrame);
+			versionMarkFrame = requestAnimationFrame(() => {
+				const markRect = versionMarkElement.getBoundingClientRect();
+				const controls = [...headerElement.children].filter(element =>
+					element !== versionMarkElement &&
+					element.matches('.jsButton2, .verticalDivider') &&
+					element.getClientRects().length > 0
+				);
+				const rightmostControl = controls.reduce(
+					(right, element) => Math.max(right, element.getBoundingClientRect().right),
+					headerElement.getBoundingClientRect().left
+				);
+				versionMarkElement.classList.toggle('is-colliding', rightmostControl + 18 > markRect.left);
+			});
+		};
+		new MutationObserver(updateVersionMarkVisibility).observe(headerElement, { childList: true });
+		new ResizeObserver(updateVersionMarkVisibility).observe(headerElement);
+		updateVersionMarkVisibility();
+	}
 	//End Flagging DEV Version
 
 	// "Signed in as" block

@@ -578,7 +578,9 @@
 		/* optional settings */
 		const prepend = options.prepend || false;
 		const prefix = options.prefix || '';
-		const defaultColour = options.defaultColour || 'rgb(41, 41, 41)';
+		const themeStatusColour = getComputedStyle(document.documentElement)
+			.getPropertyValue('--oasys-status-bg').trim();
+		const defaultColour = options.defaultColour || themeStatusColour || '#182f3b';
 		let status = options.message || '';
 		const useQueue = options.useQueue || false;
 		const statusClasses = 'jsStatusBar-error jsStatusBar-warning jsStatusBar-success jsStatusBar-info';
@@ -1115,7 +1117,5 @@ and can be used as a placeholder for attaching an OasysHelp instance.
 
 	window.jsDashWidget = jsDashWidget;
 })(jQuery);
-
-
 
 

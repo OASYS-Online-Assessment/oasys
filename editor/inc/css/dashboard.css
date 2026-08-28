@@ -252,9 +252,9 @@ body[data-dash-booting="1"] #dashScrollWrap {
     position: relative;
     min-height: 75px !important;
     max-height: 75px;
-    border-bottom: 1px solid rgba(20, 67, 91, .18);
+    border-bottom: 0;
     background:
-        linear-gradient(105deg, rgba(23, 89, 121, .98), rgba(33, 126, 170, .94) 56%, rgba(60, 151, 185, .92));
+        var(--oasys-dashboard-gradient);
     box-shadow: 0 5px 18px rgba(23, 57, 75, .18);
     overflow: hidden;
 }

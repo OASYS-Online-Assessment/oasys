@@ -2124,7 +2124,7 @@ async function openTestJourney() {
 
     gui.boxes.journeyList.setTitle(`${UILANG.m('TEST JOURNEY')} <span class='ms_title_emph'>${journeyEsc(response.data.test.name)}</span> (${response.data.test.id})`);
     gui.boxes.journeyDetail.setTitle(UILANG.m('Journey Detail'));
-    gui.statusBar.setStatus(`<strong>${UILANG.m('test results')}</strong>: <span id="sb_submsg">${UILANG.m('test journey')} - ${journeyEsc(response.data.test.name)}</span>`, false, "black");
+    gui.statusBar.setStatus(`<strong>${UILANG.m('test results')}</strong>: <span id="sb_submsg">${UILANG.m('test journey')} - ${journeyEsc(response.data.test.name)}</span>`);
 
     renderJourneyList();
     const first = response.data.testTakers?.[0];
@@ -7964,7 +7964,7 @@ function ms_closeManScoreDetail() {
     pagePos = 0;
 
     // reset status bar
-    gui.statusBar.setStatus(statusBarDefault, false, "black");
+    gui.statusBar.setStatus(statusBarDefault);
 
     // close full screen (when applicible)
     if (document.fullscreenElement) document.exitFullscreen();
