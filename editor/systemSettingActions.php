@@ -9,6 +9,9 @@ include_once 'userMgmtActions.php';
 include_once 'inc/php/systemState.php';
 require_once 'inc/php/syscheck.php';
 require_once 'inc/php/EncryptionKeyRotation.php';
+require_once 'maintenance/mediaClass.php';
+
+use maintenance\mediaClass;
 
 # ----------------------- #
 # Authentication Includes #
@@ -297,6 +300,63 @@ function syscheck(array $data, rixPDO &$db, array &$returnData): void
 	require_once 'inc/php/syscheck.php';
 	$result = oasys_syscheck($db);
 	$returnData['data'] = $result['data'];
+}
+
+function mediaCheck(array $data, rixPDO &$db, array &$returnData): void
+{
+	$returnData['data'] = runMediaMaintenanceCheck('verifyMediaAssets');
+}
+
+function mediaRepair(array $data, rixPDO &$db, array &$returnData): void
+{
+	global $myAuth;
+	if ($myAuth->checkSA() !== true && $myAuth->checkElevatedAdmin() !== true) {
+		$returnData['error'] = 'This function is reserved for superadmins and elevated administrators!';
+		return;
+	}
+
+	$repair = runMediaMaintenanceCheck('consolidateMediaAssets');
+	$verification = runMediaMaintenanceCheck('verifyMediaAssets');
+	$verification['repairLog'] = $repair['log'];
+	$returnData['data'] = $verification;
+}
+
+function runMediaMaintenanceCheck(string $action): array
+{
+	global $settings;
+	$result = ['error' => false, 'log' => []];
+	$media = new mediaClass($result, []);
+	$media->execute($action);
+
+	return [
+		'log' => $result['log'] ?? [],
+		'error' => $result['error'] ?? false,
+		'mediaLocation' => $settings['mediaLocation'] ?? 'disk',
+		'canRepair' => mediaMaintenanceHasRepairableIssues($result['log'] ?? []),
+	];
+}
+
+function mediaMaintenanceHasRepairableIssues(array $log): bool
+{
+	$area = '';
+	foreach ($log as $line) {
+		if ($line === '=== Test-content media [media] ===') {
+			$area = 'media';
+			continue;
+		}
+		if ($line === '=== Meta-page media [customContent] ===') {
+			$area = 'customContent';
+			continue;
+		}
+		if ($line === '') continue;
+		if ($area === 'media') return true;
+		if ($area === 'customContent' && (
+			str_starts_with($line, 'Empty custom-content folder')
+			|| str_starts_with($line, 'Custom-content folder is not writable')
+			|| str_starts_with($line, 'Custom-content reference in test id=')
+		)) return true;
+	}
+	return false;
 }
 
 function fetchSettings($data, &$db, &$returnData)

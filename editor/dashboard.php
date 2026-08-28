@@ -182,6 +182,18 @@ require_once __DIR__ . '/inc/php/cacheIncludes.php';       // required for cache
     // Expose admin role to JS so widgets (like SystemStatus) can make role-based decisions
     $roleForJs = $currentAdminRole ? json_encode($currentAdminRole) : 'null';
     echo "<script>window.userRole = $roleForJs;</script>";
+
+	// Derive the release label from the installed version file so the dashboard
+	// identity follows future upgrades without changing its markup.
+	$dashboardVersion = '3.7';
+	$versionFile = __DIR__ . '/../oasys_ver.txt';
+	if (is_file($versionFile)) {
+		$versionText = (string)file_get_contents($versionFile);
+		if (preg_match('/^vshort=(.+)$/mi', $versionText, $versionMatch)) {
+			$dashboardVersion = trim($versionMatch[1]);
+		}
+	}
+	echo "<script>window.dashboardVersion = " . json_encode($dashboardVersion) . ";</script>";
     ?>
 
     <!-- Load the dashboard bootstrap as an ES module -->

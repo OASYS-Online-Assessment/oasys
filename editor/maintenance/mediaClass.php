@@ -20,6 +20,7 @@ class mediaClass
 	private array $mediaLibrary;
 	private string $mediaLocation;
 	private string $mediaPath = __DIR__ . '/../../media';
+	private string $customContentPath = __DIR__ . '/../../customContent';
 
 	public function __construct(&$returnData, $data = [])
 	{
@@ -96,6 +97,8 @@ class mediaClass
 
 	private function verifyMediaAssets(): void
 	{
+		$this->returnData['log'][] = '=== Test-content media [media] ===';
+
 		//check if all media files from media table are present
 		if (count($this->mediaLibrary) > 0) {
 			foreach ($this->mediaLibrary as $media) {
@@ -166,10 +169,16 @@ class mediaClass
 
 		//check media folder permissions
 		$this->checkMediaFolders(true);
+
+		$this->returnData['log'][] = '';
+		$this->returnData['log'][] = '=== Meta-page media [customContent] ===';
+		$this->checkCustomContent(true);
 	}
 
 	private function consolidateMediaAssets(): void
 	{
+		$this->returnData['log'][] = '=== Test-content media [media] ===';
+
 		//search for orphaned media files on disk and files in wrong folders
 		$fileList = $this->fetchAssetListFromDisk();
 		foreach ($fileList as $id => $file) {
@@ -261,6 +270,145 @@ class mediaClass
 		//fix media folder permissions
 		$this->checkMediaFolders();
 
+		$this->returnData['log'][] = '';
+		$this->returnData['log'][] = '=== Meta-page media [customContent] ===';
+		$this->checkCustomContent();
+
+	}
+
+	private function checkCustomContent(bool $simulate = false): void
+	{
+		if (!is_dir($this->customContentPath)) {
+			$this->returnData['log'][] = "Custom-content root folder is missing [{$this->customContentPath}]";
+			return;
+		}
+
+		$testsResult = $this->db->fetchTable('SELECT id, metadata FROM tests', [], 'id');
+		$tests = $testsResult['data'] ?? [];
+
+		foreach ($tests as $test) {
+			$testId = (int)$test['id'];
+			$metadata = str_replace('\\/', '/', (string)($test['metadata'] ?? ''));
+			$metadataChanged = false;
+			preg_match_all('~/customContent/(\d+)/([^"\'<>?\\s\\\\]+)~i', $metadata, $matches, PREG_SET_ORDER);
+
+			foreach ($matches as $match) {
+				$folderId = (int)$match[1];
+				$relativePath = $this->normalizeCustomContentRelativePath(rawurldecode($match[2]));
+				if ($relativePath === null) {
+					$this->returnData['log'][] = "Unsafe custom-content reference in test id=$testId [{$match[2]}]";
+					continue;
+				}
+
+				if ($folderId !== $testId) {
+					if ($simulate) {
+						$this->returnData['log'][] = "Custom-content reference in test id=$testId points to another test folder (expected: $testId, actual: $folderId) [$relativePath]";
+					} else {
+						$targetAlreadyExists = is_file($this->customContentPath . "/$testId/$relativePath");
+						if ($this->copyCustomContentToTest($folderId, $testId, $relativePath)) {
+							$newReference = "/customContent/$testId/{$match[2]}";
+							$metadata = str_replace($match[0], $newReference, $metadata);
+							$metadataChanged = true;
+							$folderId = $testId;
+							$this->returnData['log'][] = $targetAlreadyExists
+								? "Updated custom-content metadata reference to the existing file in test id=$testId [$relativePath]"
+								: "Copied custom-content file to test id=$testId and updated its metadata reference [$relativePath]";
+						} else {
+							$this->returnData['log'][] = "Failed to copy custom-content file to test id=$testId from test folder $folderId [$relativePath]";
+						}
+					}
+				}
+
+				$key = $folderId . '/' . $relativePath;
+				if (!is_file($this->customContentPath . '/' . $key)) {
+					$this->returnData['log'][] = "Referenced custom-content file is missing for test id=$testId [$key]";
+				}
+			}
+
+			if ($metadataChanged) {
+				$this->db->execute('UPDATE tests SET metadata = :metadata WHERE id = :id', [
+					'metadata' => $metadata,
+					'id' => $testId,
+				]);
+			}
+		}
+
+		$folders = glob($this->customContentPath . '/*', GLOB_ONLYDIR) ?: [];
+		foreach ($folders as $folder) {
+			$folderName = basename($folder);
+			if (!ctype_digit($folderName)) {
+				$this->returnData['log'][] = "Unexpected folder found in customContent [$folderName]";
+				continue;
+			}
+
+			if (!isset($tests[(int)$folderName])) {
+				$this->returnData['log'][] = "Custom-content folder belongs to a missing test (not deleted automatically) [$folderName]";
+				continue;
+			}
+
+			$files = $this->fetchCustomContentFiles($folder);
+			if ($files === []) {
+				if ($simulate) {
+					$this->returnData['log'][] = "Empty custom-content folder found [$folderName]";
+				} elseif (@rmdir($folder)) {
+					$this->returnData['log'][] = "Deleted empty custom-content folder [$folderName]";
+				} else {
+					$this->returnData['log'][] = "Failed to delete empty custom-content folder [$folderName]";
+				}
+				continue;
+			}
+
+			if (!is_writable($folder)) {
+				if ($simulate) {
+					$this->returnData['log'][] = "Custom-content folder is not writable [$folderName]";
+				} elseif (chmod($folder, 0770)) {
+					clearstatcache(true, $folder);
+					$this->returnData['log'][] = is_writable($folder)
+						? "Changed permissions for custom-content folder [$folderName]"
+						: "Failed to make custom-content folder writable [$folderName]";
+				} else {
+					$this->returnData['log'][] = "Failed to make custom-content folder writable [$folderName]";
+				}
+			}
+		}
+	}
+
+	private function copyCustomContentToTest(int $sourceTestId, int $targetTestId, string $relativePath): bool
+	{
+		$source = $this->customContentPath . '/' . $sourceTestId . '/' . $relativePath;
+		$target = $this->customContentPath . '/' . $targetTestId . '/' . $relativePath;
+		if (is_file($target)) return true;
+		if (!is_file($source)) return false;
+
+		$targetDirectory = dirname($target);
+		if (!is_dir($targetDirectory) && !mkdir($targetDirectory, 0770, true) && !is_dir($targetDirectory)) {
+			return false;
+		}
+		return copy($source, $target);
+	}
+
+	private function normalizeCustomContentRelativePath(string $path): ?string
+	{
+		$path = str_replace('\\', '/', $path);
+		$parts = array_values(array_filter(explode('/', $path), static fn($part) => $part !== ''));
+		if ($parts === [] || in_array('..', $parts, true) || in_array('.', $parts, true)) {
+			return null;
+		}
+		return implode('/', $parts);
+	}
+
+	private function fetchCustomContentFiles(string $folder): array
+	{
+		$files = [];
+		$iterator = new RecursiveIteratorIterator(
+			new RecursiveDirectoryIterator($folder, RecursiveDirectoryIterator::SKIP_DOTS)
+		);
+		foreach ($iterator as $entry) {
+			if ($entry->isFile()) {
+				$files[] = $entry->getPathname();
+			}
+		}
+		return $files;
 	}
 
 	//check if file exists on disk and in database

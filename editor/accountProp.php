@@ -52,7 +52,7 @@ require_once __DIR__ . '/inc/php/authCommonFunctions.php'; // required for authe
 	?>
 </head>
 
-<body id="body">
+<body id="body" data-managerid="accountdetails">
 	<div id="svgMainMenuSymbols" class="svgSymbols">
 		<?php echo file_get_contents("../images/mainMenuIcons/symbols.svg"); ?>
 	</div>

@@ -2,9 +2,12 @@
 @import url("../../../inc/fonts/passionone.css");
 
 :root {
-    --oasys-frame-bg: #eef2f4;
-    --oasys-frame-panel: #f7f9fb;
+    --oasys-frame-bg: #d9e3e8;
+    --oasys-frame-panel: #e8eff2;
     --oasys-frame-edge: #d5dde5;
+    --oasys-frame-canvas:
+        radial-gradient(circle at 12% 0%, rgba(86, 186, 232, 0.16), transparent 28rem),
+        linear-gradient(145deg, #dfe7ec 0%, #cfd9df 48%, #dce5ea 100%);
     --oasys-nav-bg: #34383d;
     --oasys-nav-bg-deep: #282c31;
     --oasys-nav-text: #f4f7f9;
@@ -19,6 +22,129 @@
     --oasys-focus-ring: 0 0 0 2px rgba(86, 186, 232, 0.42);
 }
 
+/* System settings: media maintenance */
+.mediaCheckDialog {
+    display: grid;
+    gap: 14px;
+    max-height: 68vh;
+    overflow: auto;
+    padding: 2px 4px 4px;
+}
+
+.mediaCheckIntro {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 14px;
+    border: 1px solid #cfd8e3;
+    border-radius: 7px;
+    background: #f4f7fa;
+}
+
+.mediaCheckIntro span {
+    color: #52606d;
+}
+
+.mediaCheckArea {
+    border: 1px solid #d6dce3;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+}
+
+.mediaCheckAreaHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 13px 16px;
+    background: #f7f8fa;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+.mediaCheckAreaHead h3,
+.mediaCheckAreaHead p {
+    margin: 0;
+}
+
+.mediaCheckAreaHead p {
+    margin-top: 3px;
+    color: #637083;
+    font-size: 12px;
+}
+
+.mediaCheckCount {
+    flex: none;
+    padding: 4px 9px;
+    border-radius: 999px;
+    color: #8a1f1f;
+    background: #fbe5e5;
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.mediaCheckArea.isHealthy .mediaCheckCount {
+    color: #176b36;
+    background: #ddf4e5;
+}
+
+.mediaCheckHealthy {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 16px;
+    color: #176b36;
+}
+
+.mediaCheckHealthy span {
+    padding: 3px 7px;
+    border-radius: 4px;
+    background: #258a4b;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.mediaCheckIssues {
+    margin: 0;
+    padding: 7px 16px 7px 42px;
+}
+
+.mediaCheckIssues li {
+    padding: 7px 3px;
+    border-bottom: 1px dotted #d9dde2;
+    overflow-wrap: anywhere;
+}
+
+.mediaCheckIssues li:last-child {
+    border-bottom: 0;
+}
+
+.mediaCheckFootnote {
+    margin: 0;
+    color: #66717f;
+    font-size: 12px;
+}
+
+.mediaRepairLog {
+    padding: 10px 13px;
+    border: 1px solid #b9d8c4;
+    border-radius: 7px;
+    background: #f1faf4;
+}
+
+.mediaRepairLog summary {
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.mediaRepairLog pre {
+    max-height: 190px;
+    overflow: auto;
+    margin: 10px 0 0;
+    white-space: pre-wrap;
+}
+
 html {
     height: 100%;
     width: 100%;
@@ -30,7 +156,7 @@ body {
     width: 100%;
     font-family: "Open Sans", sans-serif;
     position: fixed;
-    background: var(--oasys-frame-bg);
+    background: var(--oasys-frame-canvas);
     color: #1f2933;
 }
 
@@ -8018,8 +8144,75 @@ button#changeLangButton:active {
 }
 
 #acctPropContainer {
+    box-sizing: border-box;
+    width: min(720px, calc(100% - 32px));
+    margin: 28px auto;
+    padding: 0 28px 26px;
+    overflow: hidden;
+    border: 1px solid #cbd8df;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(42, 62, 73, .14);
+}
+
+body[data-managerid="accountdetails"] #UI {
+    background: var(--oasys-frame-canvas);
+}
+
+body[data-managerid="accountdetails"] .propertiesTitle {
+    margin: 0 -28px 20px;
+    padding: 17px 28px 15px;
+    background: linear-gradient(180deg, #eaf6fa, #dceef4);
+    border-bottom: 1px solid #cbdde5;
+    color: #1e4559;
+    font-size: 18px;
+    font-weight: 700;
+    text-align: left;
+}
+
+body[data-managerid="accountdetails"] .propertiesSubtitle {
+    display: block;
+    margin-top: 4px;
+    color: #617785;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+body[data-managerid="accountdetails"] #bkBtn {
+    margin-bottom: 14px;
+}
+
+body[data-managerid="accountdetails"] #tableOfProperties {
     width: 100%;
-    background-color: white;
+    border-collapse: collapse;
+}
+
+body[data-managerid="accountdetails"] .accPropRow {
+    border-bottom: 1px solid #e1e7eb;
+}
+
+body[data-managerid="accountdetails"] .accPropRow:last-child {
+    border-bottom: 0;
+}
+
+body[data-managerid="accountdetails"] .accPropTitleCol {
+    min-width: 300px;
+    padding-left: 16px;
+    color: #344b5a;
+}
+
+body[data-managerid="accountdetails"] .accPropValueCol {
+    color: #243744;
+}
+
+body[data-managerid="accountdetails"] .accPropRow:hover {
+    background: #f5f9fb;
+}
+
+@media (max-width: 680px) {
+    #acctPropContainer { width: calc(100% - 20px); margin: 14px auto; padding-inline: 16px; }
+    body[data-managerid="accountdetails"] .propertiesTitle { margin-inline: -16px; padding-inline: 16px; }
+    body[data-managerid="accountdetails"] .accPropTitleCol { min-width: 0; width: 52%; padding-left: 6px; }
 }
 
 .accountPropertiesContainer {
@@ -12558,7 +12751,7 @@ table.oasysInfoTable td ul li {
 
 /* ====== Backend frame refresh ====== */
 #flexFrame {
-    background: var(--oasys-frame-bg);
+    background: var(--oasys-frame-canvas);
 }
 
 nav#mainMenu {
@@ -12680,7 +12873,7 @@ nav#mainMenu > #viewsPanel {
 }
 
 #interfaceFrame {
-    background: var(--oasys-frame-bg);
+    background: var(--oasys-frame-canvas);
 }
 
 header#header {
@@ -12756,13 +12949,13 @@ span.verticalDivider {
 }
 
 #outerUI {
-    background: var(--oasys-frame-bg);
+    background: var(--oasys-frame-canvas);
 }
 
 #UI {
     min-width: 0;
     box-sizing: border-box;
-    background: linear-gradient(180deg, var(--oasys-frame-panel) 0%, var(--oasys-frame-bg) 100%);
+    background: var(--oasys-frame-canvas);
 }
 
 .flexSection {

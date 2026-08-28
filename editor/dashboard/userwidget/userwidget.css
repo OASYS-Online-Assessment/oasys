@@ -10,7 +10,7 @@
   padding:4px;
 }
 
-/* === User overview grid: always 3 × 2; tiles exactly 136px tall (outer) === */
+/* === User overview grid: always 3 x 2; tiles exactly 136px tall (outer) === */
 .usrz-tiles{
   display:grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -56,6 +56,8 @@
   text-overflow:ellipsis;
 }
 
+.usrz-tTitle + .usrz-actionRow { margin-top:7px; }
+
 /* Subtitle (optional) */
 .usrz-sub{
   font-size:12px;
@@ -67,7 +69,32 @@
   text-overflow:ellipsis;
 }
 
-/* Pills / Chips (don’t widen tiles; ellipsis when tight) */
+/* Consistent tile actions */
+.usrz-actionRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  box-sizing:border-box;
+  width:100%;
+  min-width:0;
+  padding:7px 10px;
+  border:1px solid #cde7e3;
+  border-radius:7px;
+  background:#e9f5f3;
+  color:#0d5b51;
+  font-size:12px;
+  line-height:16px;
+  text-decoration:none;
+}
+.usrz-actionRow span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.usrz-actionRow strong{flex:none}
+.usrz-actionRow:hover{filter:brightness(.98);text-decoration:none}
+.usrz-actionRow.ok{background:#e7f6ee;color:#176b3a;border-color:#c3e8d3}
+.usrz-actionRow.warn{background:#fff3d6;color:#7a4d00;border-color:#f1da9f}
+.usrz-actionRow.danger{background:#ffe7e7;color:#8a1f1f;border-color:#f3b6b6}
+
+/* Pills / Chips (don't widen tiles; ellipsis when tight) */
 .usrz-pill,
 .usrz-chip{
   display:inline-flex;

@@ -13,6 +13,7 @@ function onDOMReady() {
         <div id="acctPropContainer">
             <div class="propertiesTitle">
                 ${UILANG.m("Modify account details")}
+                <span class="propertiesSubtitle">${UILANG.m("Manage your profile and personal editor preferences")}</span>
             </div>
             <div style="display: block; text-align: center;" id="bkBtn"></div>
             <table id="tableOfProperties">

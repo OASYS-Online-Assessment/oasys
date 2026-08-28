@@ -51,7 +51,7 @@ oasysRegisterActionAllowlists([
         'chartStore', 'getChartList', 'loadChart', 'setChartVisibility', 'delChart', 'updatePerm', 'fetchIgPerm',
     ],
     'editor/systemSettingActions.php' => [
-        'm_status', 'change_m_status', 'file_cleanup', 'filesyscheck', 'syscheck',
+        'm_status', 'change_m_status', 'file_cleanup', 'filesyscheck', 'syscheck', 'mediaCheck', 'mediaRepair',
         'fetchSettings', 'export_settings_values', 'saveSetting', 'resetSetting',
         'import_settings', 'encryptionRotationStatus', 'rotateManagedEncryptionKey',
         'prepareEnvironmentEncryptionKey', 'verifyEnvironmentEncryptionKey',
@@ -116,7 +116,7 @@ oasysRegisterActionAllowlists([
     'editor/dashboard/systemstatus/systemstatus.php' => [
         'readOverview', 'listFrontEndOnline', 'readSettings', 'listBackEndOnline',
         'showVersionDetails', 'showStorageDetails', 'showBackupDetails',
-        'syscheckDetails', 'showDbDetails',
+        'syscheckDetails', 'showDbDetails', 'showMediaDetails',
     ],
     'editor/dashboard/testresults/testresults.php' => ['listResults', 'fetchStats'],
     'editor/dashboard/userwidget/userwidget.php' => [

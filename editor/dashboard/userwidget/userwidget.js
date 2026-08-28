@@ -43,10 +43,10 @@ export default class UserWidget {
         // Markup
         $("#" + id).html(`<div class="usrz-body"><div class="usrz-tiles" id="${id}_tiles"></div></div>`);
 
-        // Tile clicks (only pills)
+        // Tile action rows
         $(document)
-            .off(`click${this.ns}`, `#${id} .usrz-pill[data-action]`)
-            .on(`click${this.ns}`, `#${id} .usrz-pill[data-action]`, e => {
+            .off(`click${this.ns}`, `#${id} .usrz-actionRow[data-action]`)
+            .on(`click${this.ns}`, `#${id} .usrz-actionRow[data-action]`, e => {
                 e.preventDefault();
                 const action = String($(e.currentTarget).data("action") || "");
                 if (action) this.startAjax(action, {}, { silent: false });
@@ -275,8 +275,8 @@ export default class UserWidget {
     <div class="usrz-tTitle">
       <span class="usrz-ic" aria-hidden>${t.icon}</span>${t.title}
     </div>
-    <a href="#" class="usrz-pill ${t.style || ''}" data-action="${t.action}">
-      ${Number(t.count || 0)}
+    <a href="#" class="usrz-actionRow ${t.style || ''}" data-action="${t.action}">
+      <span>${this.escape(t.title)}</span><strong>${Number(t.count || 0)}</strong>
     </a>
     <div class="usrz-sub">${this.escape(t.sub || "\u00A0")}</div>
   </div>

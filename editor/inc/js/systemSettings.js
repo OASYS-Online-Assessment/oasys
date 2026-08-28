@@ -83,6 +83,13 @@ function onReady() {
     callback: filecheck, disabled: false
   });
 
+  buttons.mediaCheck = new jsButton2($('header'), 'mediaCheck', {
+    label: 'Media Check',
+    icon: '../images/toolbarIcons/ic_tb_mediaManager.png',
+    iconWidth: 48, width: 80, height: 100,
+    callback: mediaCheck, disabled: false
+  });
+
   insertVerticalDivider('header', 'mm_div');
   $('#mm_div').hide();
 
@@ -538,6 +545,92 @@ async function filecheck() {
   if (ret.output.includes("EXTRA:") || ret.output.includes("EMPTY:")) {
     fc_diag.enableButton("cleanup");
   }
+}
+
+/* =========================
+   Media check dialog
+   ========================= */
+async function mediaCheck() {
+  const ret = await startAjax('mediaCheck', {});
+  if (ret.error || !ret.data) return;
+  showMediaCheckDialog(ret.data);
+}
+
+function splitMediaCheckLog(log) {
+  const areas = { media: [], customContent: [] };
+  let current = 'media';
+  (Array.isArray(log) ? log : []).forEach(line => {
+    if (line === '=== Test-content media [media] ===') current = 'media';
+    else if (line === '=== Meta-page media [customContent] ===') current = 'customContent';
+    else if (line !== '') areas[current].push(String(line));
+  });
+  return areas;
+}
+
+function renderMediaCheckArea(title, subtitle, lines) {
+  const healthy = lines.length === 0;
+  const rows = healthy
+    ? '<div class="mediaCheckHealthy"><span>OK</span>No problems found.</div>'
+    : `<ul class="mediaCheckIssues">${lines.map(line => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`;
+  return `<section class="mediaCheckArea ${healthy ? 'isHealthy' : 'hasIssues'}">
+    <div class="mediaCheckAreaHead">
+      <div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(subtitle)}</p></div>
+      <span class="mediaCheckCount">${healthy ? 'Healthy' : `${lines.length} issue${lines.length === 1 ? '' : 's'}`}</span>
+    </div>
+    ${rows}
+  </section>`;
+}
+
+function showMediaCheckDialog(data, repairLog = []) {
+  const areas = splitMediaCheckLog(data.log);
+  const repairSummary = repairLog.length
+    ? `<details class="mediaRepairLog"><summary>Repair run log</summary><pre>${escapeHtml(repairLog.filter(Boolean).join('\n'))}</pre></details>`
+    : '';
+  const contents = `<div class="mediaCheckDialog">
+    <div class="mediaCheckIntro">
+      <strong>Test-content storage: ${escapeHtml(data.mediaLocation || 'disk')}</strong>
+      <span>Meta-page media in customContent always remains on disk.</span>
+    </div>
+    ${repairSummary}
+    ${renderMediaCheckArea('Test-content media', 'Registered media used within test content.', areas.media)}
+    ${renderMediaCheckArea('Meta-page media', 'Files used by landing, legal, score, and finish pages.', areas.customContent)}
+    <p class="mediaCheckFootnote">Custom-content folders belonging to missing tests are reported for review and are not deleted automatically.</p>
+  </div>`;
+  const dialogButtons = [{ label: 'Close', value: 'close', cancel: true, 'default': !data.canRepair }];
+  if (data.canRepair) {
+    dialogButtons.push({ label: 'Fix issues…', value: 'repair', 'default': true, disabled: !isPrivileged });
+  }
+
+  new nxDialog('mediaCheckResults', {
+    width: 980,
+    title: 'Media Check',
+    contents,
+    buttons: dialogButtons,
+    callback: value => {
+      if (value === 'repair') confirmMediaRepair();
+    }
+  });
+}
+
+function confirmMediaRepair() {
+  new nxDialog('mediaRepairConfirm', {
+    width: 650,
+    title: 'Fix media issues?',
+    contents: `<div class="mediaRepairConfirm">
+      <p><strong>This operation changes media files and database records.</strong></p>
+      <p>For test-content media it may move or delete orphaned files, remove stale database entries, and synchronize disk/database storage. For meta-page media it copies cross-test references into the correct test folder, updates metadata, removes empty folders, and repairs folder writability.</p>
+    </div>`,
+    buttons: [
+      { label: 'Cancel', value: 'cancel', cancel: true },
+      { label: 'Fix issues', value: 'repair', 'default': true }
+    ],
+    callback: async value => {
+      if (value !== 'repair') return;
+      const ret = await startAjax('mediaRepair', {});
+      if (ret.error || !ret.data) return;
+      showMediaCheckDialog(ret.data, ret.data.repairLog || []);
+    }
+  });
 }
 
 /* =========================

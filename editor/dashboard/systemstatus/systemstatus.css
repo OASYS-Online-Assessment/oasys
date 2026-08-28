@@ -10,7 +10,7 @@
     min-height: 0;
 }
 
-/* === Fixed 4×2 grid, first tile spans two cols === */
+/* === Fixed 4x2 grid, first tile spans two cols === */
 .sysz-grid {
     display: grid;
     gap: 10px;
@@ -41,7 +41,7 @@
 /* Ensure the 'sto' tile spans two columns and keeps full width children */
 .sysz-area-sto { grid-column: span 2; align-items: stretch; }
 
-/* === Cards (tiles) — total outer height exactly 136px; title pinned at top === */
+/* === Cards (tiles) -- total outer height exactly 136px; title pinned at top === */
 .sysz-card {
     box-sizing: border-box;       /* include padding + border in height */
     height: 136px;
@@ -352,4 +352,102 @@ a.sysz-pill:hover { filter: brightness(.98); text-decoration: none; }
     .sysz-scColumns {
         grid-template-columns: 1fr;
     }
+}
+
+/* Combined system/media health tile keeps the fixed 4x2 widget grid intact. */
+.sysz-healthStack {
+    display: grid;
+    gap: 5px;
+    width: 100%;
+}
+
+.sysz-healthRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+    padding: 5px 8px;
+    border: 1px solid #dce5ec;
+    border-radius: 7px;
+    background: #f4f7f9;
+    color: #334155;
+    font-size: 11px;
+    line-height: 14px;
+    text-decoration: none;
+}
+
+.sysz-healthRow strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sysz-loginsRow,
+.sysz-chipRow {
+    display: grid;
+    gap: 5px;
+    width: 100%;
+}
+
+.sysz-card > .sysz-title + * { margin-top: 7px; }
+
+.sysz-healthRow.ok { background: #e7f6ed; border-color: #b8dfc7; color: #176b36; }
+.sysz-healthRow.warn { background: #fff5dc; border-color: #efd99c; color: #7a4d00; }
+.sysz-healthRow.danger { background: #fdeaea; border-color: #edbcbc; color: #8a1f1f; }
+.sysz-healthRow:hover { filter: brightness(.98); text-decoration: none; }
+.sysz-mediaHint { font-size: 10px; line-height: 11px; }
+
+/* Media-check details */
+.sysz-mediaDetails {
+    display: grid;
+    gap: 12px;
+}
+
+.sysz-mediaSummary {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 11px 13px;
+    border: 1px solid #b8dfc7;
+    border-radius: 8px;
+    background: #e7f6ed;
+    color: #176b36;
+}
+
+.sysz-mediaSummary.warn {
+    border-color: #efd99c;
+    background: #fff5dc;
+    color: #7a4d00;
+}
+
+.sysz-mediaArea {
+    overflow: hidden;
+    border: 1px solid #d8e1e7;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.sysz-mediaAreaHead {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 13px;
+    background: #f4f7f9;
+    border-bottom: 1px solid #e0e6ea;
+}
+
+.sysz-mediaAreaHead span {
+    color: #176b36;
+    font-weight: 700;
+}
+
+.sysz-mediaArea.hasIssues .sysz-mediaAreaHead span { color: #8a1f1f; }
+.sysz-mediaArea p { margin: 0; padding: 13px; color: #176b36; }
+.sysz-mediaArea ul { margin: 0; padding: 6px 14px 6px 38px; }
+.sysz-mediaArea li { padding: 7px 2px; border-bottom: 1px dotted #d9e0e4; list-style: disc; overflow-wrap: anywhere; }
+.sysz-mediaArea li:last-child { border-bottom: 0; }
+
+@media (max-width: 640px) {
+    .sysz-mediaSummary { flex-direction: column; gap: 4px; }
 }

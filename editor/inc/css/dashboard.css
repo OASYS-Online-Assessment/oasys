@@ -237,3 +237,282 @@ body[data-dash-booting="1"] #dashScrollWrap {
    ============================================ */
 @media (max-width: 1280px) { #dashScrollWrap { --gridGap: 8px; } }
 @media (max-width: 1024px) { #dashScrollWrap { --gridGap: 6px; } }
+
+/* ============================================
+   OASYS 3.7 visual refresh
+   Existing layout IDs and grid behavior remain unchanged.
+   ============================================ */
+#dashboardContainer {
+    background:
+        radial-gradient(circle at 12% 0%, rgba(86, 186, 232, .16), transparent 28rem),
+        linear-gradient(145deg, #dfe7ec 0%, #cfd9df 48%, #dce5ea 100%);
+}
+
+#box_dashboardHeader {
+    position: relative;
+    min-height: 75px !important;
+    max-height: 75px;
+    border-bottom: 1px solid rgba(20, 67, 91, .18);
+    background:
+        linear-gradient(105deg, rgba(23, 89, 121, .98), rgba(33, 126, 170, .94) 56%, rgba(60, 151, 185, .92));
+    box-shadow: 0 5px 18px rgba(23, 57, 75, .18);
+    overflow: hidden;
+}
+
+#box_dashboardHeader::after {
+    content: "";
+    position: absolute;
+    right: -45px;
+    top: -90px;
+    width: 270px;
+    height: 210px;
+    border: 36px solid rgba(255, 255, 255, .07);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+#dashboardHeader {
+    position: relative;
+    z-index: 1;
+    align-items: center;
+    box-sizing: border-box;
+    height: 75px;
+    padding: 7px 18px;
+}
+
+.dashNameSection {
+    min-width: 0;
+    color: #fff;
+}
+
+.dashReleaseLine {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2px;
+    color: rgba(255, 255, 255, .72);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .16em;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.dashReleaseDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #78e4bc;
+    box-shadow: 0 0 0 3px rgba(120, 228, 188, .16);
+}
+
+.dashGreetingLine {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    min-width: 0;
+}
+
+#dashUserName {
+    overflow: hidden;
+    color: #fff;
+    font-size: 1.45em;
+    font-weight: 700;
+    line-height: 1.08;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, .12);
+    white-space: nowrap;
+}
+
+#dashWelcomeMsg {
+    margin-top: 2px;
+    overflow: hidden;
+    color: rgba(255, 255, 255, .78);
+    font-size: .9em;
+    font-style: normal;
+    line-height: 1.1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#headerButtonsContainer > .nxButtonBackground,
+#refreshBtnWrap > .nxButtonBackground {
+    margin: 0;
+}
+
+#headerButtonsContainer .nxButton {
+    border-radius: 7px;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+#headerButtonsContainer .nxButton:not(.nxButtonIconOnly),
+#refreshBtnWrap .nxButton {
+    border-color: rgba(255,255,255,.42);
+    background: rgba(255,255,255,.94);
+    color: #176184;
+    box-shadow: 0 3px 9px rgba(6,39,56,.16);
+}
+
+#headerButtonsContainer .nxButtonHovered {
+    background: #fff !important;
+    color: #0f5678 !important;
+    filter: none !important;
+}
+
+#btnRefreshWidgets.nxButtonHovered {
+    border-color: #8ed3eb !important;
+    background: #dff4fb !important;
+    color: #0d607f !important;
+    box-shadow: 0 3px 9px rgba(6,39,56,.16);
+}
+
+#headerButtonsContainer .nxButtonHovered > .nxButtonHoverIcon { display: none !important; }
+#headerButtonsContainer .nxButtonHovered > .nxButtonIcon { display: block !important; }
+
+#headerButtonsContainer .nxButtonIconOnly {
+    padding: 5px;
+    color: #fff;
+}
+
+#headerButtonsContainer .nxButtonIconOnly.nxButtonHovered {
+    background: rgba(255,255,255,.14) !important;
+    color: #fff !important;
+}
+
+.scope-toggle {
+    height: auto;
+    min-width: 0;
+    padding: 2px;
+    border-color: #cbd5e1;
+    background: #f1f5f9;
+    box-shadow: 0 2px 6px rgba(6,39,56,.16);
+}
+
+.scope-toggle .scope-btn {
+    height: auto;
+    padding: 3px 9px;
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.dashVersionBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    padding: 4px 7px 4px 9px;
+    border: 1px solid rgba(255, 255, 255, .28);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
+    color: #fff;
+    backdrop-filter: blur(4px);
+}
+
+.dashVersionBadge strong {
+    font-size: 12px;
+    letter-spacing: .04em;
+}
+
+.dashVersionBadge small {
+    padding: 2px 5px;
+    border-radius: 999px;
+    background: #78e4bc;
+    color: #124a43;
+    font-size: 7px;
+    font-weight: 900;
+    letter-spacing: .1em;
+}
+
+#headerButtonsContainer {
+    width: auto;
+    min-width: 70px;
+    color: #fff;
+}
+
+.scope-toggle .scope-btn {
+    color: #7b8c96;
+    background: transparent;
+    border-radius: 999px;
+    font-weight: 600;
+    opacity: .82;
+    transition: color .15s ease, background-color .15s ease, box-shadow .15s ease, opacity .15s ease;
+}
+
+.scope-toggle .scope-btn:hover:not(.active) {
+    color: #526a78;
+    background: #dfe9ee;
+    opacity: 1;
+}
+
+.scope-toggle .scope-btn.active {
+    color: #fff;
+    opacity: 1;
+    box-shadow: 0 2px 5px rgba(25,52,67,.24), inset 0 0 0 1px rgba(255,255,255,.18);
+}
+.scope-toggle .scope-btn[data-scope="admin"].active { background: #176184; }
+.scope-toggle .scope-btn[data-scope="user"].active { background: #176184; }
+
+#dashboardWidgets {
+    padding: calc(var(--gridGap) + 2px);
+}
+
+.jsDashWidget {
+    border: 1px solid rgba(120, 141, 154, .34);
+    border-radius: 10px;
+    box-shadow: 0 5px 16px rgba(42, 62, 73, .13);
+}
+
+.user-scope .jsDashWidgetTitle {
+    box-sizing: border-box;
+    min-height: 25px;
+    padding: 4px 7px;
+    border-bottom: 1px solid #d5e4eb;
+    background: linear-gradient(180deg, #eaf6fa, #dceef4);
+    color: #263f4c;
+}
+
+.admin-scope .jsDashWidgetTitle {
+    border-bottom-color: #b6ced9;
+    background: linear-gradient(180deg, #d5e6ed, #c5dbe4);
+}
+
+.admin-scope .jsDashWidgetTitle::after {
+    padding-right: 8px;
+    color: #176184;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .12em;
+}
+
+#dashBootMask {
+    background:
+        radial-gradient(circle at 50% 35%, rgba(86, 186, 232, .20), transparent 24rem),
+        linear-gradient(145deg, #dce6eb, #cbd7de);
+    color: #35515f;
+}
+
+#dashBootMask .bootVersion {
+    margin-top: -18px;
+    color: #176184;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+}
+
+@media (max-width: 720px) {
+    #dashboardHeader { padding-inline: 11px; }
+    #dashUserName { max-width: 46vw; font-size: 1.2em; }
+    #dashWelcomeMsg { max-width: 52vw; }
+    .dashVersionBadge { padding-left: 7px; }
+    .dashVersionBadge small { display: none; }
+    .dashReleaseLine { letter-spacing: .1em; }
+    .scope-toggle .scope-btn { padding-inline: 8px; }
+}
+
+@media (max-width: 460px) {
+    .dashVersionBadge { display: none; }
+    #dashUserName { max-width: 52vw; }
+    #dashWelcomeMsg { max-width: 56vw; }
+}

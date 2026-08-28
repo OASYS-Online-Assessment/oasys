@@ -5,6 +5,9 @@
 	require_once __DIR__ . '/../../inc/php/initBackend.php';
 	require_once '../../inc/php/systemState.php';   // checkActiveStates()
 	require_once '../../inc/php/syscheck.php';
+	require_once '../../maintenance/mediaClass.php';
+
+	use maintenance\mediaClass;
 
 	$action = filter_input(INPUT_POST, 'action') ?: "";
 	$returnData = ['data' => [], 'action' => $action, 'error' => false];
@@ -72,6 +75,7 @@
 		// NEW: Database version + integrity summary
 		$dbVer = getDbVersion($db);
 		$dbCheck = dbIntegrityOverview($db); // ['status','ok','warnings','errors','tables', optionally 'error']
+		$mediaCheck = mediaHealthOverview();
 
 		$returnData['data'] = [
 			'version' => $ver,
@@ -90,7 +94,39 @@
 			'sysCheck' => ['status' => $status, 'failCount' => $fail, 'warnCount' => $warn],
 			'backups' => $bk,
 			'database' => array_merge($dbCheck, ['version' => $dbVer]),
+			'mediaCheck' => $mediaCheck,
 		];
+	}
+
+	function mediaHealthOverview(bool $includeIssues = false): array
+	{
+		$result = ['error' => false, 'log' => []];
+		$media = new mediaClass($result, []);
+		$media->execute('verifyMediaAssets');
+
+		$area = '';
+		$counts = ['media' => 0, 'customContent' => 0];
+		$issues = ['media' => [], 'customContent' => []];
+		foreach ($result['log'] ?? [] as $line) {
+			if ($line === '=== Test-content media [media] ===') {
+				$area = 'media';
+			} elseif ($line === '=== Meta-page media [customContent] ===') {
+				$area = 'customContent';
+			} elseif ($line !== '' && isset($counts[$area])) {
+				$counts[$area]++;
+				if ($includeIssues) $issues[$area][] = $line;
+			}
+		}
+
+		$total = $counts['media'] + $counts['customContent'];
+		$overview = [
+			'status' => $total > 0 ? 'warn' : 'ok',
+			'issueCount' => $total,
+			'testContentCount' => $counts['media'],
+			'metaPageCount' => $counts['customContent'],
+		];
+		if ($includeIssues) $overview['issues'] = $issues;
+		return $overview;
 	}
 
 	function listFrontEndOnline($data, rixPDO &$db, array &$returnData, userAuth &$myAuth)
@@ -157,6 +193,11 @@
 		$dbVer = getDbVersion($db);
 		$dbCheck = dbIntegrityOverview($db);
 		$returnData['data'] = array_merge($dbCheck, ['version' => $dbVer]);
+	}
+
+	function showMediaDetails($data, rixPDO &$db, array &$returnData, userAuth &$myAuth): void
+	{
+		$returnData['data'] = mediaHealthOverview(true);
 	}
 
 	/* =========================

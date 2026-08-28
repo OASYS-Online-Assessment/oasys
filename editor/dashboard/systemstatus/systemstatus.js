@@ -44,8 +44,8 @@ export default class SystemStatus {
 
         // Events
         $(document)
-            .off(`click${this.ns}`, `#${id} .sysz-pill[data-action], #${id} .sysz-chip[data-action]`)
-            .on(`click${this.ns}`, `#${id} .sysz-pill[data-action], #${id} .sysz-chip[data-action]`, (e) => {
+            .off(`click${this.ns}`, `#${id} [data-action]`)
+            .on(`click${this.ns}`, `#${id} [data-action]`, (e) => {
                 e.preventDefault();
                 const $el    = $(e.currentTarget);
                 const action = String($el.data("action") || "");
@@ -243,6 +243,43 @@ export default class SystemStatus {
                 break;
             }
 
+			case "showMediaDetails": {
+				const d = res.data || {};
+				const issues = d.issues || { media: [], customContent: [] };
+				const renderArea = (title, rows) => {
+					const list = Array.isArray(rows) ? rows : [];
+					return `<section class="sysz-mediaArea ${list.length ? 'hasIssues' : 'isHealthy'}">
+						<div class="sysz-mediaAreaHead"><strong>${this.escape(title)}</strong><span>${list.length ? `${list.length} issue${list.length === 1 ? '' : 's'}` : 'OK'}</span></div>
+						${list.length
+							? `<ul>${list.map(line => `<li>${this.escape(line)}</li>`).join('')}</ul>`
+							: '<p>No problems found.</p>'}
+					</section>`;
+				};
+				const p = location.pathname;
+				const i = p.indexOf('/editor/');
+				const settingsUrl = `${i >= 0 ? p.slice(0, i) : ''}/editor/systemSettings.php`;
+				new nxDialog('syszMediaDetails', {
+					title: 'Media check',
+					width: 900,
+					contents: `<div class="sysz-dialogWrap sysz-mediaDetails">
+						<div class="sysz-mediaSummary ${d.issueCount > 0 ? 'warn' : 'ok'}">
+							<strong>${d.issueCount > 0 ? `${d.issueCount} media issue${d.issueCount === 1 ? '' : 's'} found` : 'Media storage is healthy'}</strong>
+							<span>${d.issueCount > 0 ? 'Open System Settings to review and fix these issues.' : 'No action is required.'}</span>
+						</div>
+						${renderArea('Test-content media', issues.media)}
+						${renderArea('Meta-page media', issues.customContent)}
+					</div>`,
+					buttons: [
+						{ label: 'Close', value: 'close', cancel: true, default: d.issueCount === 0 },
+						{ label: 'Open System Settings', value: 'settings', default: d.issueCount > 0 }
+					],
+					callback: value => {
+						if (value === 'settings') window.location.assign(settingsUrl);
+					}
+				});
+				break;
+			}
+
             case "readSettings": {
                 const rows = (res.data && res.data.rows) || [];
                 this._settingsRows = rows;
@@ -275,6 +312,7 @@ export default class SystemStatus {
         const bk  = d.backups   || {};
         const sc  = d.sysCheck  || { status:"ok", warnCount:0, failCount:0 };
         const db  = d.database  || {};
+        const media = d.mediaCheck || { status:"ok", issueCount:0, testContentCount:0, metaPageCount:0 };
 
         // Upgrade availability + role gate
         const upgAvail  = String(sessionStorage.getItem("upgAvail") || "").toLowerCase() === "true";
@@ -311,8 +349,8 @@ export default class SystemStatus {
         const tileVersion = `
   <div class="sysz-card sysz-area-ver ${canUpgrade ? 'sysz-card--upg' : ''}">
     <div class="sysz-title">${icon('info')}OASYS version</div>
-    <a href="#" class="sysz-pill" data-action="showVersionDetails">
-      ${this.escape(String(ver.vshort || '—'))}
+    <a href="#" class="sysz-healthRow" data-action="showVersionDetails">
+      <span>Version details</span><strong>${this.escape(String(ver.vshort || '—'))}</strong>
     </a>
     ${canUpgrade
             ? `<div class="sysz-sub"><a class="sysz-upgLink" href="${upgraderHref}">New version available</a></div>`
@@ -323,8 +361,8 @@ export default class SystemStatus {
         const tileDb = `
       <div class="sysz-card sysz-area-db">
         <div class="sysz-title">${icon('db')}Database</div>
-        <a href="#" class="sysz-pill ${db.status==='fail'?'danger':(db.status==='warn'?'warn':'')}" data-action="showDbDetails">
-          ${this.escape(String(db.version || '—'))}
+        <a href="#" class="sysz-healthRow ${db.status==='fail'?'danger':(db.status==='warn'?'warn':'ok')}" data-action="showDbDetails">
+          <span>Database status</span><strong>${this.escape(String(db.version || '—'))}</strong>
         </a>
         ${dbSub ? `<div class="sysz-sub">${this.escape(dbSub)}</div>` : ``}
       </div>`;
@@ -333,11 +371,11 @@ export default class SystemStatus {
       <div class="sysz-card sysz-area-log">
         <div class="sysz-title">👥 Logged in</div>
         <div class="sysz-loginsRow">
-          <a href="#" class="sysz-pill ${feCount>0?'ok':''}" data-action="listFrontEndOnline">
-            Front-end: ${this.escape(String(feCount))}
+          <a href="#" class="sysz-healthRow ${feCount>0?'ok':''}" data-action="listFrontEndOnline">
+            <span>Front-end</span><strong>${this.escape(String(feCount))}</strong>
           </a>
-          <a href="#" class="sysz-pill ${(!be.notAvailable && Number(beCount)>0)?'ok':''}" data-action="listBackEndOnline">
-            Back-end: ${this.escape(String(beCount))}
+          <a href="#" class="sysz-healthRow ${(!be.notAvailable && Number(beCount)>0)?'ok':''}" data-action="listBackEndOnline">
+            <span>Back-end</span><strong>${this.escape(String(beCount))}</strong>
           </a>
         </div>
         ${be.notAvailable ? `<div class="sysz-sub">Back-end not available</div>` : ``}
@@ -345,11 +383,16 @@ export default class SystemStatus {
 
         const tileSc = `
       <div class="sysz-card sysz-area-sc">
-        <div class="sysz-title">${icon('hc')}System check</div>
-        <a href="#" class="sysz-pill ${sc.status==='fail'?'danger':(sc.status==='warn'?'warn':'ok')}" data-action="syscheckDetails">
-          ${this.escape(String(sc.status==='ok'?'OK':(sc.status==='warn'?'Warnings':'Failures')))}
-        </a>
-        <div class="sysz-sub">${this.escape(`${sc.warnCount} warnings, ${sc.failCount} failures`)}</div>
+        <div class="sysz-title">${icon('hc')}Health checks</div>
+        <div class="sysz-healthStack">
+          <a href="#" class="sysz-healthRow ${sc.status==='fail'?'danger':(sc.status==='warn'?'warn':'ok')}" data-action="syscheckDetails">
+            <span>System</span><strong>${this.escape(String(sc.status==='ok'?'OK':(sc.status==='warn'?'Warnings':'Failures')))}</strong>
+          </a>
+          <a href="#" class="sysz-healthRow ${media.status==='ok'?'ok':'warn'}" data-action="showMediaDetails">
+            <span>Media</span><strong>${media.issueCount > 0 ? this.escape(`${media.issueCount} issue${media.issueCount === 1 ? '' : 's'}`) : 'OK'}</strong>
+          </a>
+        </div>
+        ${media.issueCount > 0 ? `<div class="sysz-sub sysz-mediaHint">Open System Settings to fix</div>` : ``}
       </div>`;
 
         const total = Number(fs.total||0);
@@ -390,7 +433,7 @@ export default class SystemStatus {
       <div class="sysz-card sysz-area-bak">
         <div class="sysz-title">🗂️ Backups</div>
         <div class="sysz-chipRow">
-          <a href="#" class="sysz-chip" data-action="showBackupDetails">Show details</a>
+          <a href="#" class="sysz-healthRow" data-action="showBackupDetails"><span>Backup details</span><strong>›</strong></a>
         </div>
         <div class="sysz-sub">${latest}</div>
       </div>`;
@@ -400,8 +443,8 @@ export default class SystemStatus {
         const tileSettings = `
       <div class="sysz-card sysz-area-set">
         <div class="sysz-title">⚙️ Settings</div>
-        <a href="#" class="sysz-pill" data-action="showSettingsDetails">
-          <span id="${this.id}_settingsCount">${this.escape(settingsCount)}</span>
+        <a href="#" class="sysz-healthRow" data-action="showSettingsDetails">
+          <span>Modified settings</span><strong id="${this.id}_settingsCount">${this.escape(settingsCount)}</strong>
         </a>
         <div class="sysz-sub">modified</div>
       </div>`;

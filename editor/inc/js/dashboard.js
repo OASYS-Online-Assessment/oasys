@@ -31,6 +31,7 @@ async function onDOMReady() {
 
         m.innerHTML = `
               <img class="bootLogo" src="${LOGO_PATH}" alt="OASYS" />
+              <div class="bootVersion">OASYS ${String(window.dashboardVersion || '3.7')}</div>
               <div class="boot-text">${UILANG?.m?.('Loading dashboard…') || 'Loading dashboard…'}</div>
               <div class="spinner" aria-hidden="true"></div>
             `;
@@ -74,8 +75,12 @@ async function onDOMReady() {
 
     const headerDiv = `
     <div class="dashNameSection">
-      <div id="dashUserName"></div>
-      <div id="dashWelcomeMsg">${UILANG.m("Welcome to OASYS Dashboard")}</div>
+      <div class="dashGreetingLine">
+        <div>
+          <div id="dashUserName"></div>
+          <div id="dashWelcomeMsg">${UILANG.m("Welcome to your OASYS workspace")}</div>
+        </div>
+      </div>
     </div>
     <div id="headerButtonsContainer"></div>`;
     $("#dashboardHeader").append(headerDiv);
@@ -484,6 +489,9 @@ async function onDOMReady() {
 
         if (adminSec) adminSec.style.display = (currentScope === 'admin') ? '' : 'none';
         if (userSec)  userSec.style.display  = (currentScope === 'user')  ? '' : 'none';
+
+        document.body.classList.toggle('dashboard-admin-active', currentScope === 'admin');
+        document.body.classList.toggle('dashboard-user-active', currentScope === 'user');
 
         updateToggleUI(currentScope);
         sizeVisibleScope(currentScope);
