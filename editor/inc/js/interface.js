@@ -194,13 +194,27 @@ function createMenuButtons() {
 
 	//Flagging Version
 	$('#viewsPanel').append('<p class="menuSeparator"></p>');
-	$('#viewsPanel').append(
-		'<div style="text-align:center;">' +
-		'<div id="versionInfo" style="color:#999;">' +
-		UILANG.m('Version') + '&nbsp;<a id="displayinfo" style="cursor: pointer">' + String(settings.vshort) + '</a>' +
-		'</div>' +
-		'</div>'
-	);
+	const versionNumber = String(settings.vshort ?? '');
+	const isBetaVersion = /\bbeta\b/i.test([settings.v, settings.vshort].filter(Boolean).join(' '));
+	const $versionInfo = $('<div>', {
+		id: 'versionInfo',
+		class: isBetaVersion ? 'versionInfoBeta' : '',
+		role: isBetaVersion ? 'status' : undefined,
+		'aria-label': isBetaVersion ? 'Beta version ' + versionNumber : undefined
+	});
+	$versionInfo.append(document.createTextNode(UILANG.m('Version') + '\u00a0'));
+	$versionInfo.append($('<a>', {
+		id: 'displayinfo',
+		href: '#',
+		text: versionNumber
+	}));
+	if (isBetaVersion) {
+		$versionInfo.append($('<span>', {
+			class: 'versionBetaBadge',
+			text: 'Beta version'
+		}));
+	}
+	$('#viewsPanel').append($('<div>', {class: 'versionInfoWrapper'}).append($versionInfo));
 	//End Flagging DEV Version
 
 	// "Signed in as" block
@@ -214,7 +228,10 @@ function createMenuButtons() {
 		);
 	}
 
-	$('#displayinfo').on('click', displayDetails);
+	$('#displayinfo').on('click', function(event) {
+		event.preventDefault();
+		displayDetails();
+	});
 
 	// show/hide account options handler, hide menu when clicked outside
 	$("#username").on('click', function() {

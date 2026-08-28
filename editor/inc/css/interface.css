@@ -12876,6 +12876,39 @@ div#statusBar.jsStatusBar-info strong {
     color: var(--oasys-accent);
 }
 
+.versionInfoWrapper {
+    padding: 0 10px;
+    text-align: center;
+}
+
+#versionInfo.versionInfoBeta {
+    padding: 10px 8px;
+    border: 1px solid #ffbf47;
+    border-radius: 7px;
+    background: #4a3511;
+    box-shadow: 0 0 0 2px rgba(255, 191, 71, 0.16);
+    color: #fff4d6 !important;
+}
+
+#versionInfo.versionInfoBeta #displayinfo {
+    color: #fff;
+    font-weight: 800;
+}
+
+.versionBetaBadge {
+    display: block;
+    margin-top: 7px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: #ffbf47;
+    color: #2c1c00;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
 .loginStatusContainer {
     width: 184px;
     min-height: 44px;
