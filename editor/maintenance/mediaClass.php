@@ -392,14 +392,20 @@ class mediaClass
 	{
 		$mediaFolders = $this->fetchListOfMediaFolders();
 		foreach ($mediaFolders as $mediaFolder) {
-			//check permissions
-			if (!str_ends_with(sprintf('%o', fileperms($mediaFolder)), '0775')) {
+			// The effective permissions depend on ownership, ACLs, the process umask,
+			// and (for bind mounts) the host filesystem. Check the capability OASYS
+			// actually needs instead of requiring one exact numeric mode.
+			if (!is_writable($mediaFolder)) {
 				if ($simulate) {
-					$this->returnData['log'][] = "Wrong permissions for folder [$mediaFolder]";
+					$this->returnData['log'][] = "Media folder is not writable [$mediaFolder]";
 					continue;
 				}
-				chmod($mediaFolder, 0775);
-				$this->returnData['log'][] = "Changed permissions for media folder [$mediaFolder]";
+
+				if (chmod($mediaFolder, 0775) && is_writable($mediaFolder)) {
+					$this->returnData['log'][] = "Changed permissions for media folder [$mediaFolder]";
+				} else {
+					$this->returnData['log'][] = "Failed to make media folder writable [$mediaFolder]";
+				}
 			}
 		}
 	}
