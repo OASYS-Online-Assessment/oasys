@@ -8181,6 +8181,8 @@ body[data-managerid="accountdetails"] #UI {
 }
 
 body[data-managerid="accountdetails"] .propertiesTitle {
+    box-sizing: border-box;
+    height: auto;
     margin: 0 -28px 20px;
     padding: 17px 28px 15px;
     background: linear-gradient(180deg, #eaf6fa, #dceef4);
@@ -8188,6 +8190,7 @@ body[data-managerid="accountdetails"] .propertiesTitle {
     color: #1e4559;
     font-size: 18px;
     font-weight: 700;
+    line-height: 1.2;
     text-align: left;
 }
 
