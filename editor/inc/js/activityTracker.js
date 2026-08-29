@@ -1237,7 +1237,7 @@ async function openActivityJourney(scope, loginId, passwordId, testId) {
         activityTrackerRefreshButton.hide();
         kbHandler.registerShortcut('up', () => navigateActivityJourney(-1));
         kbHandler.registerShortcut('down', () => navigateActivityJourney(1));
-        gui.statusBar.setStatus(`: ${activityJourneyContextLabel()}`);
+        gui.statusBar.setStatus(activityJourneyContextLabel());
         $('#statusBar > strong').css('margin-right', 0);
         renderActivityJourneyList();
         const first = activityJourney.runs[0];

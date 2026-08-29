@@ -13077,6 +13077,12 @@ div#statusBar {
     text-shadow: none;
 }
 
+#statusBar > .jsStatusBarLabel,
+#statusBar > #sb_submsg {
+    position: relative;
+    top: 1px;
+}
+
 div#statusBar.jsStatusBar-error,
 div#statusBar.jsStatusBar-warning,
 div#statusBar.jsStatusBar-success,

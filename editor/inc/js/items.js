@@ -143,7 +143,7 @@ function onReady() {
 	};
 	gui.statusBar = new jsStatusBar('#UI', 'statusBar', {
 		prepend: true,
-		prefix: '<strong style="margin-right: 10px;">' + UILANG.m('Content:') + '</strong>',
+		prefix: '<strong style="margin-right: 10px;">' + UILANG.m('Content') + '</strong>',
 		message: UILANG.m('browsing page groups')
 	});
 

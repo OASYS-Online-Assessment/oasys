@@ -178,7 +178,7 @@ function onReady() {
     };
     gui.statusBar = new jsStatusBar('#UI', 'statusBar', {
         prepend: true,
-        prefix: '<strong style="margin-right: 10px;">Tests:</strong>',
+        prefix: '<strong style="margin-right: 10px;">Tests</strong>',
         message: UILANG.m('browsing tests')
     });
 

@@ -605,7 +605,7 @@
 		function setStatus(text, ttl, colour) {
 			if (!ttl) {
 				status = text;
-				if (statusTimer === false) element.html(prefix + status);
+				if (statusTimer === false) element.html(prefix + (prefix ? `<span class="jsStatusBarLabel">${status}</span>` : status));
 				if (colour) setStatusStyle(colour);
 				else if (statusTimer === false) setStatusStyle(false);
 			} else {
@@ -622,7 +622,7 @@
 		function advanceStatusQueue() {
 			if (statusQueue.length > 0) {
 				const msg = statusQueue.shift();
-				element.html(prefix + msg.text);
+				element.html(prefix + (prefix ? `<span class="jsStatusBarLabel">${msg.text}</span>` : msg.text));
 				setStatusStyle(msg.colour);
 				statusTimer = setTimeout(advanceStatusQueue, msg.ttl);
 			} else {
@@ -1117,5 +1117,4 @@ and can be used as a placeholder for attaching an OasysHelp instance.
 
 	window.jsDashWidget = jsDashWidget;
 })(jQuery);
-
 

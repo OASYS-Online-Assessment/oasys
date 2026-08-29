@@ -228,7 +228,7 @@ function onReady() {
 
     gui.statusBar = new jsStatusBar('#UI', 'statusBar', {
         prepend: true,
-        prefix: '<strong style="margin-right: 10px;">' + UILANG.m('Test Takers') + ':</strong>',
+        prefix: '<strong style="margin-right: 10px;">' + UILANG.m('Test Takers') + '</strong>',
         message: UILANG.m('browsing test takers (logins)')
     });
 

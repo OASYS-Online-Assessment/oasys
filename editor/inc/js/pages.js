@@ -131,7 +131,7 @@ function initialize() {
 
 	gui.statusBar = new jsStatusBar('#outerUI', 'statusBar', {
 		prepend: true,
-		prefix: '<strong style="margin-right: 10px;">' + UILANG.m('Content:') + '</strong>',
+		prefix: '<strong style="margin-right: 10px;">' + UILANG.m('Content') + '</strong>',
 		message: UILANG.m('editing page')
 	});
 

@@ -486,7 +486,7 @@ let showBlocked = false;
 
 function onReady() {
 
-    statusBarDefault = `<strong>${UILANG.m('test results')}</strong>: <span id="sb_submsg">browsing test results</span>`;
+    statusBarDefault = `<strong>${UILANG.m('test results')}</strong> <span id="sb_submsg">browsing test results</span>`;
 
     hiddenForm('previewForm', 'post', '../index.php', '_blank', ['action', 'data']);
 
@@ -2032,7 +2032,7 @@ async function reportBuilder() {
     gui.boxes.report.rb_data.hide();
 
     gui.boxes.plotPreview.pp = insertSubSection(gui.boxes.plotPreview.getInnerBox(), 'chartArea', `<span><strong>${journeyEsc(serverData.testname)}</strong> ${UILANG.m('PDF preview')}</span>`);
-    statusBarDefault = `<strong>${UILANG.m('test results')}</strong>: <span id="sb_submsg">${journeyEsc(serverData.testname)}</span>`;
+    statusBarDefault = `<strong>${UILANG.m('test results')}</strong> <span id="sb_submsg">${journeyEsc(serverData.testname)}</span>`;
 }
 
 function openDescriptiveStatistics() {
@@ -2124,7 +2124,7 @@ async function openTestJourney() {
 
     gui.boxes.journeyList.setTitle(`${UILANG.m('TEST JOURNEY')} <span class='ms_title_emph'>${journeyEsc(response.data.test.name)}</span> (${response.data.test.id})`);
     gui.boxes.journeyDetail.setTitle(UILANG.m('Journey Detail'));
-    gui.statusBar.setStatus(`<strong>${UILANG.m('test results')}</strong>: <span id="sb_submsg">${UILANG.m('test journey')} - ${journeyEsc(response.data.test.name)}</span>`);
+    gui.statusBar.setStatus(`<strong>${UILANG.m('test results')}</strong> <span id="sb_submsg">${UILANG.m('test journey')} - ${journeyEsc(response.data.test.name)}</span>`);
 
     renderJourneyList();
     const first = response.data.testTakers?.[0];
