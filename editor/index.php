@@ -20,6 +20,10 @@
 		$settings['interfaceLanguage'] = $forceLang;
 	}
 	require_once("inc/php/authkeygen.php");
+
+	// Refresh modified login assets without requiring users to clear their browser cache.
+	$interfaceCssVersion = filemtime(__DIR__ . '/inc/css/interface.css') ?: 0;
+	$loginJsVersion = filemtime(__DIR__ . '/inc/js/login.js') ?: 0;
 	?>
 
 	<meta http-equiv="Content-Type" content="text/html;charset=utf-8">
@@ -28,7 +32,7 @@
 	<!-- CSS Includes -->
 	<link rel="stylesheet" href="../inc/nxButton/nxButton.css">
 	<link rel="stylesheet" href="../inc/nxDialog/nxDialog.css" />
-	<link type="text/css" href="inc/css/interface.css" rel="stylesheet">
+	<link type="text/css" href="inc/css/interface.css?v=<?php echo $interfaceCssVersion; ?>" rel="stylesheet">
 	<link rel="stylesheet" href="../inc/css/login.css" />
 	<link rel="icon" href="images/favicon.png">
 
@@ -45,7 +49,7 @@
 	<script src="inc/js/interface.js"></script>
 
 	<!-- Main Login Page Include (And Mode Set) -->
-	<script src="inc/js/login.js"></script>
+	<script src="inc/js/login.js?v=<?php echo $loginJsVersion; ?>"></script>
 
 	<script id='forceLang'>
 		"use strict";

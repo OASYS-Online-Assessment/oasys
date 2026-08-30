@@ -14225,3 +14225,164 @@ header > .jsButton2:focus-visible {
 @media (max-width: 620px) {
     .ekrCompletionStats { grid-template-columns: 1fr; }
 }
+/* OASYS 3.7 backend login */
+.backendLoginUI {
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 32px 20px !important;
+    background:
+        radial-gradient(circle at 15% 15%, rgba(79, 179, 224, 0.22), transparent 34%),
+        linear-gradient(145deg, #102c43 0%, #174d6d 48%, #0d2639 100%);
+}
+
+.backendLoginUI #loginContainer {
+    position: relative;
+    box-sizing: border-box;
+    width: min(780px, calc(100vw - 40px));
+    min-width: 0;
+    min-height: 440px;
+    margin: auto;
+    padding: 0 32px 70px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 16px;
+    background: linear-gradient(160deg, rgba(27, 73, 101, 0.98), rgba(14, 43, 62, 0.98));
+    box-shadow: 0 24px 70px rgba(0, 17, 29, 0.42);
+}
+
+.backendLoginUI .logincontainerLogo {
+    width: auto;
+    height: 160px;
+    max-width: min(360px, 80%);
+    object-fit: contain;
+    margin: 24px auto 18px;
+    filter: drop-shadow(0 8px 18px rgba(0, 14, 25, 0.22));
+}
+
+.backendLoginUI .loginTitle {
+    box-sizing: content-box;
+    min-height: 24px;
+    height: auto;
+    margin: 0 -32px;
+    padding: 14px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.92);
+    background: rgba(4, 27, 43, 0.46);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.11em;
+}
+
+.backendLoginUI .loginRow,
+.backendLoginUI .settingsRow {
+    width: min(400px, 100%);
+    min-width: 0;
+}
+
+.backendLoginUI .loginTextField {
+    border: 1px solid rgba(255, 255, 255, 0.34) !important;
+    border-radius: 7px !important;
+    background: rgba(255, 255, 255, 0.96) !important;
+    box-shadow: inset 0 1px 2px rgba(8, 35, 52, 0.08);
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.backendLoginUI .loginTextField:focus {
+    border-color: #61c6ee !important;
+    box-shadow: 0 0 0 3px rgba(67, 181, 226, 0.2);
+}
+
+.backendLoginUI .uSettingFieldLabel,
+.backendLoginUI .uSettingFieldSpecial {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.backendLoginUI button#ret2loginButton,
+.backendLoginUI button#newpwdSubmitButton,
+.backendLoginUI button#codeSubmitButton,
+.backendLoginUI button#SSOloginButton,
+.backendLoginUI button#loginButton {
+    border-radius: 7px;
+    background: #238fbd;
+    box-shadow: 0 7px 18px rgba(0, 26, 42, 0.22);
+    transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.backendLoginUI button#ret2loginButton:hover,
+.backendLoginUI button#SSOloginButton:hover,
+.backendLoginUI button#loginButton:hover {
+    background: #2da8d8;
+    box-shadow: 0 9px 22px rgba(0, 25, 41, 0.3);
+    transform: translateY(-1px);
+}
+
+.backendLoginUI button#loginButton:disabled,
+.backendLoginUI button#SSOloginButton:disabled {
+    color: rgba(255, 255, 255, 0.46);
+    background: rgba(129, 159, 176, 0.35) !important;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+.backendLoginUI .loginLangButton {
+    background-color: rgba(35, 143, 189, 0.88);
+    cursor: pointer;
+    transition: background-color 150ms ease, transform 150ms ease;
+}
+
+.backendLoginUI .loginLangButton:hover {
+    background-color: #2da8d8;
+    transform: translateY(-1px);
+}
+
+.loginVersionWatermark {
+    position: absolute;
+    right: 24px;
+    bottom: 18px;
+    color: rgba(255, 255, 255, 0.2);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    pointer-events: none;
+}
+
+.loginBetaBadge {
+    position: absolute;
+    right: 24px;
+    bottom: 42px;
+    padding: 3px 8px;
+    border: 1px solid rgba(135, 211, 242, 0.38);
+    border-radius: 999px;
+    color: rgba(202, 239, 255, 0.76);
+    background: rgba(66, 160, 202, 0.12);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    pointer-events: none;
+}
+
+@media (max-width: 600px) {
+    .backendLoginUI {
+        padding: 16px 12px !important;
+    }
+
+    .backendLoginUI #loginContainer {
+        width: calc(100vw - 24px);
+        padding-right: 20px;
+        padding-left: 20px;
+        border-radius: 12px;
+    }
+
+    .backendLoginUI .loginTitle {
+        margin-right: -20px;
+        margin-left: -20px;
+        font-size: 12px;
+    }
+
+    .backendLoginUI .logincontainerLogo {
+        height: 130px;
+    }
+}

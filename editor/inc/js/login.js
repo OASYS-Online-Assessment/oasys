@@ -139,6 +139,20 @@ function onDOMReady() {
 
     $('#UI').addClass(`backendLoginUI`);
 
+    // Keep the login branding in sync with oasys_ver.txt (exposed through settings).
+    const versionValue = String(settings.v || settings.vshort || '').trim();
+    const cleanVersion = versionValue
+        .replace(/^OASYS\s*(?:ver\.?|v=)?\s*/i, '')
+        .trim();
+    const versionNumber = cleanVersion.match(/\d+(?:\.\d+)*/);
+    const versionLabel = versionNumber ? `OASYS ${versionNumber[0]}` : 'OASYS';
+    const isBetaVersion = /\bbeta\b/i.test(versionValue);
+
+    $('#loginContainer').append(
+        `<div class="loginVersionWatermark" aria-label="${versionLabel}">${versionLabel}</div>` +
+        (isBetaVersion ? '<div class="loginBetaBadge">BETA</div>' : '')
+    );
+
     if (settings.SSOSysActive === true) {
         $('#SSOloginButtonHolder').show();
     } else {
