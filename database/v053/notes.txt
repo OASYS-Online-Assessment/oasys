@@ -1,0 +1,6 @@
+Removed: sessions
+
+The deprecated sessions table has been replaced by the backend and frontend
+state tables and is no longer required.
+
+VERSION: 053
