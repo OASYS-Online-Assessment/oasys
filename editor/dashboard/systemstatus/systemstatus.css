@@ -10,7 +10,7 @@
     min-height: 0;
 }
 
-/* === Fixed 4x2 grid, first tile spans two cols === */
+/* === Fixed 4×2 grid, first tile spans two cols === */
 .sysz-grid {
     display: grid;
     gap: 10px;
@@ -41,7 +41,7 @@
 /* Ensure the 'sto' tile spans two columns and keeps full width children */
 .sysz-area-sto { grid-column: span 2; align-items: stretch; }
 
-/* === Cards (tiles) -- total outer height exactly 136px; title pinned at top === */
+/* === Cards (tiles) — total outer height exactly 136px; title pinned at top === */
 .sysz-card {
     box-sizing: border-box;       /* include padding + border in height */
     height: 136px;

@@ -103,9 +103,14 @@ export default class SystemStatus {
             return;
         }
         if (res.error) {
+            const localizedError = res.errorCode === "dbIntegrityLockFailed"
+                ? UILANG.m("The database integrity-check lock could not be acquired.")
+                : (res.errorCode === "dbIntegrityAlreadyRunning"
+                    ? UILANG.m("Another database integrity check is already running.")
+                    : res.error);
             new nxDialog("error", {
                 buttons:[{label:"OK",default:true,cancel:true,value:"ok"}],
-                contents:formatActionErrorMessage(`<strong>Sorry! The action cannot be completed.</strong><br><p>${res.error}</p>`),
+                contents:formatActionErrorMessage(`<strong>Sorry! The action cannot be completed.</strong><br><p>${localizedError}</p>`),
                 title:"Error", icon:"../images/error.png", iconWidth:64, width:700,
                 callback:()=>{ if(res.forceLoginRedirect) window.location="index.php"; }
             });
@@ -215,31 +220,16 @@ export default class SystemStatus {
             }
 
             case "showDbDetails": {
+                this.showDatabaseDialog(res.data || {});
+                break;
+            }
+
+            case "runDbIntegrityCheck": {
                 const d = res.data || {};
-                const head = `
-          <div class="sysz-vbox">
-            <div><b>Version:</b> ${this.escape(d.version || "—")}</div>
-            <div><b>Status:</b> ${this.escape((d.status || "unknown").toUpperCase())}
-              ${d.ok!=null ? ` • OK: ${d.ok}` : ""}${d.warnings!=null ? ` • Warnings: ${d.warnings}` : ""}${d.errors!=null ? ` • Errors: ${d.errors}` : ""}</div>
-          </div>`;
-
-                const body = (d.tables || []).map(t => `
-          <tr class="${t.state === 'OK' ? '' : (t.msg && /warning/i.test(t.msg) ? 'is-warn' : 'is-fail')}">
-            <td>${this.escape(t.name)}</td>
-            <td>${this.escape(t.engine || '')}</td>
-            <td class="sysz-num">${t.rows != null ? this.escape(String(t.rows)) : '—'}</td>
-            <td>${this.escape(t.state || '')}</td>
-            <td>${this.escape(t.msg || '')}</td>
-          </tr>`).join("");
-
-                this.dialog("Database details",
-                    `${head}
-           <table class="sysz-dialogTbl">
-             <thead><tr><th>Table</th><th>Engine</th><th>Rows</th><th>State</th><th>Message</th></tr></thead>
-             <tbody>${body || `<tr><td colspan="5">No table info available.</td></tr>`}</tbody>
-           </table>`,
-                    1000
-                );
+                this.showDatabaseDialog(d, true);
+                // Refresh the tile's live metadata. The integrity result remains
+                // transient and is shown only in the dialog opened above.
+                this.refresh({ silent: true });
                 break;
             }
 
@@ -337,10 +327,11 @@ export default class SystemStatus {
             db:`<span class="sysz-ic" aria-hidden>🛢️</span>`
         }[n]||'');
 
-        const dbStatus = db.status ? db.status.toUpperCase() : "UNKNOWN";
-        const dbSub = (db.ok!=null || db.warnings!=null || db.errors!=null)
-            ? `Integrity: ${dbStatus} • Warn ${db.warnings||0}, Err ${db.errors||0}`
-            : "";
+        const dbSub = db.available === false
+            ? UILANG.m("Metadata unavailable")
+            : this.completeLanguageReplacements(UILANG.m("${tableCount} tables • Live metadata", {
+                tableCount: Number(db.tableCount || 0)
+            }), { tableCount: Number(db.tableCount || 0) });
 
         const feCount = Number(fe.count || 0);
         const beCount = be.notAvailable ? 'n/a' : Number(be.count || 0);
@@ -557,6 +548,127 @@ export default class SystemStatus {
         this.dialog(`System settings — ${diffs.length} changed`, html, 960);
     }
 
+    showDatabaseDialog(d, justRan = false) {
+        const status = this.databaseStateLabel(d.status || "not_checked");
+        const checkedAt = justRan && d.checkedAt ? this.formatNice(d.checkedAt) : null;
+        const duration = justRan && d.durationMs != null ? this.formatDuration(d.durationMs) : null;
+        const intro = justRan
+            ? UILANG.m("This integrity result is not stored. Closing this dialog discards it; future views show fresh metadata only.")
+            : UILANG.m("This is live, inexpensive database metadata. No table integrity scan was performed.");
+
+        const body = (d.tables || []).map(t => {
+            const state = String(t.state || "").toUpperCase();
+            const rowClass = !justRan || state === "OK" ? "" : (state === "ERROR" || state === "FAIL" ? "is-fail" : "is-warn");
+            return `
+          <tr class="${rowClass}">
+            <td>${this.escape(t.name)}</td>
+            <td>${this.escape(t.engine || "")}</td>
+            ${justRan ? `<td>${this.escape(this.databaseStateLabel(state))}</td><td>${this.escape(t.msg || "")}</td>` : ""}
+          </tr>`;
+        }).join("");
+
+        const databaseReplacements = {
+            availability: d.available === false ? UILANG.m("Unavailable") : UILANG.m("Available"),
+            tableCount: Number(d.tableCount || 0)
+        };
+        const databaseSummary = this.completeLanguageReplacements(
+            UILANG.m("Database: ${availability} • ${tableCount} tables", databaseReplacements),
+            databaseReplacements
+        );
+        const integrityReplacements = {
+            status,
+            ok: Number(d.ok || 0),
+            warnings: Number(d.warnings || 0),
+            errors: Number(d.errors || 0)
+        };
+        const integritySummary = this.completeLanguageReplacements(
+            UILANG.m("Integrity result: ${status} • OK: ${ok} • Warnings: ${warnings} • Errors: ${errors}", integrityReplacements),
+            integrityReplacements
+        );
+        const ddlVersion = this.completeLanguageReplacements(
+            UILANG.m("DDL version: ${version}", { version: d.version || "—" }),
+            { version: d.version || "—" }
+        );
+        const completed = checkedAt ? this.completeLanguageReplacements(
+            UILANG.m("Completed: ${time}", { time: checkedAt }),
+            { time: checkedAt }
+        ) : null;
+        const durationText = duration ? this.completeLanguageReplacements(
+            UILANG.m("Duration: ${duration}", { duration }),
+            { duration }
+        ) : null;
+
+        const html = `
+          <div class="sysz-vbox sysz-dbSummary">
+            <div>${this.escape(ddlVersion)}</div>
+            <div>${this.escape(databaseSummary)}</div>
+            ${justRan ? `<div>${this.escape(integritySummary)}</div>` : ""}
+            ${completed ? `<div>${this.escape(completed)}</div>` : ""}
+            ${durationText ? `<div>${this.escape(durationText)}</div>` : ""}
+          </div>
+          <div class="sysz-dbNotice">${this.escape(intro)}</div>
+          <table class="sysz-dialogTbl">
+            <thead><tr><th>${UILANG.m("Table")}</th><th>${UILANG.m("Engine")}</th>${justRan ? `<th>${UILANG.m("State")}</th><th>${UILANG.m("Message")}</th>` : ""}</tr></thead>
+            <tbody>${body || `<tr><td colspan="${justRan ? 4 : 2}">${UILANG.m("No table info available.")}</td></tr>`}</tbody>
+          </table>`;
+
+        new nxDialog("syszDatabaseDialog", {
+            title: UILANG.m("Database details"),
+            contents: `<div class="sysz-dialogWrap">${html}</div>`,
+            width: 1050,
+            height: 680,
+            buttons: [
+                { label: UILANG.m("Close"), cancel: true, value: "close" },
+                { label: UILANG.m("Run integrity check"), value: "run", disabled: d.available === false }
+            ],
+            callback: value => { if (value === "run") this.confirmDatabaseIntegrityCheck(); }
+        });
+    }
+
+    confirmDatabaseIntegrityCheck() {
+        const contents = `
+          <div class="sysz-dbWarning">
+            <p><strong>${UILANG.m("This operation checks every database table and may take several minutes on a large production instance.")}</strong></p>
+            <p>${UILANG.m("MariaDB may block other database work while individual tables are being checked. Run it during a low-traffic maintenance period.")}</p>
+          </div>`;
+
+        new nxDialog("syszConfirmDatabaseCheck", {
+            title: UILANG.m("Run database integrity check?"),
+            contents,
+            width: 620,
+            icon: "../images/warning.png",
+            iconWidth: 64,
+            buttons: [
+                { label: UILANG.m("Cancel"), cancel: true, value: "cancel", "default": true },
+                { label: UILANG.m("Run check"), value: "run" }
+            ],
+            callback: value => {
+                if (value === "run") this.startAjax("runDbIntegrityCheck", {}, { silent: false });
+            }
+        });
+    }
+
+    databaseStateLabel(state) {
+        switch (String(state || "").toLowerCase()) {
+            case "ok": return UILANG.m("OK");
+            case "warn":
+            case "warning": return UILANG.m("Warning");
+            case "fail":
+            case "failed": return UILANG.m("Failed");
+            case "error": return UILANG.m("Error");
+            case "not_checked": return UILANG.m("Not checked");
+            default: return String(state || "").toUpperCase().replace(/_/g, " ");
+        }
+    }
+
+    completeLanguageReplacements(text, replacements) {
+        let result = String(text || "");
+        for (const [name, value] of Object.entries(replacements || {})) {
+            result = result.split("${" + name + "}").join(String(value));
+        }
+        return result;
+    }
+
     encryptedBadgeHtml(title = "Stored encrypted") {
         return `<span class="enc-badge" title="${this.escape(title)}">${this.lockOpenSvg(11)} Encryption</span>`;
     }
@@ -578,6 +690,7 @@ export default class SystemStatus {
     }
     formatTs(ts){ if(!ts) return "—"; const d=this._parseDate(ts); if(!d) return this.escape(String(ts)); const p=n=>String(n).padStart(2,"0"); return `${p(d.getDate())}.${p(d.getMonth()+1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; }
     formatNice(ts){ if (ts==null) return "—"; const d=this._parseDate(ts); if(!d) return this.escape(String(ts)); const p=n=>String(n).padStart(2,"0"); const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}, ${p(d.getHours())}:${p(d.getMinutes())}`; }
+    formatDuration(ms){ const n=Math.max(0,Number(ms)||0); if(n<1000)return `${Math.round(n)} ms`; const s=n/1000; if(s<60)return `${s.toFixed(s<10?1:0)} s`; const m=Math.floor(s/60); return `${m} min ${Math.round(s%60)} s`; }
     _parseDate(ts){ if (ts instanceof Date) return isNaN(ts.getTime())?null:ts; if (typeof ts==="number"||(/^\d+$/.test(String(ts)))){ let n=Number(ts); if (String(Math.trunc(n)).length<=12) n=n*1000; const d=new Date(n); return isNaN(d.getTime())?null:d; } const norm=String(ts).replace(" ","T").replace(/\.\d+$/,""); const d=new Date(norm); return isNaN(d.getTime())?null:d; }
     bytes(n){ const b=Number(n)||0; if (b<1024) return `${b} B`; const u=["KB","MB","GB","TB","PB"]; let i=-1, v=b; do { v/=1024; i++; } while(v>=1024 && i<u.length-1); return `${v.toFixed(v<10?1:0)} ${u[i]}`; }
     fileName(p){ const s=String(p||""); const a=s.split(/[\\/]/); return a[a.length-1]||s; }

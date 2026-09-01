@@ -26,12 +26,6 @@ if (empty($dbCreds->user) || empty($dbCreds->password) || empty($dbCreds->db) ||
 }
 
 doTheDbUpgrade($dbCreds->user, $dbCreds->password, $dbCreds->db, $dbCreds->host);
-/**
- * Get the current date and time in "Y-m-d H:i:s" format (helper function for logging)
- *
- * @return string Current date and time in "Y-m-d H:i:s" format
- * 
- */
 
 function doTheDbUpgrade($mdbUser, $mdbPass, $mdbDb, $mdbHost)
 {
@@ -48,6 +42,46 @@ function doTheDbUpgrade($mdbUser, $mdbPass, $mdbDb, $mdbHost)
 	});
 	sort($patchDirs, SORT_NATURAL);
 	$latestPatchDir = end($patchDirs);
+
+	// Check for rollup directories
+	$rollupDirs = array_filter(scandir($dbDir), function ($item) use ($dbDir) {
+		return is_dir($dbDir . '/' . $item) && preg_match('/^rollup.*_v(\d+(\.\d+)*)$/', $item);
+	});
+	sort($rollupDirs, SORT_NATURAL);
+	$latestRollupDir = end($rollupDirs);
+
+	// Compare current database version with the latest rollup directory
+	if ($latestRollupDir) {
+		$rollupVersion = substr(strrchr($latestRollupDir, '_'), 1); // Extract version from the part after the last '_' in 'rollup_..._v###'
+		if (version_compare($dbCurVer, $rollupVersion, '<')) {
+			$rollupSqlFile = $dbDir . '/' . $latestRollupDir . '/patch.sql';
+
+			if (!file_exists($rollupSqlFile)) {
+				file_put_contents($autoDbLogFile, "[" . getCurrentDateTime() . "] Error: Rollup SQL patch file not found for version $rollupVersion at $rollupSqlFile\n", FILE_APPEND);
+			} else {
+				// Execute the rollup SQL file
+				$command = sprintf(
+					"mariadb -N -s -u%s -p%s %s -h%s < %s 2>&1",
+					escapeshellarg($mdbUser),
+					escapeshellarg($mdbPass),
+					escapeshellarg($mdbDb),
+					escapeshellarg($mdbHost),
+					escapeshellarg($rollupSqlFile)
+				);
+
+				exec($command, $output, $returnVar);
+				if ($returnVar !== 0) {
+					file_put_contents($autoDbLogFile, "[" . getCurrentDateTime() . "] Error executing rollup SQL patch for version $rollupVersion. Command: $command\nOutput: " . implode("\n", $output) . "\n", FILE_APPEND);
+					array_push($returnData['result'], "Failed rollup SQL patch $rollupVersion. Aborting update sequence.");
+				} else {
+					file_put_contents($autoDbLogFile, "[" . getCurrentDateTime() . "] Successfully applied rollup SQL patch for version $rollupVersion.\n", FILE_APPEND);
+					array_push($returnData['result'], "Applied rollup SQL patch $rollupVersion");
+					// Exit gracefully after applying rollup patch
+					return;
+				}
+			}
+		}
+	}
 
 	// Compare current database version with the latest patch directory
 	if ($dbCurVer !== $latestPatchDir) {
@@ -91,6 +125,12 @@ function doTheDbUpgrade($mdbUser, $mdbPass, $mdbDb, $mdbHost)
 	}
 }
 
+/**
+ * Get the current date and time in "Y-m-d H:i:s" format (helper function for logging)
+ *
+ * @return string Current date and time in "Y-m-d H:i:s" format
+ * 
+ */
 function getCurrentDateTime()
 {
 	return date("Y-m-d H:i:s");

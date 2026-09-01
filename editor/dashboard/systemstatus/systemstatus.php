@@ -32,6 +32,7 @@
 	/* ---- Config ---- */
 	define('OASYS_ROOT', realpath(__DIR__ . "/../../..")); // repo root
 	define('VER_FILE', OASYS_ROOT . "/oasys_ver.txt");    // version file
+	define('DB_INTEGRITY_LOCK_NAME', 'oasys.systemstatus.database_integrity');
 
 	/* Dispatch */
 	if ($action && function_exists($action)) {
@@ -72,9 +73,10 @@
 	    // Backups (same place the backup app writes): backupRestore/*.zip
 	    $bk = findLatestBackupsFromBackupRestore(8);
 
-		// NEW: Database version + integrity summary
+		// Live database metadata only. Full integrity checks are explicit actions.
+		// This path must remain cheap because it runs when the widget loads.
 		$dbVer = getDbVersion($db);
-		$dbCheck = dbIntegrityOverview($db); // ['status','ok','warnings','errors','tables', optionally 'error']
+		$dbCheck = dbLiveOverview($db);
 		$mediaCheck = mediaHealthOverview();
 
 		$returnData['data'] = [
@@ -191,13 +193,37 @@
 	function showDbDetails($data, rixPDO &$db, array &$returnData, userAuth &$myAuth)
 	{
 		$dbVer = getDbVersion($db);
-		$dbCheck = dbIntegrityOverview($db);
+		$dbCheck = dbLiveOverview($db);
 		$returnData['data'] = array_merge($dbCheck, ['version' => $dbVer]);
 	}
 
 	function showMediaDetails($data, rixPDO &$db, array &$returnData, userAuth &$myAuth): void
 	{
 		$returnData['data'] = mediaHealthOverview(true);
+	}
+
+	/** Run the deliberately expensive integrity check only after an explicit admin request. */
+	function runDbIntegrityCheck($data, rixPDO &$db, array &$returnData, userAuth &$myAuth): void
+	{
+		$lock = $db->fetchValue('SELECT GET_LOCK(?, 0)', [DB_INTEGRITY_LOCK_NAME]);
+		if (!empty($lock['error'])) {
+			$returnData['errorCode'] = 'dbIntegrityLockFailed';
+			$returnData['error'] = 'The database integrity-check lock could not be acquired.';
+			return;
+		}
+		if ((int)($lock['data'] ?? 0) !== 1) {
+			$returnData['errorCode'] = 'dbIntegrityAlreadyRunning';
+			$returnData['error'] = 'Another database integrity check is already running.';
+			return;
+		}
+
+		try {
+			$result = executeDbIntegrityCheck($db);
+			$result['version'] = getDbVersion($db);
+			$returnData['data'] = $result;
+		} finally {
+			$db->fetchValue('SELECT RELEASE_LOCK(?)', [DB_INTEGRITY_LOCK_NAME]);
+		}
 	}
 
 	/* =========================
@@ -424,77 +450,138 @@
 	}
 
 
-	/** Integrity overview using CHECK TABLE ... QUICK on all base tables */
-	function dbIntegrityOverview(rixPDO $db): array
+	/**
+	 * Cheap table metadata query used by normal dashboard requests.
+	 * Keeping this as one information_schema query avoids the previous per-table lookup.
+	 */
+	function dbTableMetadata(rixPDO $db): array
 	{
-		// Discover base tables
-		$tables = [];
-		try {
-			$res = $db->fetchTable("SHOW FULL TABLES WHERE Table_type='BASE TABLE'", []);
-			foreach (($res['data'] ?? []) as $r) {
-				// key name is "Tables_in_<db>" — take first column value
-				$vals = array_values($r);
-				if (!empty($vals[0])) $tables[] = $vals[0];
-			}
-		} catch (Throwable $e) {
-			return ['status' => 'fail', 'ok' => 0, 'warnings' => 0, 'errors' => 1, 'tables' => [], 'error' => $e->getMessage()];
+		$res = $db->fetchTable("
+			SELECT TABLE_NAME AS name, ENGINE AS engine
+			FROM information_schema.TABLES
+			WHERE TABLE_SCHEMA = DATABASE()
+			  AND TABLE_TYPE = 'BASE TABLE'
+			ORDER BY TABLE_NAME
+		", []);
+
+		if (!empty($res['error'])) {
+			return ['ok' => false, 'tables' => [], 'error' => trim(strip_tags((string)$res['error']))];
 		}
 
-	    $ok=0; $warn=0; $err=0; $out=[];
+		$tables = [];
+		foreach (($res['data'] ?? []) as $row) {
+			$tables[] = [
+				'name' => (string)($row['name'] ?? ''),
+				'engine' => $row['engine'] ?? null,
+			];
+		}
+		return ['ok' => true, 'tables' => $tables, 'error' => null];
+	}
 
-		foreach ($tables as $t) {
-			$state = 'UNKNOWN';
-			$msg = '';
-			try {
-				$chk = $db->fetchTable("CHECK TABLE `$t` QUICK", []);
-				$row0 = ($chk['data'][0] ?? null);
-				if ($row0) {
-					$msgType = strtoupper($row0['Msg_type'] ?? '');
-					$msgText = $row0['Msg_text'] ?? '';
-					$msg = ($msgType ? "$msgType: " : "") . $msgText;
-
-	                if (strcasecmp($msgText,'OK')===0 || strcasecmp($msgType,'status')===0) {
-	                    $state='OK'; $ok++;
-	                } elseif (stripos($msgText,'warning')!==false || strcasecmp($msgType,'warning')===0) {
-	                    $state='WARNING'; $warn++;
-					} else {
-						$state = $msgType ?: 'ERROR';
-						if (trim($msgText) !== '') $err++;
-					}
-				}
-			} catch (Throwable $e) {
-				$state = 'ERROR';
-				$msg = $e->getMessage();
-				$err++;
-			}
-
-			// Attach engine + approximate rows
-        	$engine = null; $rowsEst = null;
-			try {
-				$info = $db->fetchTable("
-                SELECT ENGINE, TABLE_ROWS
-                  FROM information_schema.TABLES
-                 WHERE TABLE_SCHEMA = DATABASE()
-                   AND TABLE_NAME = ?
-                 LIMIT 1
-            ", [$t]);
-				if (!empty($info['data'][0])) {
-					$engine = $info['data'][0]['ENGINE'] ?? null;
-					$rowsEst = $info['data'][0]['TABLE_ROWS'] ?? null;
-				}
-        	} catch (Throwable $e) {}
-
-			$out[] = [
-				'name' => $t,
-				'engine' => $engine,
-				'rows' => $rowsEst,
-				'state' => $state,
-				'msg' => $msg
+	/** Return current, inexpensive database availability and table metadata. */
+	function dbLiveOverview(rixPDO $db): array
+	{
+		$metadata = dbTableMetadata($db);
+		if (!$metadata['ok']) {
+			return [
+				'available' => false,
+				'status' => 'fail',
+				'tableCount' => 0,
+				'tables' => [],
+				'error' => $metadata['error'],
 			];
 		}
 
+		return [
+			'available' => true,
+			'status' => 'ok',
+			'tableCount' => count($metadata['tables']),
+			'tables' => $metadata['tables'],
+		];
+	}
+
+	/** Execute CHECK TABLE sequentially and correctly inspect every returned message row. */
+	function executeDbIntegrityCheck(rixPDO $db): array
+	{
+		$started = microtime(true);
+		$metadata = dbTableMetadata($db);
+		if (!$metadata['ok']) {
+			return [
+				'available' => false,
+				'status' => 'fail',
+				'ok' => 0,
+				'warnings' => 0,
+				'errors' => 1,
+				'tableCount' => 0,
+				'tables' => [],
+				'checkedAt' => (new DateTimeImmutable())->format('Y-m-d H:i:s.v'),
+				'durationMs' => (int)round((microtime(true) - $started) * 1000),
+				'error' => $metadata['error'],
+			];
+		}
+
+		$ok = 0;
+		$warn = 0;
+		$err = 0;
+		$out = [];
+
+		foreach ($metadata['tables'] as $table) {
+			$tableName = $table['name'];
+			$quotedName = '`' . str_replace('`', '``', $tableName) . '`';
+			$check = $db->fetchTable("CHECK TABLE $quotedName QUICK", []);
+			$summary = summarizeDbCheckMessages($check);
+
+			if ($summary['state'] === 'OK') $ok++;
+			elseif ($summary['state'] === 'WARNING' || $summary['state'] === 'UNKNOWN') $warn++;
+			else $err++;
+
+			$out[] = $table + $summary;
+		}
+
 		$status = $err > 0 ? 'fail' : ($warn > 0 ? 'warn' : 'ok');
-		return ['status' => $status, 'ok' => $ok, 'warnings' => $warn, 'errors' => $err, 'tables' => $out];
+		return [
+			'available' => true,
+			'status' => $status,
+			'ok' => $ok,
+			'warnings' => $warn,
+			'errors' => $err,
+			'tableCount' => count($out),
+			'tables' => $out,
+			'checkedAt' => (new DateTimeImmutable())->format('Y-m-d H:i:s.v'),
+			'durationMs' => (int)round((microtime(true) - $started) * 1000),
+		];
+	}
+
+	function summarizeDbCheckMessages(array $check): array
+	{
+		if (!empty($check['error'])) {
+			return ['state' => 'ERROR', 'msg' => trim(strip_tags((string)$check['error']))];
+		}
+
+		$severity = 0; // 0=OK, 1=warning/unknown, 2=error
+		$sawOk = false;
+		$messages = [];
+		foreach (($check['data'] ?? []) as $row) {
+			$type = strtoupper(trim((string)($row['Msg_type'] ?? '')));
+			$text = trim((string)($row['Msg_text'] ?? ''));
+			if ($type !== '' || $text !== '') $messages[] = ($type !== '' ? "$type: " : '') . $text;
+
+			if ($type === 'ERROR' || preg_match('/corrupt|error|failed|invalid/i', $text)) {
+				$severity = 2;
+			} elseif ($severity < 2 && ($type === 'WARNING' || stripos($text, 'warning') !== false)) {
+				$severity = 1;
+			} elseif ($type === 'STATUS') {
+				if (strcasecmp($text, 'OK') === 0) $sawOk = true;
+				elseif ($severity === 0) $severity = 1;
+			}
+		}
+
+		if ($severity === 2) $state = 'ERROR';
+		elseif ($severity === 1) $state = 'WARNING';
+		elseif ($sawOk) $state = 'OK';
+		else $state = 'UNKNOWN';
+
+		return ['state' => $state, 'msg' => implode(' | ', array_values(array_unique($messages)))];
 	}
 
 	/* =========================
