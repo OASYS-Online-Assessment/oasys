@@ -116,7 +116,7 @@ oasysRegisterActionAllowlists([
     'editor/dashboard/systemstatus/systemstatus.php' => [
         'readOverview', 'listFrontEndOnline', 'readSettings', 'listBackEndOnline',
         'showVersionDetails', 'showStorageDetails', 'showBackupDetails',
-        'syscheckDetails', 'showDbDetails',
+        'syscheckDetails', 'showDbDetails', 'runDbIntegrityCheck',
     ],
     'editor/dashboard/testresults/testresults.php' => ['listResults', 'fetchStats'],
     'editor/dashboard/userwidget/userwidget.php' => [
