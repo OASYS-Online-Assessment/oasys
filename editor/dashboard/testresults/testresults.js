@@ -248,7 +248,7 @@ export default class TestResults {
     /* =========================
        UI actions
     ========================== */
-    refresh(opts = {}){ this.startAjax('listResults', { scope: this.scope }, opts); }
+    // refresh(opts = {}){ this.startAjax('listResults', { scope: this.scope }, opts); }
 
     render() {
         const $tbody = $("#" + this.id + "_tbody");
