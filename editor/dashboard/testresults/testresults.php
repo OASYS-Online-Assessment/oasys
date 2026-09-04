@@ -194,16 +194,30 @@ function tr_detectScoringTimestampColumn(rixPDO $db): ?string {
 		$ids = array_map(fn($t) => (int)$t['id'], $tests);
 		$placeholders = implode(',', array_fill(0, count($ids), '?'));
 
-    $activityRows = $db->fetchTable(
-        "SELECT activity.testId,
-                activity.tsActiveServer,
-                " . tr_loginAccessParentSql('logins', 'templateLogin') . " AS loginParent
-         FROM activity
-         JOIN logins ON logins.id = activity.loginId
-         LEFT JOIN logins templateLogin ON templateLogin.id = logins.parentTemplateId
-         WHERE activity.testId IN ($placeholders)",
-        $ids
-    )['data'] ?? [];
+	$accessParentSql = tr_loginAccessParentSql('logins', 'templateLogin');
+	$newCountSql = '0 AS newCount';
+	$queryParams = [];
+	if ($lastLoginTS) {
+		$newCountSql = 'SUM(CASE WHEN activity.tsActiveServer > ? THEN 1 ELSE 0 END) AS newCount';
+		$queryParams[] = date('Y-m-d H:i:s', $lastLoginTS);
+	}
+	$queryParams = array_merge($queryParams, $ids);
+
+	// Aggregate by access folder in SQL. Permission checks still happen in PHP,
+	// but the result set scales with tests/folders instead of every assessment.
+	$activityRows = $db->fetchTable(
+		"SELECT activity.testId,
+				$accessParentSql AS loginParent,
+				COUNT(*) AS totalResults,
+				MAX(activity.tsActiveServer) AS updatedTs,
+				$newCountSql
+		 FROM activity
+		 JOIN logins ON logins.id = activity.loginId
+		 LEFT JOIN logins templateLogin ON templateLogin.id = logins.parentTemplateId
+		 WHERE activity.testId IN ($placeholders)
+		 GROUP BY activity.testId, $accessParentSql",
+		$queryParams
+	)['data'] ?? [];
 
     if (empty($activityRows)) {
         $returnData['data']        = [];
@@ -221,21 +235,19 @@ function tr_detectScoringTimestampColumn(rixPDO $db): ?string {
             continue;
         }
         $tid = (int)$row['testId'];
-        $updatedTs = strtotime($row['tsActiveServer'] ?? '');
-        $updatedTs = ($updatedTs !== false) ? $updatedTs : null;
+		$updatedTs = strtotime($row['updatedTs'] ?? '');
+		$updatedTs = ($updatedTs !== false) ? $updatedTs : null;
         if (!isset($aggByTest[$tid])) {
             $aggByTest[$tid] = [
                 'total'      => 0,
                 'updated_ts' => null
             ];
         }
-        $aggByTest[$tid]['total']++;
+		$aggByTest[$tid]['total'] += (int)($row['totalResults'] ?? 0);
         if ($updatedTs !== null && ($aggByTest[$tid]['updated_ts'] === null || $updatedTs > $aggByTest[$tid]['updated_ts'])) {
             $aggByTest[$tid]['updated_ts'] = $updatedTs;
         }
-        if ($lastLoginTS && $updatedTs !== null && $updatedTs > $lastLoginTS) {
-            $newByTest[$tid] = ($newByTest[$tid] ?? 0) + 1;
-        }
+		$newByTest[$tid] = ($newByTest[$tid] ?? 0) + (int)($row['newCount'] ?? 0);
     }
 
     foreach ($aggByTest as $tid => $row) {

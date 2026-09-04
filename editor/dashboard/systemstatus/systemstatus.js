@@ -18,6 +18,7 @@ export default class SystemStatus {
         this._settingsRows  = null;
         this._settingsDiffs = null;
         this._wantSettingsDialog = false;
+		this._frontEndCount = 0;
 
         // Widget shell
         this.myContainer = createDashWidget(container, id, { title: "System status" });
@@ -56,6 +57,10 @@ export default class SystemStatus {
                     this.openSettingsDialog();
                     return;
                 }
+				if (action === "showMediaDetails") {
+					this.confirmMediaIntegrityCheck();
+					return;
+				}
 
                 let payload = $el.data("payload") || {};
                 if (typeof payload === "string") { try { payload = JSON.parse(payload); } catch { payload = {}; } }
@@ -103,11 +108,14 @@ export default class SystemStatus {
             return;
         }
         if (res.error) {
-            const localizedError = res.errorCode === "dbIntegrityLockFailed"
-                ? UILANG.m("The database integrity-check lock could not be acquired.")
-                : (res.errorCode === "dbIntegrityAlreadyRunning"
-                    ? UILANG.m("Another database integrity check is already running.")
-                    : res.error);
+			const errorMessages = {
+				dbIntegrityLockFailed: "The database integrity-check lock could not be acquired.",
+				dbIntegrityAlreadyRunning: "Another database integrity check is already running.",
+				activeTestTakers: "The integrity check cannot run while test takers are active. Please try again when all front-end sessions have ended."
+			};
+			const localizedError = errorMessages[res.errorCode]
+				? UILANG.m(errorMessages[res.errorCode])
+				: res.error;
             new nxDialog("error", {
                 buttons:[{label:"OK",default:true,cancel:true,value:"ok"}],
                 contents:formatActionErrorMessage(`<strong>Sorry! The action cannot be completed.</strong><br><p>${localizedError}</p>`),
@@ -233,7 +241,7 @@ export default class SystemStatus {
                 break;
             }
 
-			case "showMediaDetails": {
+			case "runMediaIntegrityCheck": {
 				const d = res.data || {};
 				const issues = d.issues || { media: [], customContent: [] };
 				const renderArea = (title, rows) => {
@@ -267,6 +275,7 @@ export default class SystemStatus {
 						if (value === 'settings') window.location.assign(settingsUrl);
 					}
 				});
+				this.refresh({ silent: true });
 				break;
 			}
 
@@ -334,6 +343,7 @@ export default class SystemStatus {
             }), { tableCount: Number(db.tableCount || 0) });
 
         const feCount = Number(fe.count || 0);
+		this._frontEndCount = feCount;
         const beCount = be.notAvailable ? 'n/a' : Number(be.count || 0);
 
         // --- Tiles with fixed area classes ---
@@ -352,7 +362,7 @@ export default class SystemStatus {
         const tileDb = `
       <div class="sysz-card sysz-area-db">
         <div class="sysz-title">${icon('db')}Database</div>
-        <a href="#" class="sysz-healthRow ${db.status==='fail'?'danger':(db.status==='warn'?'warn':'ok')}" data-action="showDbDetails">
+        <a href="#" class="sysz-healthRow" data-action="showDbDetails">
           <span>Database status</span><strong>${this.escape(String(db.version || '—'))}</strong>
         </a>
         ${dbSub ? `<div class="sysz-sub">${this.escape(dbSub)}</div>` : ``}
@@ -379,8 +389,8 @@ export default class SystemStatus {
           <a href="#" class="sysz-healthRow ${sc.status==='fail'?'danger':(sc.status==='warn'?'warn':'ok')}" data-action="syscheckDetails">
             <span>System</span><strong>${this.escape(String(sc.status==='ok'?'OK':(sc.status==='warn'?'Warnings':'Failures')))}</strong>
           </a>
-          <a href="#" class="sysz-healthRow ${media.status==='ok'?'ok':'warn'}" data-action="showMediaDetails">
-            <span>Media</span><strong>${media.issueCount > 0 ? this.escape(`${media.issueCount} issue${media.issueCount === 1 ? '' : 's'}`) : 'OK'}</strong>
+          <a href="#" class="sysz-healthRow ${media.status==='ok'?'ok':(media.status==='warn'?'warn':'')}" data-action="showMediaDetails">
+            <span>Media</span><strong>${media.status === 'not_checked' ? UILANG.m('Run check') : (media.issueCount > 0 ? this.escape(`${media.issueCount} issue${media.issueCount === 1 ? '' : 's'}`) : 'OK')}</strong>
           </a>
         </div>
         ${media.issueCount > 0 ? `<div class="sysz-sub sysz-mediaHint">Open System Settings to fix</div>` : ``}
@@ -554,7 +564,7 @@ export default class SystemStatus {
         const duration = justRan && d.durationMs != null ? this.formatDuration(d.durationMs) : null;
         const intro = justRan
             ? UILANG.m("This integrity result is not stored. Closing this dialog discards it; future views show fresh metadata only.")
-            : UILANG.m("This is live, inexpensive database metadata. No table integrity scan was performed.");
+            : "";
 
         const body = (d.tables || []).map(t => {
             const state = String(t.state || "").toUpperCase();
@@ -598,25 +608,29 @@ export default class SystemStatus {
             { duration }
         ) : null;
 
+        const resultTone = d.status === 'fail' ? 'danger' : (d.status === 'warn' ? 'warn' : 'ok');
         const html = `
-          <div class="sysz-vbox sysz-dbSummary">
-            <div>${this.escape(ddlVersion)}</div>
-            <div>${this.escape(databaseSummary)}</div>
-            ${justRan ? `<div>${this.escape(integritySummary)}</div>` : ""}
-            ${completed ? `<div>${this.escape(completed)}</div>` : ""}
-            ${durationText ? `<div>${this.escape(durationText)}</div>` : ""}
+          <div class="sysz-dbHeader ${justRan ? '' : 'isCompact'}">
+            <div class="sysz-dbSummary">
+              <div class="sysz-dbMetric"><span>${UILANG.m('DDL version')}</span><strong>${this.escape(String(d.version || '—'))}</strong></div>
+              <div class="sysz-dbMetric"><span>${UILANG.m('Tables')}</span><strong>${this.escape(String(Number(d.tableCount || 0)))}</strong></div>
+              ${justRan ? `<div class="sysz-dbMetric ${resultTone}"><span>${UILANG.m('Integrity')}</span><strong>${this.escape(status)}</strong></div>` : ''}
+              ${justRan ? `<div class="sysz-dbMetric"><span>${UILANG.m('OK / warnings / errors')}</span><strong>${Number(d.ok || 0)} / ${Number(d.warnings || 0)} / ${Number(d.errors || 0)}</strong></div>` : ''}
+              ${completed ? `<div class="sysz-dbMetric"><span>${UILANG.m('Completed')}</span><strong>${this.escape(checkedAt)}</strong></div>` : ''}
+              ${durationText ? `<div class="sysz-dbMetric"><span>${UILANG.m('Duration')}</span><strong>${this.escape(duration)}</strong></div>` : ''}
+            </div>
+            ${intro ? `<div class="sysz-dbNotice">${this.escape(intro)}</div>` : ''}
           </div>
-          <div class="sysz-dbNotice">${this.escape(intro)}</div>
-          <table class="sysz-dialogTbl">
+          ${justRan ? `<table class="sysz-dialogTbl">
             <thead><tr><th>${UILANG.m("Table")}</th><th>${UILANG.m("Engine")}</th>${justRan ? `<th>${UILANG.m("State")}</th><th>${UILANG.m("Message")}</th>` : ""}</tr></thead>
             <tbody>${body || `<tr><td colspan="${justRan ? 4 : 2}">${UILANG.m("No table info available.")}</td></tr>`}</tbody>
-          </table>`;
+          </table>` : ''}`;
 
         new nxDialog("syszDatabaseDialog", {
             title: UILANG.m("Database details"),
-            contents: `<div class="sysz-dialogWrap">${html}</div>`,
-            width: 1050,
-            height: 680,
+            contents: `<div class="sysz-dialogWrap sysz-dbDialogWrap ${justRan ? 'hasResults' : 'isCompact'}">${html}</div>`,
+            width: justRan ? 1050 : 640,
+            height: justRan ? 680 : 330,
             buttons: [
                 { label: UILANG.m("Close"), cancel: true, value: "close" },
                 { label: UILANG.m("Run integrity check"), value: "run", disabled: d.available === false }
@@ -626,10 +640,12 @@ export default class SystemStatus {
     }
 
     confirmDatabaseIntegrityCheck() {
+		const activeCount = Number(this._frontEndCount || 0);
         const contents = `
           <div class="sysz-dbWarning">
             <p><strong>${UILANG.m("This operation checks every database table and may take several minutes on a large production instance.")}</strong></p>
             <p>${UILANG.m("MariaDB may block other database work while individual tables are being checked. Run it during a low-traffic maintenance period.")}</p>
+			${activeCount > 0 ? `<p class="sysz-checkBlocked"><strong>${activeCount}</strong> ${UILANG.m('test taker(s) are currently active. The check is disabled until they have finished.')}</p>` : ''}
           </div>`;
 
         new nxDialog("syszConfirmDatabaseCheck", {
@@ -640,13 +656,35 @@ export default class SystemStatus {
             iconWidth: 64,
             buttons: [
                 { label: UILANG.m("Cancel"), cancel: true, value: "cancel", "default": true },
-                { label: UILANG.m("Run check"), value: "run" }
+				{ label: UILANG.m("Run check"), value: "run", disabled: activeCount > 0 }
             ],
             callback: value => {
                 if (value === "run") this.startAjax("runDbIntegrityCheck", {}, { silent: false });
             }
         });
     }
+
+	confirmMediaIntegrityCheck() {
+		const activeCount = Number(this._frontEndCount || 0);
+		new nxDialog('syszConfirmMediaCheck', {
+			title: UILANG.m('Run media integrity check?'),
+			width: 640,
+			icon: '../images/warning.png',
+			iconWidth: 64,
+			contents: `<div class="sysz-dbWarning">
+				<p><strong>${UILANG.m('This operation scans all registered media and custom-content files and may take several minutes on a large production instance.')}</strong></p>
+				<p>${UILANG.m('Run it during a quiet maintenance period to avoid competing with assessments for disk and database resources.')}</p>
+				${activeCount > 0 ? `<p class="sysz-checkBlocked"><strong>${activeCount}</strong> ${UILANG.m('test taker(s) are currently active. The check is disabled until they have finished.')}</p>` : ''}
+			</div>`,
+			buttons: [
+				{ label: UILANG.m('Cancel'), cancel: true, value: 'cancel', 'default': true },
+				{ label: UILANG.m('Run check'), value: 'run', disabled: activeCount > 0 }
+			],
+			callback: value => {
+				if (value === 'run') this.startAjax('runMediaIntegrityCheck', {}, { silent: false });
+			}
+		});
+	}
 
     databaseStateLabel(state) {
         switch (String(state || "").toLowerCase()) {

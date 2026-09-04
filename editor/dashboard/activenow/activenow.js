@@ -194,6 +194,9 @@ export default class ActiveNow {
 
         // initial load
         this.refresh();
+		// refresh() is intentionally manual/no-op at startup; do not hold the
+		// dashboard readiness contract until its timeout.
+		this.markReady?.();
     }
 
     destroy() {

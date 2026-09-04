@@ -77,7 +77,8 @@
 		// This path must remain cheap because it runs when the widget loads.
 		$dbVer = getDbVersion($db);
 		$dbCheck = dbLiveOverview($db);
-		$mediaCheck = mediaHealthOverview();
+		// A full media scan is deliberately not run during dashboard startup.
+		$mediaCheck = ['status' => 'not_checked', 'issueCount' => null];
 
 		$returnData['data'] = [
 			'version' => $ver,
@@ -197,14 +198,16 @@
 		$returnData['data'] = array_merge($dbCheck, ['version' => $dbVer]);
 	}
 
-	function showMediaDetails($data, rixPDO &$db, array &$returnData, userAuth &$myAuth): void
+	function runMediaIntegrityCheck($data, rixPDO &$db, array &$returnData, userAuth &$myAuth): void
 	{
+		if (!allowExpensiveCheck($returnData)) return;
 		$returnData['data'] = mediaHealthOverview(true);
 	}
 
 	/** Run the deliberately expensive integrity check only after an explicit admin request. */
 	function runDbIntegrityCheck($data, rixPDO &$db, array &$returnData, userAuth &$myAuth): void
 	{
+		if (!allowExpensiveCheck($returnData)) return;
 		$lock = $db->fetchValue('SELECT GET_LOCK(?, 0)', [DB_INTEGRITY_LOCK_NAME]);
 		if (!empty($lock['error'])) {
 			$returnData['errorCode'] = 'dbIntegrityLockFailed';
@@ -224,6 +227,18 @@
 		} finally {
 			$db->fetchValue('SELECT RELEASE_LOCK(?)', [DB_INTEGRITY_LOCK_NAME]);
 		}
+	}
+
+	function allowExpensiveCheck(array &$returnData): bool
+	{
+		$traffic = expensiveCheckTrafficState();
+		if (!$traffic['blocked']) return true;
+
+		$count = (int)$traffic['frontEndCount'];
+		$returnData['errorCode'] = 'activeTestTakers';
+		$returnData['error'] = "The integrity check was not started because $count test taker(s) are currently active.";
+		$returnData['data'] = $traffic;
+		return false;
 	}
 
 	/* =========================

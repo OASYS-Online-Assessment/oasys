@@ -18,6 +18,7 @@ class mediaClass
 	private ?uiLang $uiLang;
 	private ?userAuth $myAuth;
 	private array $mediaLibrary;
+	private array $mediaFilesIndex = [];
 	private string $mediaLocation;
 	private string $mediaPath = __DIR__ . '/../../media';
 	private string $customContentPath = __DIR__ . '/../../customContent';
@@ -33,6 +34,7 @@ class mediaClass
 		//init database connections
 		$this->db = $db;
 		$this->fetchMediaLibrary();
+		$this->fetchMediaFilesIndex();
 		$this->mediaLocation = $settings['mediaLocation'];
 	}
 
@@ -49,7 +51,17 @@ class mediaClass
 	private function fetchMediaLibrary(): void
 	{
 		$res = $this->db->fetchTable("SELECT id, `name`, filetype, parent, filesize, CONCAT('/', parent, '/', id, '.dat') as 'path' FROM media", [], 'id');
-		$this->mediaLibrary = $res['data'];
+		$this->mediaLibrary = $res['data'] ?? [];
+	}
+
+	/** Load database-backed media presence and sizes once, avoiding two queries per asset. */
+	private function fetchMediaFilesIndex(): void
+	{
+		$res = $this->db->fetchTable('SELECT id, OCTET_LENGTH(data) AS filesize FROM mediaFiles', [], 'id');
+		foreach (($res['data'] ?? []) as $id => $row) {
+			$mediaId = (int)($row['id'] ?? $id);
+			$this->mediaFilesIndex[$mediaId] = (int)($row['filesize'] ?? 0);
+		}
 	}
 
 	private function fetchAssetListFromDisk(): array
@@ -414,12 +426,10 @@ class mediaClass
 	//check if file exists on disk and in database
 	private function fileExists($id, $path): array
 	{
-		$return = ['disk' => file_exists($this->mediaPath . $path), 'database' => false];
-		$res = $this->db->fetchValue("SELECT id FROM mediaFiles WHERE id = :id", ['id' => $id]);
-		if ($res['rows'] === 1) {
-			$return['database'] = true;
-		}
-		return $return;
+		return [
+			'disk' => file_exists($this->mediaPath . $path),
+			'database' => array_key_exists((int)$id, $this->mediaFilesIndex),
+		];
 	}
 
 	private function fileSizeDisk($path): int
@@ -429,8 +439,7 @@ class mediaClass
 
 	private function fileSizeDatabase($id): int
 	{
-		$res = $this->db->fetchValue("SELECT OCTET_LENGTH(data) FROM mediaFiles WHERE id = :id", ['id' => $id]);
-		return $res['data'];
+		return $this->mediaFilesIndex[(int)$id] ?? 0;
 	}
 
 	private function updateFileSize($id, $size): void

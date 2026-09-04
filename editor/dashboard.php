@@ -65,9 +65,7 @@ require_once __DIR__ . '/inc/php/cacheIncludes.php';       // required for cache
 
     $hasTrees = (isset($root['user']) || isset($root['admin']));
 
-    // We only pre-load widget **CSS**; JS is imported by dashboard.js (ESM)
-    $includedCSS = [];
-
+    // Widget CSS and JS are loaded by dashboard.js when their scope is first shown.
     // Determine current admin role (highest wins)
     $currentAdminRole = null;
     if (isset($myAuth)) {
@@ -80,7 +78,7 @@ require_once __DIR__ . '/inc/php/cacheIncludes.php';       // required for cache
         }
     }
 
-    $collectMeta = function (array $w, string $key) use ($dashboardPath, &$includedCSS) {
+    $collectMeta = function (array $w, string $key) use ($dashboardPath) {
         $w = array_change_key_case($w, CASE_LOWER); // be forgiving with keys
 
         $path      = isset($w['path']) ? rtrim($w['path'], '/') . '/' : '';
@@ -106,13 +104,6 @@ require_once __DIR__ . '/inc/php/cacheIncludes.php';       // required for cache
             $roles = array_values(array_unique(array_map('strtolower', $rolesRaw)));
         } else {
             $roles = null; // visible to all admin types if section is "admin"
-        }
-
-        if (!empty($css)) {
-            if (empty($includedCSS[$cssPath])) {
-                includeCSS($cssPath);
-                $includedCSS[$cssPath] = true;
-            }
         }
 
         return [

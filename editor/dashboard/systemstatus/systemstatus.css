@@ -398,6 +398,118 @@ a.sysz-pill:hover { filter: brightness(.98); text-decoration: none; }
 .sysz-healthRow:hover { filter: brightness(.98); text-decoration: none; }
 .sysz-mediaHint { font-size: 10px; line-height: 11px; }
 
+/* Database check summary */
+.sysz-dbDialogWrap {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.sysz-dbDialogWrap.hasResults {
+    height: min(600px, 62vh);
+    max-height: none;
+}
+
+.sysz-dbDialogWrap .sysz-dialogTbl {
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    max-width: 100%;
+    max-height: none;
+    overflow: hidden;
+}
+
+.sysz-dbDialogWrap .sysz-dialogTbl th,
+.sysz-dbDialogWrap .sysz-dialogTbl td {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.sysz-dbHeader {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
+    margin: -2px -4px 0;
+    padding: 2px 4px 10px;
+    background: #fff;
+    box-shadow: 0 8px 12px -12px rgba(18, 40, 62, .55);
+}
+
+.sysz-dbSummary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
+    margin-bottom: 10px;
+}
+
+.sysz-dbHeader.isCompact .sysz-dbSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sysz-dbHeader.isCompact {
+    position: static;
+    box-shadow: none;
+}
+
+.sysz-dbDialogWrap .sysz-dialogTbl thead {
+    flex: 0 0 auto;
+}
+
+.sysz-dbDialogWrap .sysz-dialogTbl tbody {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+
+.sysz-dbMetric {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid #d8e3ed;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.sysz-dbMetric span {
+    color: #607083;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.sysz-dbMetric strong {
+    overflow: hidden;
+    color: #17324b;
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sysz-dbMetric.ok { border-color: #b8dfc7; background: #e7f6ed; }
+.sysz-dbMetric.warn { border-color: #efd99c; background: #fff5dc; }
+.sysz-dbMetric.danger { border-color: #edbcbc; background: #fdeaea; }
+
+.sysz-checkBlocked {
+    padding: 10px 12px;
+    border: 1px solid #edbcbc;
+    border-radius: 7px;
+    background: #fdeaea;
+    color: #8a1f1f;
+}
+
+@media (max-width: 720px) {
+    .sysz-dbSummary { grid-template-columns: 1fr; }
+}
+
 /* Media-check details */
 .sysz-mediaDetails {
     display: grid;

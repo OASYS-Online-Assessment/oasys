@@ -551,9 +551,31 @@ async function filecheck() {
    Media check dialog
    ========================= */
 async function mediaCheck() {
-  const ret = await startAjax('mediaCheck', {});
-  if (ret.error || !ret.data) return;
-  showMediaCheckDialog(ret.data);
+	const safety = await startAjax('mediaCheckSafety', {});
+	if (safety.error || !safety.data) return;
+	const activeCount = Number(safety.data.frontEndCount || 0);
+
+	new nxDialog('mediaCheckConfirm', {
+		width: 660,
+		title: 'Run media check?',
+		icon: '../images/warning.png',
+		iconWidth: 64,
+		contents: `<div class="mediaCheckConfirm">
+			<p><strong>This check scans all media and custom-content files and may take several minutes on a large production system.</strong></p>
+			<p>Run it during a quiet maintenance period to avoid competing with assessments for disk and database resources.</p>
+			${activeCount > 0 ? `<p class="mediaCheckTrafficWarning"><strong>${activeCount} test taker${activeCount === 1 ? '' : 's'} currently active.</strong> The check is disabled until all front-end sessions have ended.</p>` : ''}
+		</div>`,
+		buttons: [
+			{ label: 'Cancel', value: 'cancel', cancel: true, 'default': true },
+			{ label: 'Run check', value: 'run', disabled: activeCount > 0 }
+		],
+		callback: async value => {
+			if (value !== 'run') return;
+			const ret = await startAjax('mediaCheck', {});
+			if (ret.error || !ret.data) return;
+			showMediaCheckDialog(ret.data);
+		}
+	});
 }
 
 function splitMediaCheckLog(log) {

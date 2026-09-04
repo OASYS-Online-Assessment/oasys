@@ -304,7 +304,19 @@ function syscheck(array $data, rixPDO &$db, array &$returnData): void
 
 function mediaCheck(array $data, rixPDO &$db, array &$returnData): void
 {
+	$traffic = expensiveCheckTrafficState();
+	if ($traffic['blocked']) {
+		$returnData['errorCode'] = 'activeTestTakers';
+		$returnData['error'] = 'The media check cannot run while test takers are active.';
+		$returnData['data'] = $traffic;
+		return;
+	}
 	$returnData['data'] = runMediaMaintenanceCheck('verifyMediaAssets');
+}
+
+function mediaCheckSafety(array $data, rixPDO &$db, array &$returnData): void
+{
+	$returnData['data'] = expensiveCheckTrafficState();
 }
 
 function mediaRepair(array $data, rixPDO &$db, array &$returnData): void

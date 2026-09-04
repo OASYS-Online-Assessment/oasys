@@ -117,6 +117,16 @@ async function onDOMReady() {
         (Array.isArray(window.settings?.roles) && window.settings.roles.includes('admin')) ||
         asBool(window.settings?.perm?.admin);
 
+	const SCOPE_STORAGE_KEY = 'oasys.dashboard.scope';
+	const scopeLabels = { admin: 'Admin', user: 'User' };
+	const getStoredScope = () => {
+		try {
+			const value = localStorage.getItem(SCOPE_STORAGE_KEY);
+			return value === 'admin' || value === 'user' ? value : null;
+		} catch { return null; }
+	};
+	let currentScope = userIsAdmin ? (getStoredScope() || 'admin') : 'user';
+
     // ===== Layout constants =====
     const GRID_BASE_UNIT = 200;
     const GRID_GAP_PX    = 10;
@@ -154,6 +164,7 @@ async function onDOMReady() {
             el = document.createElement('div');
             el.id = id;
             el.className = scope === 'admin' ? 'dash-section admin-scope' : 'dash-section user-scope';
+			el.style.display = scope === currentScope ? '' : 'none';
 
             const body = document.createElement('div');
             body.className = 'dash-section-body';
@@ -383,15 +394,47 @@ async function onDOMReady() {
         return readyPromises;
     }
 
-    // ===== Render (still under boot mask) =====
-    const [adminReadies, userReadies] = await Promise.all([
-		(userIsAdmin && listAdmin.length) ? render(listAdmin, 'admin') : [],
-		listUser.length ? render(listUser, 'user') : []
-	]);
+    // Load only the initially visible scope. The other scope is initialized on
+    // first use, avoiding hidden widget modules and requests during startup.
+	let adminColsBaseline = 0;
+	let userColsBaseline = 0;
+	let adminLoaded = false;
+	let userLoaded = false;
 
-    // Apply grid to BOTH scopes and capture baseline column counts
-    const adminColsBaseline = (userIsAdmin && listAdmin.length) ? applyGrid('admin', listAdmin) : 0;
-    const userColsBaseline  = listUser.length ? applyGrid('user', listUser) : 0;
+	async function ensureScopeLoaded(scope) {
+		if (scope === 'admin') {
+			if (adminLoaded || !userIsAdmin || !listAdmin.length) return;
+			adminLoaded = true;
+			try {
+				await render(listAdmin, 'admin');
+				adminColsBaseline = applyGrid('admin', listAdmin);
+			} catch (error) {
+				adminLoaded = false;
+				throw error;
+			}
+			return;
+		}
+
+		if (userLoaded || !listUser.length) return;
+		userLoaded = true;
+		try {
+			await render(listUser, 'user');
+			userColsBaseline = applyGrid('user', listUser);
+		} catch (error) {
+			userLoaded = false;
+			throw error;
+		}
+	}
+
+	async function waitForSystemStatus(scope) {
+		if (scope !== 'admin') return;
+		const meta = listAdmin.find(item => item.jsconstruct === 'SystemStatus');
+		const id = meta && (meta.id || meta.jsconstruct);
+		const widget = id && window._dashWidgets.get(id);
+		if (typeof widget?.ready === 'function') await widget.ready();
+	}
+
+	await ensureScopeLoaded(currentScope);
 
     // ===== Horizontal sizing (per visible scope only) =====
     function baselineFromCols(cols) {
@@ -430,21 +473,6 @@ async function onDOMReady() {
     }
 
     // ====== Scope toggle ======
-    const SCOPE_STORAGE_KEY = 'oasys.dashboard.scope';
-    const scopeLabels = { admin: 'Admin', user: 'User'};
-
-    function getStoredScope() {
-        try {
-            const v = localStorage.getItem(SCOPE_STORAGE_KEY);
-            return (v === 'admin' || v === 'user') ? v : null;
-        } catch { return null; }
-    }
-    function defaultScope() {
-        return userIsAdmin ? (getStoredScope() || 'admin') : 'user';
-    }
-
-    let currentScope = defaultScope();
-
     function injectScopeToggle(isAdmin, force = false) {
         if (!isAdmin && !force) return;
 
@@ -462,7 +490,7 @@ async function onDOMReady() {
             const toggle = document.getElementById('scopeToggle');
             toggle.addEventListener('click', (e) => {
                 const btn = e.target.closest('button[data-scope]');
-                if (btn) setScope(btn.dataset.scope);
+				if (btn) void setScope(btn.dataset.scope);
             });
 
             updateToggleUI(currentScope);
@@ -481,9 +509,20 @@ async function onDOMReady() {
         });
     }
 
-    function setScope(scope) {
-        currentScope = (scope === 'admin') ? 'admin' : 'user';
-        try { localStorage.setItem(SCOPE_STORAGE_KEY, currentScope); } catch {}
+    async function setScope(scope) {
+		const nextScope = (scope === 'admin') ? 'admin' : 'user';
+		try { localStorage.setItem(SCOPE_STORAGE_KEY, nextScope); } catch {}
+
+		if ((nextScope === 'admin' && !adminLoaded) || (nextScope === 'user' && !userLoaded)) {
+			globalThis.dashboardWaitStart?.();
+			try {
+				await ensureScopeLoaded(nextScope);
+				await waitForSystemStatus(nextScope);
+			} finally {
+				globalThis.dashboardWaitEnd?.();
+			}
+		}
+		currentScope = nextScope;
         const adminSec = document.getElementById('dashSection_admin');
         const userSec  = document.getElementById('dashSection_user');
 
@@ -575,27 +614,24 @@ async function onDOMReady() {
 
     // ===== Initial sizing & scope (still hidden by boot mask) =====
     if (document.getElementById('dashSection_admin') || document.getElementById('dashSection_user')) {
-        setScope(currentScope);
+		await setScope(currentScope);
     }
     fitFrameHeight();
     sizeVisibleScope(currentScope);
 
-    // ---- Wait for readiness (CSS + modules + first-frame; optional widget.ready()) ----
-    const allReadies = [...adminReadies, ...userReadies];
+	// System Status is the visual anchor of the admin dashboard and an empty tile
+	// is more distracting than the brief initial wait. Other widgets continue to
+	// load progressively.
+	await waitForSystemStatus(currentScope);
 
-    // Safety cap: don't hang forever if a widget never resolves its ready()
-    const cap = (p, ms = 2000) => new Promise(resolve => {
-        let t = setTimeout(resolve, ms);
-        Promise.resolve(p).finally(() => { clearTimeout(t); resolve(); });
-    });
-
-    // Optionally also wait for fonts to reduce text reflow flash
+	// Widget shells are otherwise revealed without waiting for their independent
+	// data requests. Each widget owns its loading/ready state.
     const fontReady = (document.fonts && document.fonts.ready) ? Promise.race([
         document.fonts.ready,
         new Promise(r => setTimeout(r, 500))
     ]) : Promise.resolve();
 
-    await Promise.all([...allReadies.map(p => cap(p)), fontReady]);
+	await fontReady;
 
     // Let layout fully settle before reveal
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));

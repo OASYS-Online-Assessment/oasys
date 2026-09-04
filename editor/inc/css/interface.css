@@ -46,6 +46,23 @@
     color: #52606d;
 }
 
+.mediaCheckConfirm p {
+    margin: 0 0 12px;
+    line-height: 1.45;
+}
+
+.mediaCheckConfirm p:last-child {
+    margin-bottom: 0;
+}
+
+.mediaCheckTrafficWarning {
+    padding: 11px 13px;
+    border: 1px solid #e2b2b2;
+    border-radius: 7px;
+    background: #fceaea;
+    color: #842626;
+}
+
 .mediaCheckArea {
     border: 1px solid #d6dce3;
     border-radius: 8px;

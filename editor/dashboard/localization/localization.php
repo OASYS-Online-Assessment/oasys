@@ -52,6 +52,7 @@
 		$totalPairs = all_pairs($contexts);
 
 		$langs = fetch_languages($db);
+		$pairsByLanguage = fetch_all_present_pairs($db);
 		// Normalize to map for quick lookup
 		$byCode = [];
 		foreach ($langs as $lg) $byCode[$lg['code']] = $lg;
@@ -70,7 +71,7 @@
 			$flag = small_flag_emoji($code);
 
 			// Count modified pairs for default language: one per (context|variable)
-			$modifiedMap = fetch_modified_map_for_language($db, $code); // key => value
+			$modifiedMap = $pairsByLanguage[$code] ?? [];
 			$modifiedCount = count($modifiedMap);
 
 			$defaultsOut[] = [
@@ -91,7 +92,7 @@
 			$fb = $lg['fallback'];
 
 			$missingCount = 0;
-			$present = fetch_present_pairs_for_language($db, $code); // "context|var" => true
+			$present = $pairsByLanguage[$code] ?? [];
 			foreach ($contexts as $c) {
 				$ctx = $c['context'];
 				foreach ($c['variables'] as $var) {
@@ -291,6 +292,22 @@
 			}
 		}
 		return $map;
+	}
+
+	/** Load the lightweight key inventory for every language in one query. */
+	function fetch_all_present_pairs(rixPDO $db): array
+	{
+		$byLanguage = [];
+		$res = $db->fetchTable('SELECT language, context, variable FROM l10n', []);
+		$rows = (is_array($res) && $res['error'] === false && is_array($res['data'])) ? $res['data'] : [];
+		foreach ($rows as $row) {
+			$language = strtoupper(trim((string)($row['language'] ?? '')));
+			$context = (string)($row['context'] ?? '');
+			$variable = (string)($row['variable'] ?? '');
+			if ($language === '' || $context === '' || $variable === '') continue;
+			$byLanguage[$language][$context . '|' . $variable] = true;
+		}
+		return $byLanguage;
 	}
 
 	/** Modified map for defaults: key "ctx|var" => overridden value */

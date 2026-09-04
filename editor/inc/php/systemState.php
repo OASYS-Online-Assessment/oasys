@@ -16,6 +16,21 @@
 
 	$uiLang = new uiLang($settings['interfaceLanguage']);
 
+	/**
+	 * Expensive integrity checks are maintenance operations. Even one active test
+	 * taker is enough to defer them: a filesystem scan can saturate shared I/O and
+	 * CHECK TABLE may briefly contend with normal database work.
+	 */
+	function expensiveCheckTrafficState(): array
+	{
+		$frontEndCount = count(OasysFrontendState::fetchActiveLogins());
+		return [
+			'frontEndCount' => $frontEndCount,
+			'warning' => $frontEndCount > 0,
+			'blocked' => $frontEndCount > 0,
+		];
+	}
+
 	function checkActiveStates(array $data, rixPDO &$db, array &$returnData): void
 	{
 		global $settings, $myAuth, $uiLang;
