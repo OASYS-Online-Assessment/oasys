@@ -339,7 +339,7 @@ export default class ActiveNow {
        UI actions
     ========================== */
     refresh(opts = {}) {
-        // this.startAjax("listActive", { scope: this.scope, _auto: !!opts.silent }, { silent: !!opts.silent });
+        this.startAjax("listActive", { scope: this.scope, _auto: !!opts.silent }, { silent: !!opts.silent });
     }
 
     render() {
