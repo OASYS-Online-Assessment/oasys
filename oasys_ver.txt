@@ -1,4 +1,4 @@
 OASYS ver. 3.7 Beta
 v=3.7 beta
 vshort=3.7
-info=New features:<ul><li>Media Check in System Settings for verifying and repairing media issues</li><li>Faster dashboards with optimized loading and database queries</li><li>Database and media integrity checks now run on demand</li></ul>
+info=New features:<ul><li>no new feature so far ;-)</li></ul>
