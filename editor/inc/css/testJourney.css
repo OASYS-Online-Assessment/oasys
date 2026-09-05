@@ -178,6 +178,10 @@
     font-weight: 700;
 }
 
+.journeyTakerRun.journeyDataset::before {
+    content: none;
+}
+
 .journeyTakerRun i {
     flex: 0 0 auto;
     font-style: italic;

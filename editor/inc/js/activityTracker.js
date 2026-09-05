@@ -1377,7 +1377,7 @@ function renderActivityJourneyRows() {
     const rows = runs.map((run) => {
         const selected = activityJourneyRunKey(run) === activityJourney.selectedKey ? ' is-selected' : '';
         const loginIdentity = run.loginTemplate === 'cloned'
-            ? `<span class="journeyTakerRun">${journeyEsc(`${UILANG.m('Dataset')} ${run.loginName}`)}</span>`
+            ? `<span class="journeyTakerRun journeyDataset">${journeyEsc(`${UILANG.m('Dataset')} ${run.loginName}`)}</span>`
             : '';
         return /* html */`
             <button type="button" class="journeyTaker${selected}"
