@@ -193,7 +193,9 @@ export default class ActiveNow {
         withReadyContract(this, { timeoutMs: 2500, autoOnResolvedRefresh: false });
 
         // initial load
-        this.refresh();
+        // Initial data load is covered by the dashboard boot mask. Keep the
+        // shared please-wait dialog for explicit user refreshes only.
+        this.refresh({ silent: true });
 		// refresh() is intentionally manual/no-op at startup; do not hold the
 		// dashboard readiness contract until its timeout.
 		this.markReady?.();

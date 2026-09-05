@@ -137,8 +137,10 @@ export default class TestResults {
                 this.startAjax('fetchStats', { selectedTest: testId });
             });
 
-        // 4) Initial load (silent during boot)
-        this.refresh({ silent: true });
+        // 4) Initial load: show feedback while the results aggregation runs.
+        // Other dashboard widgets keep their initial requests silent so they
+        // cannot leave the shared wait dialog visible after their content paints.
+        this.refresh();
     }
 
     destroy(){ $(document).off(this.ns); }
@@ -147,7 +149,7 @@ export default class TestResults {
        AJAX
     ========================== */
     startAjax(action, data, opts = {}) {
-        const silent = !!opts.silent || this._booting;
+        const silent = !!opts.silent;
         const requestId = (this._requestSequence || 0) + 1;
         this._requestSequence = requestId;
 		if (action === 'listResults') this._latestListRequest = requestId;

@@ -87,7 +87,9 @@ export default class LastEdited {
         withReadyContract(this, { timeoutMs: 2500, autoOnResolvedRefresh: false });
 
         // Initial load
-        this.refresh();
+        // Initial data load is covered by the dashboard boot mask. Keep the
+        // shared please-wait dialog for explicit user refreshes only.
+        this.refresh({ silent: true });
     }
 
     destroy() { $(document).off(this.ns); }
@@ -95,8 +97,9 @@ export default class LastEdited {
     /* =========================
        AJAX
     ========================== */
-    startAjax(action, data) {
-        globalThis.dashboardWaitStart?.();
+    startAjax(action, data, opts = {}) {
+        const silent = !!opts.silent;
+        if (!silent) globalThis.dashboardWaitStart?.();
         const params = { action, data: JSON.stringify(data || {}) };
 
         $.ajax({
@@ -106,13 +109,13 @@ export default class LastEdited {
             cache: false,
             timeout: 300000,
             data: params,
-            success: (res) => this.onAjaxSuccess(res),
-            error: (jqXHR, _ts, errorThrown) => this.onAjaxError(jqXHR, errorThrown)
+            success: (res) => this.onAjaxSuccess(res, { silent }),
+            error: (jqXHR, _ts, errorThrown) => this.onAjaxError(jqXHR, errorThrown, { silent })
         });
     }
 
-    onAjaxError(jqXHR, errorThrown) {
-        globalThis.dashboardWaitEnd?.();
+    onAjaxError(jqXHR, errorThrown, { silent = false } = {}) {
+        if (!silent) globalThis.dashboardWaitEnd?.();
         const retContents = (jqXHR.responseJSON !== undefined)
             ? jqXHR.responseJSON.fatalError
             : UILANG.m("No server data returned");
@@ -125,9 +128,9 @@ export default class LastEdited {
         });
     }
 
-    onAjaxSuccess(res) {
+    onAjaxSuccess(res, { silent = false } = {}) {
         $('#un_val').text(res.loggedInName || "");
-        globalThis.dashboardWaitEnd?.();
+        if (!silent) globalThis.dashboardWaitEnd?.();
 
         if (res.fatalError) {
             new nxDialog('fatalError', {
@@ -179,7 +182,7 @@ export default class LastEdited {
     /* =========================
        UI
     ========================== */
-    refresh() { this.startAjax('listEdited', {}); }
+    refresh(opts = {}) { this.startAjax('listEdited', {}, opts); }
 
     render() {
         const $tbody = $("#" + this.id + "_tbody");

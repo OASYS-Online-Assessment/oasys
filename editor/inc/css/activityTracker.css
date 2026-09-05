@@ -515,7 +515,7 @@ table#settings td:not(.panelTitle) {
 }
 
 #settings_date_property.is-disabled label {
-    color: #aab4bd;
+    color: #aab4bd !important;
 }
 
 #settings_date_property.is-disabled input,
@@ -526,6 +526,23 @@ table#settings td:not(.panelTitle) {
     color: #b1bac2;
     cursor: not-allowed;
     opacity: 1;
+}
+
+#settings_date_property input.is-disabled {
+    border-color: #edf0f3;
+    background: #fafbfc;
+    color: #aab4bd !important;
+    -webkit-text-fill-color: #aab4bd !important;
+    cursor: not-allowed;
+}
+
+#settings_date_property.is-disabled #tf_date {
+    color: #aab4bd !important;
+    -webkit-text-fill-color: #aab4bd !important;
+}
+
+#settings_date_property.is-disabled td {
+    color: #aab4bd;
 }
 
 body[data-managerid="activityTracker"] .ui-datepicker td.activityHasResultsDate a {

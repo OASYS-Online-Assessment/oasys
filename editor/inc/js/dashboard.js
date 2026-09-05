@@ -31,23 +31,23 @@ async function onDOMReady() {
 
         m.innerHTML = `
               <img class="bootLogo" src="${LOGO_PATH}" alt="OASYS" />
-              <div class="bootVersion">OASYS ${String(window.dashboardVersion || '3.7')}</div>
               <div class="boot-text">${UILANG?.m?.('Loading dashboard…') || 'Loading dashboard…'}</div>
               <div class="spinner" aria-hidden="true"></div>
             `;
         document.body.appendChild(m);
     }
 
-    waitDialog = new jsModalWait(UILANG.m('please wait'));
+	waitDialog = new jsModalWait(UILANG.m('please wait'));
     globalThis.waitDialog = waitDialog;
+	let dashboardBooting = true;
 	let dashboardWaitCount = 0;
 	globalThis.dashboardWaitStart = () => {
 		dashboardWaitCount++;
-		if (dashboardWaitCount === 1) waitDialog.show();
+		if (!dashboardBooting && dashboardWaitCount === 1) waitDialog.show();
 	};
 	globalThis.dashboardWaitEnd = () => {
 		dashboardWaitCount = Math.max(0, dashboardWaitCount - 1);
-		if (dashboardWaitCount === 0) waitDialog.hide();
+		if (!dashboardBooting && dashboardWaitCount === 0) waitDialog.hide();
 	};
 
     const userName = window.localUName;
@@ -638,6 +638,9 @@ async function onDOMReady() {
 
     // ---- Reveal
     document.body.removeAttribute('data-dash-booting');
+    dashboardBooting = false;
+    dashboardWaitCount = 0;
+    waitDialog.hide();
     document.getElementById('dashBootMask')?.remove();
 
     // Re-evaluate after reveal (accurate measurements)

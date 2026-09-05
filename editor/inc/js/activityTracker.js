@@ -45,6 +45,7 @@ let activityJourney = {
 let activityJourneyBackButton;
 let activityJourneyRefreshButton;
 let activityTrackerRefreshButton;
+let waitDialog;
 
 let settingsElements = {};
 let selectedEntry = {login: null, testId: null, passwordId: null};
@@ -60,6 +61,7 @@ const statusLabel = ['finished', 'active', 'lost connection', 'aborted', 'Reopen
 $(onDOMReady);
 
 function onDOMReady() {
+    waitDialog = new jsModalWait(UILANG.m('please wait'));
     $.ajaxSetup({
         type: "POST",
         cache: false,
@@ -422,7 +424,7 @@ function createProperties() {
 
     opt = {
         label: UILANG.m("expand all"),
-        callback: toggleOpenCloseAll,
+        callback: () => toggleOpenCloseAll('expand'),
         value: "expand",
         frameStyle: {
             width: '100%',
@@ -434,7 +436,7 @@ function createProperties() {
 
     opt = {
         label: UILANG.m("collapse all"),
-        callback: toggleOpenCloseAll,
+        callback: () => toggleOpenCloseAll('collapse'),
         value: "collapse",
         frameStyle: {
             width: '100%',
@@ -516,6 +518,7 @@ function setupActivityMetaAutocomplete($input, $menu, type) {
         $menu.hide();
         refreshActivityDetailState();
         updateKeys();
+        updateList(dataCache);
         if (profile.monitorLive) fetchNewData();
     });
 }
@@ -610,6 +613,7 @@ function saveActivityHierarchy() {
 }
 
 function updateKeys() {
+    const previousHierarchy = hierarchy.slice();
     let k1 = tfKey1.val();
     let k2 = tfKey2.val();
     if (k1) {
@@ -622,11 +626,10 @@ function updateKeys() {
     } else {
         hierarchy = [];
     }
-    renderList();
+    if (previousHierarchy.length === hierarchy.length
+        && previousHierarchy.every((value, index) => value === hierarchy[index])) return;
+    updateList(dataCache);
     saveActivityHierarchy();
-    if (!profile.monitorLive) {
-        fetchNewData();
-    }
 }
 
 function tfKeyDown(e) {
@@ -718,16 +721,17 @@ function changeLiveMonitoring(sender, value) {
     if (monitorLive) {
         activityTrackerRefreshButton.enable();
         delete profile.date;
+        tfDate.datepicker('setDate', new Date());
         $('#settings_date_property').addClass('is-disabled');
-        tfDate.datepicker('option', 'disabled', true).attr('aria-disabled', 'true');
+        tfDate.datepicker('option', 'disabled', true).attr('aria-disabled', 'true').addClass('is-disabled');
         const autoRefresh = $('#activityRefreshMode button.is-active').data('mode') === 'live';
         profile.live = autoRefresh;
     } else {
         activityTrackerRefreshButton.disable();
         const currentDate = new Date();
-        tfDate.val(activityDisplayDate(currentDate));
+        tfDate.datepicker('setDate', currentDate);
         $('#settings_date_property').removeClass('is-disabled');
-        tfDate.datepicker('option', 'disabled', false).attr('aria-disabled', 'false');
+        tfDate.datepicker('option', 'disabled', false).attr('aria-disabled', 'false').removeClass('is-disabled');
         profile.date = activityLocalDate(currentDate);
         profile.live = false;
         if (timeoutPointer !== null) {
@@ -889,9 +893,9 @@ function renderList() {
         let closedCount = 0;
         let timeOutCount = 0;
         let totalCount = 0;
-        for (let login in structure[k].logins) {
-            let loginData = structure[k].logins[login];
-            for (let i in loginData.activity) {
+		for (let login in structure[k].logins) {
+			let loginData = structure[k].logins[login];
+			for (let i in loginData.activity) {
                 let activity = loginData.activity[i];
                 totalCount++;
                 if (activity.status === STATUS_CLOSED || activity.status === STATUS_ABORTED) {
@@ -902,7 +906,7 @@ function renderList() {
             }
         }
         html += `<tbody data-category="${escapeAttribute(k)}" class='category ${structure[k].open ? '' : 'closed'}'><tr class='categoryLabel'><td colspan="7"><div class="categoryLabelContent"><div class="categoryLabelNames">${structure[k].label}</div><div class="categoryLabelSummary"><span class="categoryLoginCount">[${escapeAttribute(accountSummary)}]</span>${categoryProgress(totalCount, closedCount, timeOutCount)}</div></div></td></tr>`;
-        for (let login in structure[k].logins) {
+		if (structure[k].open) for (let login in structure[k].logins) {
             let loginData = structure[k].logins[login];
             for (let i in loginData.activity) {
                 let activity = loginData.activity[i];
@@ -989,7 +993,7 @@ function toggleOpenClose(e) {
         node.addClass('closed');
         structure[k].open = false;
     }
-    updateExpandCollapseButtons();
+    renderList();
 }
 
 function toggleOpenCloseAll(mode) {
@@ -1004,6 +1008,7 @@ function toggleOpenCloseAll(mode) {
             structure[k].open = false;
         }
     }
+    renderList();
     updateExpandCollapseButtons();
 }
 
@@ -1385,7 +1390,7 @@ function renderActivityJourneyRows() {
                     </span>
                     <em>
                         ${loginIdentity}
-                        <span class="journeyTakerRun">${journeyEsc(journeyRunPasswordLabel(run) || run.passwordId)}</span>
+                        <span class="journeyTakerRun${loginIdentity ? ' hasLoginIdentity' : ''}">${journeyEsc(journeyRunPasswordLabel(run) || run.passwordId)}</span>
                     </em>
                 </span>
                 <span class="journeyTakerStats">
@@ -1431,7 +1436,7 @@ async function selectActivityJourneyRun(passwordId, testId) {
     renderJourneyDetail(response.data);
     const summary = response.data?.summary || {};
     $('#journeyDetailHeader').html(
-        `<span>${journeyEsc(summary.testName || summary.testId)} · ${journeyEsc(journeyPrimaryLoginName(summary))} / ${journeyEsc(journeyRunPasswordLabel(summary) || summary.passwordId)}</span>`
+        `<span>${journeyEsc(summary.testName || summary.testId)} · ${journeyEsc([journeyPrimaryLoginName(summary), journeyRunPasswordLabel(summary) || summary.passwordId].filter(value => String(value || '').trim() !== '').join(' / '))}</span>`
     );
 }
 
@@ -1446,6 +1451,7 @@ function startAjax(data, action = {}) {
         includeMeta: !metaSuggestionsLoaded
     });
     if (activeRequest && activeRequest.readyState !== 4) activeRequest.abort();
+    if (profile.live !== true && typeof waitDialog !== 'undefined') waitDialog.show();
     setActivityRefreshIndicator('loading');
     let params = {
         data: JSON.stringify(requestData),
@@ -1458,6 +1464,7 @@ function startAjax(data, action = {}) {
 
 function ajaxError(jqXHR, textStatus, errorThrown) {
     if (textStatus === 'abort') return;
+    if (typeof waitDialog !== 'undefined') waitDialog.hide();
     setActivityRefreshIndicator('error');
     actionInFlight = false;
     controls.find('button').prop('disabled', false);
@@ -1471,6 +1478,7 @@ function ajaxError(jqXHR, textStatus, errorThrown) {
 }
 
 function ajaxSuccess(res) {
+    if (typeof waitDialog !== 'undefined') waitDialog.hide();
     const responseId = Number(res.requestId) || 0;
     if (responseId < latestAppliedRequest) return;
     latestAppliedRequest = responseId;

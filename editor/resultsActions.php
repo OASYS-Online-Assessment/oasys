@@ -140,11 +140,8 @@ function resultsAccessibleLibraryRows(rixPDO &$db, array &$returnData): array
 {
 	global $backendState;
 	$recordRows = $db->fetchTable(
-		"SELECT DISTINCT recorded.testId, recorded.passwordId,
-			COALESCE(templateLogin.parent, logins.parent) AS loginParent,
-			logins.name AS loginName, passwords.name AS passwordName,
-			passwords.tag AS passwordTag,
-			passwords.label AS passwordLabel
+		"SELECT DISTINCT recorded.testId,
+			COALESCE(templateLogin.parent, logins.parent) AS loginParent
 		FROM (
 			SELECT activity.testId, activity.passwordId,
 				COALESCE(activity.loginId, passwords.loginID) AS loginId
@@ -157,37 +154,17 @@ function resultsAccessibleLibraryRows(rixPDO &$db, array &$returnData): array
 			JOIN passwords ON passwords.id = scoring.passwordId
 		) recorded
 		JOIN logins ON logins.id = recorded.loginId
-		JOIN passwords ON passwords.id = recorded.passwordId
 		LEFT JOIN logins templateLogin ON templateLogin.id = logins.parentTemplateId"
 	)['data'] ?? [];
 
 	$folderReadCache = [];
-	$folderWriteCache = [];
 	$testAccess = [];
 	foreach ($recordRows as $record) {
 		$folderId = (int)($record['loginParent'] ?? 0);
 		if (!tmCanReadTestTakerFolder($folderId, $db, $folderReadCache)) continue;
 		$testId = (int)($record['testId'] ?? 0);
-		$passwordId = (int)($record['passwordId'] ?? 0);
-		if ($testId <= 0 || $passwordId <= 0) continue;
-		if (!array_key_exists($folderId, $folderWriteCache)) {
-			$folderWriteCache[$folderId] = resultsCanWriteTestTakerFolder($folderId, $db);
-		}
-
-		if (!isset($testAccess[$testId])) {
-			$testAccess[$testId] = [
-				'passwords' => [],
-				'searchTerms' => []
-			];
-		}
-		$previousWrite = $testAccess[$testId]['passwords'][$passwordId]['write'] ?? false;
-		$testAccess[$testId]['passwords'][$passwordId] = [
-			'write' => $previousWrite || $folderWriteCache[$folderId]
-		];
-		foreach (['loginName', 'passwordName', 'passwordTag', 'passwordLabel'] as $field) {
-			$value = trim((string)($record[$field] ?? ''));
-			if ($value !== '') $testAccess[$testId]['searchTerms'][] = $value;
-		}
+		if ($testId <= 0) continue;
+		$testAccess[$testId] = true;
 	}
 
 	if ($testAccess === []) return [];
@@ -228,12 +205,6 @@ function resultsAccessibleLibraryRows(rixPDO &$db, array &$returnData): array
 			$pathCache[$parentId] = resultsTestFolderPath($parentId, $db, $returnData);
 		}
 		$path = $pathCache[$parentId];
-		$accessibleCount = count($testAccess[$testId]['passwords']);
-		$writableCount = count(array_filter(
-			$testAccess[$testId]['passwords'],
-			static fn(array $access): bool => $access['write'] === true
-		));
-		$searchTerms = array_values(array_unique($testAccess[$testId]['searchTerms']));
 		$rows[] = [
 			'id' => 't' . $testId,
 			'dbId' => $testId,
@@ -247,11 +218,8 @@ function resultsAccessibleLibraryRows(rixPDO &$db, array &$returnData): array
 			'testType' => (string)$structure['type'],
 			'watchList' => (int)$test['watchList'],
 			'path' => $path,
-			'secondaryLabel' => $path . ' · ID ' . $testId . ' · '
-				. $accessibleCount . ' accessible · ' . $writableCount . ' writable',
-			'filterText' => implode(' ', array_merge([(string)$test['name'], (string)$testId, $path], $searchTerms)),
-			'accessibleTestTakers' => $accessibleCount,
-			'writableTestTakers' => $writableCount
+			'secondaryLabel' => $path . ' · ID ' . $testId,
+			'filterText' => implode(' ', [(string)$test['name'], (string)$testId, $path])
 		];
 	}
 	return $rows;
@@ -517,9 +485,11 @@ function fetchReportData($data, rixPDO &$db, &$returnData): void
                         if (!isset($item_field_data[$cm_field_key])) continue;
 
                         $fType[$if_key_name . "_" . $cmVal["value"]] = $item_field_data[$cm_field_key]["type"];
-                        $item_field_values[$ti_id . "_" . $ib_val["id"] . "_" . $cmVal["value"]] = strip_tags($cmVal["label"][$settingsDefaults["defaultLanguage"]["value"] ?? key($cmVal["label"])]);
+						$cmLabels = is_array($cmVal['label'] ?? null) ? $cmVal['label'] : [];
+						$cmLanguage = $settingsDefaults['defaultLanguage']['value'] ?? array_key_first($cmLabels);
+						$item_field_values[$ti_id . "_" . $ib_val["id"] . "_" . $cmVal["value"]] = strip_tags((string)($cmLabels[$cmLanguage] ?? ''));
                         foreach (($ib_val['labels'] ?? []) as $il_k => $il_v) {
-                            $qXcat[$ti_id . "_" . $ib_val["id"] . "_" . $cmVal["value"]][] = strip_tags($il_v["value"]);
+							$qXcat[$ti_id . "_" . $ib_val["id"] . "_" . $cmVal["value"]][] = strip_tags((string)($il_v["value"] ?? ''));
                         }
                     }
                     continue;

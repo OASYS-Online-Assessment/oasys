@@ -354,9 +354,9 @@ function tr_detectScoringTimestampColumn(rixPDO $db): ?string {
 		$rows = [];
 
 		$all = $db->fetchTable(
-			"SELECT DISTINCT tests.id, tests.name, tests.parent, tests.structure
+			"SELECT tests.id, tests.name, tests.parent, tests.structure
 			FROM tests
-			JOIN activity ON activity.testId = tests.id",
+			WHERE EXISTS (SELECT 1 FROM activity WHERE activity.testId = tests.id)",
 			[]
 		);
 		foreach ($all['data'] as $t) {

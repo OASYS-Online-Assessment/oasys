@@ -15,7 +15,7 @@ function renderJourneyDetail(data) {
     const flags = data.flags || {};
     journeyConceptMapStore = {};
 
-    header.html(`<span>${journeyEsc(journeyPrimaryLoginName(summary))} / ${journeyEsc(journeyRunPasswordLabel(summary) || summary.passwordId)}</span>`);
+    header.html(`<span>${journeyEsc([journeyPrimaryLoginName(summary), journeyRunPasswordLabel(summary) || summary.passwordId].filter(value => String(value || '').trim() !== '').join(' / '))}</span>`);
 
     detail.html(/* html */`
         <div class="journeyShell">
@@ -1245,7 +1245,7 @@ function journeyPrimaryLoginName(data) {
     if (data?.loginTemplate === 'cloned') {
         return journeyTemplateLoginName(data) || data?.displayName || data?.loginName || UILANG.m('Test taker');
     }
-    return data?.displayName || data?.loginName || UILANG.m('Test taker');
+    return data?.loginName || data?.displayName || UILANG.m('Test taker');
 }
 
 function journeyIsStudentLogin(data) {

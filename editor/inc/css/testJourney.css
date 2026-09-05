@@ -171,7 +171,7 @@
     white-space: nowrap;
 }
 
-.journeyTakerRun::before {
+.journeyTakerRun.hasLoginIdentity::before {
     content: "/";
     flex: 0 0 auto;
     color: #60778a;

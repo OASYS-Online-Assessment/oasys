@@ -353,8 +353,10 @@ function fetchActivity($data, &$db, &$returnData): void
                     $returnData['error'] = 'Invalid activity date.';
                     return;
                 }
-                $whereClause = "DATE(tsLoginServer)=?";
-                $params = [$data['date']];
+                $startDate = $data['date'] . ' 00:00:00';
+                $endDate = date('Y-m-d H:i:s', strtotime($data['date'] . ' +1 day'));
+                $whereClause = "tsLoginServer >= ? AND tsLoginServer < ?";
+                $params = [$startDate, $endDate];
             }
             break;
         default:

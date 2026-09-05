@@ -168,6 +168,25 @@ function an_dt_defaults(): array {
 		}
 
 		$ids = array_map(fn($t) => (int)$t['id'], $tests);
+		$activeCutoff = date('Y-m-d H:i:s', time() - $timeoutLimit);
+		$activePh = implode(',', array_fill(0, count($ids), '?'));
+		$activeCandidates = $db->fetchTable(
+			"SELECT DISTINCT testId
+			   FROM activity
+			  WHERE testId IN ($activePh)
+			    AND timeLeft <> 0
+			    AND tsActiveServer >= ?",
+			array_merge($ids, [$activeCutoff])
+		)['data'] ?? [];
+		$ids = array_values(array_filter(array_map(
+			fn($row) => (int)($row['testId'] ?? 0),
+			$activeCandidates
+		)));
+		if ($ids === []) {
+			$returnData['data'] = [];
+			$returnData['scope'] = $scope;
+			return;
+		}
 		$ph = implode(',', array_fill(0, count($ids), '?'));
 
 		// pull activity rows for those tests

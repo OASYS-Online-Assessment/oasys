@@ -113,10 +113,6 @@ class ResultsTestList {
                         <strong>${this.escape(item.label)}</strong>
                         <span>${this.escape(item.path)} · ID ${this.escape(item.dbId)}</span>
                     </span>
-                    <span class="resultsTestAccess">
-                        <span title="${this.escape(UILANG.m('Accessible test takers'))}"><strong>${this.escape(item.accessibleTestTakers)}</strong> ${this.escape(UILANG.m('accessible'))}</span>
-                        <span title="${this.escape(UILANG.m('Writable test takers'))}"><strong>${this.escape(item.writableTestTakers)}</strong> ${this.escape(UILANG.m('writable'))}</span>
-                    </span>
                 </div>`);
 
             $row.on('click.resultsList', () => this.selectItem(item));
@@ -2243,7 +2239,7 @@ function renderJourneyTakerRows() {
                         <span class="journeyTakerLogin">${journeyEsc(tt.loginTemplate === 'cloned'
                             ? `${UILANG.m('Dataset')} ${tt.loginName}`
                             : tt.loginName)}</span>
-                        ${runPassword ? `<span class="journeyTakerRun">${journeyEsc(runPassword)}${journeyIsStudentLogin(tt) ? ` <i>(${journeyEsc(UILANG.m('Label'))})</i>` : ''}</span>` : ''}
+                        ${runPassword ? `<span class="journeyTakerRun hasLoginIdentity">${journeyEsc(runPassword)}${journeyIsStudentLogin(tt) ? ` <i>(${journeyEsc(UILANG.m('Label'))})</i>` : ''}</span>` : ''}
                     </em>
                 </span>
                 <span class="journeyTakerStats">
@@ -8214,7 +8210,7 @@ function ajaxSuccess(res, hideWait = true) {
                     $('<td>', {class: 'rightalign'}).text(serverData.testname)
                 ));
                 rti.append('<tr><td>' + UILANG.m('Test-type:') + '</td><td class="rightalign">' + serverData.testType + '</td></tr>');
-                rti.append('<tr><td>' + UILANG.m('Test-takers with results:') + '</td><td class="rightalign">' + userRecs + '</td></tr>');
+                rti.append('<tr><td>' + UILANG.m('Accessible test-takers with results:') + '</td><td class="rightalign">' + userRecs + '</td></tr>');
                 rti.append('<tr><td>' + UILANG.m('Passwords not logged in:') + '</td><td class="rightalign">' + noLoginCount + '</td></tr>');
                 rovl.append('<table width="100%" id="resTaView"></table>');
                 const rtv = $("#resTaView");
