@@ -194,7 +194,7 @@ function createMenuButtons() {
 
 	//Flagging Version
 	$('#viewsPanel').append('<p class="menuSeparator"></p>');
-	const versionNumber = String(settings.v ?? settings.vshort ?? '');
+	const versionNumber = String(settings.vshort ?? settings.v ?? '');
 	const shortVersionNumber = String(settings.vshort ?? settings.v ?? '');
 	const isBetaVersion = /\bbeta\b/i.test([settings.v, settings.vshort].filter(Boolean).join(' '));
 	const $versionInfo = $('<div>', {

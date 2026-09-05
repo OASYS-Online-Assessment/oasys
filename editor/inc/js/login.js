@@ -140,7 +140,7 @@ function onDOMReady() {
     $('#UI').addClass(`backendLoginUI`);
 
     // Keep the login branding in sync with oasys_ver.txt (exposed through settings).
-    const versionValue = String(settings.v || settings.vshort || '').trim();
+    const versionValue = String(settings.vshort || settings.v || '').trim();
     const cleanVersion = versionValue
         .replace(/^OASYS\s*(?:ver\.?|v=)?\s*/i, '')
         .trim();
