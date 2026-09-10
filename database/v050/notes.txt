@@ -1,9 +1,0 @@
-Added: itemGroups.info
-Added: logins.parentTemplateId
-
-This patch links anonymous cloned test takers back to their source template when
-the clone name follows the template_00000001 naming pattern. Matched clones are
-moved out of the folder tree and receive parentTemplateId. Clones without a
-matching template are converted back to regular testees.
-
-VERSION: 050

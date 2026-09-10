@@ -1,4 +1,0 @@
-Changed the sendFrequency system setting from milliseconds to seconds.
-Existing stored overrides are converted and constrained to 5–300 seconds during the upgrade.
-
-VERSION: 051
