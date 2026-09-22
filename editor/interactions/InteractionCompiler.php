@@ -1159,7 +1159,7 @@
 			$cnf->required = $block->mandatory;
 			$cnf->options = new stdClass();
 			$cnf->code = bin2hex($cnf->id);
-			$this->copyValues($cnf, $block, ['processing', 'labelLeft', 'labelCentre', 'labelRight', 'labelNoReply', 'min', 'max', 'step', 'subDivisions', 'showSteps', 'noReply', 'showValue']);
+			$this->copyValues($cnf, $block, ['processing', 'labelLeft', 'labelCentre', 'labelRight', 'labelNoReply', 'min', 'max', 'step', 'subDivisions', 'showSteps', 'showSubdivisionSteps', 'noReply', 'showValue']);
 			$cnf->score = new stdClass();
 
 			if ($cnf->showSteps === true) {

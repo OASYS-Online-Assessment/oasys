@@ -13,6 +13,7 @@
   {"value": 1, "localized": false, "flags": [], "path": ["step"]},
   {"value": 1, "localized": false, "flags": [], "path": ["subDivisions"]},
   {"value": true, "localized": false, "flags": [], "path": ["showSteps"]},
+  {"value": false, "localized": false, "flags": [], "path": ["showSubdivisionSteps"]},
   {"value": true, "localized": false, "flags": [], "path": ["showAllValues"]},
   {"value": false, "localized": false, "flags": [], "path": ["noReply"]},
   {"value": true, "localized": false, "flags": [], "path": ["showValue"]},
