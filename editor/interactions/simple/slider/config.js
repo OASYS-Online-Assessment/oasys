@@ -61,6 +61,10 @@ window.interactionConfigs.slider = {
 			"type": "propsSwitchRow",
 			"settings": {"label": "show steps", "path": ["showSteps"]}
 		}, {
+			"id": "showSubdivisionSteps",
+			"type": "propsSwitchRow",
+			"settings": {"label": "show steps of subdivision", "path": ["showSubdivisionSteps"]}
+		}, {
 			"type": "propsToggleDiv",
 			"settings": {"path": ["showSteps"], "conditions": [true]},
 			"children": [{

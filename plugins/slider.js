@@ -216,12 +216,26 @@
 			let path = `M ${xMin} ${r0 - 4} H ${xMax} A ${4} ${4} 0 0 1 ${xMax} ${r0 + 4} `;
 			path += `H ${xMin} A ${4} ${4} 0 0 1 ${r0} ${r0 - 4}`;
 			let svg = `<path d='${path}' style='stroke: ${trackStroke}; stroke-width: 1px; fill: ${trackFill};' />`;
+			if (options.showSubdivisionSteps === true) {
+				svg += createSubdivisionTicks();
+			}
 			if (options.showSteps === true) {
 				for (let i = min; i <= max; i+=step) {
 					svg += createTick(i);
 				}
 			}
 			return svg;
+		}
+
+		function createSubdivisionTicks() {
+			let path = '';
+			for (let value = min; value < max; value += step) {
+				for (let subdivision = 1; subdivision < options.subDivisions; subdivision++) {
+					const x = valueCoordinate(value + subdivision * step / options.subDivisions);
+					path += `M ${x} ${r0 - 12} v 3 `;
+				}
+			}
+			return path === '' ? '' : `<path d='${path}' style='stroke: ${stepsStroke}; stroke-width: 1px;' />`;
 		}
 
 		function createTick(value) {
