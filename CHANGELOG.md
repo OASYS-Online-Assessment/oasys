@@ -2,12 +2,20 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.9] - 2026-09-23
+
+### Added
+- CHANGELOG.md (this file), SECURITY.md, and README.md have been added.
+
+### Changed
+- Cleaning routine of FrontendState and BackendState classes have been made less aggressive.
+- rixPDO updated to v2.03 adding the inTransaction() method.
+
 ## [3.6.8] - 2026-09-22
 
 ### Added
 
 - Slider interaction now supports showing tick marks for subdivisions.
-- CHANGELOG.md (this file), SECURITY.md, and README.md have been added.
 
 ## [3.6.7] - 2026-09-10
 
