@@ -1,7 +1,7 @@
 <?php
 
 	/**
-	 * OasysFrontendState v1.2.2
+	 * OasysFrontendState v1.2.3
 	 * This class is used to manage the state of the Oasys frontend. It replaces sessions and has the
 	 * advantage of working atomically with the database. This means that 2 parallel running PHP scripts
 	 * can work on the same state without any problems.
@@ -17,6 +17,9 @@
 	 * 		derived active-login monitoring from the connection retry window instead of state retention
 	 * v1.2.2:
 	 * 		added getNumberOfActiveClients()
+	 * v1.2.3:
+	 * 		sampled stale-state cleanup once per request with a 1-in-100 chance, skipping open transactions
+	 * 		checked current-state expiry independently and used direct activity cutoffs preserving timeout boundaries
 	 * usage:
 	 *    Creating a new instance:
 	 *        $state = OasysFrontendState::getInstance($instanceId, true);
@@ -58,6 +61,7 @@
 	class OasysFrontendState
 	{
 		private static array $instances = [];
+		private static bool $cleanupConsidered = false;
 
 		const array ALLOWED_PROPERTIES = [
 			'loginId', 'passwordId', 'testId', 'studentId', 'preview'
@@ -86,12 +90,16 @@
 			$this->stateId = static::getStateId();
 			$this->instanceId = $instanceId;
 
-			//check if instanceId exists in table and create if $init is true, otherwise fail
+			//Check expiry independently of probabilistic cleanup, before refreshing activity.
+			//The extra second preserves the previous whole-second TIMESTAMPDIFF boundary.
 			static::getDBHandle();
-			$query = "SELECT COUNT(*) FROM stateFrontend WHERE stateId = ? AND instanceId = ?";
-			$res = static::$db->fetchValue($query, [$this->stateId, $this->instanceId]);
+			$query = "SELECT COUNT(*) FROM stateFrontend WHERE stateId = ? AND instanceId = ? AND active > NOW() - INTERVAL ? SECOND";
+			$res = static::$db->fetchValue($query, [$this->stateId, $this->instanceId, static::$timeOut + 1]);
 			if ($res['data'] === 0) {
 				if ($init) {
+					//Only remove this expired instance when recreating it, even if global cleanup was skipped.
+					$query = "DELETE FROM stateFrontend WHERE stateId = ? AND instanceId = ? AND active <= NOW() - INTERVAL ? SECOND";
+					static::$db->execute($query, [$this->stateId, $this->instanceId, static::$timeOut + 1]);
 					static::$db->insert('stateFrontend', ['stateId' => $this->stateId, 'instanceId' => $this->instanceId]);
 				} else {
 					throw new StateExpiredException();
@@ -321,8 +329,8 @@
 		public static function stateIdActive(): bool
 		{
 			static::getDBHandle();
-			$query = "SELECT COUNT(*) FROM stateFrontend WHERE stateId = ? && TIMESTAMPDIFF(SECOND,active,NOW()) <= ?";
-			$res = static::$db->fetchValue($query, [static::getStateId(), static::$timeOut]);
+			$query = "SELECT COUNT(*) FROM stateFrontend WHERE stateId = ? AND active > NOW() - INTERVAL ? SECOND";
+			$res = static::$db->fetchValue($query, [static::getStateId(), static::$timeOut + 1]);
 			return ($res['error'] === false && $res['data'] > 0);
 		}
 
@@ -406,9 +414,19 @@
 
 		private static function cleanStaleStates(): void
 		{
+			if (self::$cleanupConsidered) {
+				return;
+			}
+			self::$cleanupConsidered = true;
 			static::getDBHandle();
-			$query = "DELETE FROM stateFrontend WHERE TIMESTAMPDIFF(SECOND,active,NOW()) > ?";
-			static::$db->execute($query, [static::$timeOut]);
+			//Never enlist table-wide housekeeping in an application transaction.
+			//Sample once per request, even when several frontend instances are accessed.
+			if (static::$db->inTransaction() || mt_rand(1, 100) !== 1) {
+				return;
+			}
+			//Preserve whole-second expiry while allowing a future index on active to be used.
+			$query = "DELETE FROM stateFrontend WHERE active <= NOW() - INTERVAL ? SECOND";
+			static::$db->execute($query, [static::$timeOut + 1]);
 		}
 
 		private static function getDBHandle(): void

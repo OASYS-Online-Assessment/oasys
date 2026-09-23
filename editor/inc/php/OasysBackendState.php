@@ -1,7 +1,7 @@
 <?php
 
 /**
- * OasysBackendState v1.3
+ * OasysBackendState v1.4
  * This class replaces sessions for storing temporary data on the server side for a specific user. It stores data
  * in a database table instead of files, which makes it usable in a load-balanced environment.
  * Each user is identified by a stateId stored in a cookie sent alongside each request like session cookies.
@@ -14,6 +14,8 @@
  * v1.2		made several methods static
  * 			added a number of new static methods required for systemstate management
  * v1.3		separated the backend-login inactivity threshold from the state/session timeout
+ * v1.4		sampled stale-state cleanup once per request with a 1-in-100 chance, skipping open transactions
+ * 			checked current-state expiry independently and used direct activity cutoffs preserving timeout boundaries
  *
  * usage:
  *    Creating a new instance or getting one that already exists:
@@ -52,6 +54,7 @@ class OasysBackendState
 	private string $stateId;
 	private static int $timeOut = 2 * 60;
 	private static int $inactivityTimeOut = 10;
+	private static bool $cleanupConsidered = false;
 	private OasysSettings $settings;
 	private rixPDO $db;
 	private ?string $backup = null;
@@ -74,10 +77,14 @@ class OasysBackendState
 		//clean out any states that have overstayed their welcome
 		static::cleanStaleStates();
 
-		//check if stateId exists in table and either create it or throw exception
-		$query = "SELECT COUNT(*) FROM stateBackend WHERE stateId = ?";
-		$res = $this->db->fetchValue($query, [$this->stateId]);
+		//Check expiry independently of probabilistic cleanup, before refreshing activity.
+		//The extra minute preserves the previous whole-minute TIMESTAMPDIFF boundary.
+		$query = "SELECT COUNT(*) FROM stateBackend WHERE stateId = ? AND active > NOW() - INTERVAL ? MINUTE";
+		$res = $this->db->fetchValue($query, [$this->stateId, static::$timeOut + 1]);
 		if ($res['data'] === 0) {
+			//Remove only this expired session; this is required even when global cleanup is skipped.
+			$query = "DELETE FROM stateBackend WHERE stateId = ? AND active <= NOW() - INTERVAL ? MINUTE";
+			$this->db->execute($query, [$this->stateId, static::$timeOut + 1]);
 			//if no state exists in database yet insert it
 			$this->db->insert('stateBackend', ['stateId' => $this->stateId]);
 		} else {
@@ -337,8 +344,8 @@ class OasysBackendState
 
 	public function isStateActive(): bool
 	{
-		$query = "SELECT COUNT(*) FROM stateBackend WHERE stateId = ? && TIMESTAMPDIFF(MINUTE,active,NOW()) <= ?";
-		$res = $this->db->fetchValue($query, [$this->getStateId(), static::$timeOut]);
+		$query = "SELECT COUNT(*) FROM stateBackend WHERE stateId = ? AND active > NOW() - INTERVAL ? MINUTE";
+		$res = $this->db->fetchValue($query, [$this->getStateId(), static::$timeOut + 1]);
 		return ($res['error'] === false && $res['data'] > 0);
 	}
 
@@ -406,8 +413,8 @@ class OasysBackendState
 	{
 		$settings = OasysSettings::getInstance();
 		$db = $settings->getDatabaseInstance();
-		$query = "SELECT COUNT(*) FROM stateBackend WHERE stateId = ? && TIMESTAMPDIFF(MINUTE,active,NOW()) <= ?";
-		$res = $db->fetchValue($query, [$stateId, static::$timeOut]);
+		$query = "SELECT COUNT(*) FROM stateBackend WHERE stateId = ? AND active > NOW() - INTERVAL ? MINUTE";
+		$res = $db->fetchValue($query, [$stateId, static::$timeOut + 1]);
 		return ($res['error'] === false && $res['data'] > 0);
 	}
 
@@ -440,10 +447,20 @@ class OasysBackendState
 
 	private static function cleanStaleStates(): void
 	{
+		if (self::$cleanupConsidered) {
+			return;
+		}
+		self::$cleanupConsidered = true;
 		$settings = OasysSettings::getInstance();
 		$db = $settings->getDatabaseInstance();
-		$query = "DELETE FROM stateBackend WHERE TIMESTAMPDIFF(MINUTE,active,NOW()) > ?";
-		$db->execute($query, [static::$timeOut]);
+		//Never enlist table-wide housekeeping in an application transaction.
+		//Sample once per request, including calls from fetchAllActiveStates().
+		if ($db->inTransaction() || mt_rand(1, 100) !== 1) {
+			return;
+		}
+		//Preserve whole-minute expiry while allowing a future index on active to be used.
+		$query = "DELETE FROM stateBackend WHERE active <= NOW() - INTERVAL ? MINUTE";
+		$db->execute($query, [static::$timeOut + 1]);
 	}
 
 	private static function wrapValue(mixed $value): array

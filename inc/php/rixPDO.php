@@ -4,7 +4,7 @@
 
 	class.rixPDO.php
 	wrapper around PDO for mySQL
-	version 2.02
+	version 2.03
 
 	version history at the end of the file
 
@@ -1312,6 +1312,11 @@
 			return $this->results(); // also when error occured, return the results which includes the error message
 		}
 
+		public function inTransaction(): bool
+		{
+			return $this->con !== null && $this->con->inTransaction();
+		}
+
 		/*
 		 * method startTransaction
 		 *
@@ -1597,6 +1602,7 @@ v2.01	2026-06-17
 	- added executeBatch() method
 v2.02	2026-06-18
 	- modifications in executeBatch() method
+v2.03	2026-09-23
+	- added inTransaction() to expose the connection's transaction status; returns false when disconnected
 
 */
-
