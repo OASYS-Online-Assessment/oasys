@@ -37,8 +37,8 @@ are also available from the GitHub **Releases** page.
 This GitHub repository is an automatically maintained, read-only mirror.
 Development takes place in a private Bitbucket repository.
 
-Community contributions are not accepted. GitHub issues, discussions, and
-pull requests are not monitored.
+Community code contributions are not accepted, and pull requests are disabled.
+GitHub Issues may be used to report bugs or request enhancements.
 
 ## Security
 
@@ -53,4 +53,3 @@ General Public License version 3 (AGPL-3.0).
 ## Contact
 
 For general enquiries, contact [oasys@uni.lu](mailto:oasys@uni.lu).
-
