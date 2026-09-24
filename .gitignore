@@ -17,6 +17,9 @@ desktop.ini
 tmp/
 assets/
 .*
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
 !.gitignore
 jsconfig.json
 !.htaccess

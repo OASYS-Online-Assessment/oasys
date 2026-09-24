@@ -1,0 +1,60 @@
+name: Publish release
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG"
+            exit 1
+          fi
+
+      - name: Check out release
+        uses: actions/checkout@v4
+
+      - name: Extract release notes
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          awk -v version="$RELEASE_TAG" '
+            index($0, "## [" version "] - ") == 1 {
+              date = $0
+              sub(/^.*\] - /, "", date)
+              print "Originally released on " date "."
+              print ""
+              found = 1
+              next
+            }
+            found && /^## \[/ { exit }
+            found { print }
+            END {
+              if (!found) {
+                print "No CHANGELOG.md entry found for " version > "/dev/stderr"
+                exit 1
+              }
+            }
+          ' CHANGELOG.md > release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            --verify-tag \
+            --title "OASYS $RELEASE_TAG" \
+            --notes-file release-notes.md \
+            --latest

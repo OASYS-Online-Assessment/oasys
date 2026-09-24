@@ -1,6 +1,23 @@
 image: atlassian/default-image:4
 
+clone:
+  depth: full
+
 pipelines:
+  tags:
+    '*.*.*':
+      - step:
+          name: Publish release to GitHub
+          script:
+            - |
+              if [[ ! "$BITBUCKET_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "Refusing to publish invalid release tag: $BITBUCKET_TAG"
+                exit 1
+              fi
+            - git fetch origin main:refs/remotes/origin/main
+            - test "$BITBUCKET_COMMIT" = "$(git rev-parse refs/remotes/origin/main)"
+            - git remote add github git@github.com:OASYS-Online-Assessment/oasys.git
+            - git push --atomic github "$BITBUCKET_COMMIT:refs/heads/main" "refs/tags/$BITBUCKET_TAG:refs/tags/$BITBUCKET_TAG"
   custom:
     qodana:
       - step:
