@@ -1440,8 +1440,9 @@ class userAuth
 				$log_oldPerm = json_encode($log_oldPerm, JSON_PRETTY_PRINT); // old values in JSON
 				$log_newPerm = json_encode($newPermObj, JSON_PRETTY_PRINT); // new values in JSON
 
-				// get name of folder being modified
-				foreach ($permAuth->folder_id as $fId) {
+				// Log only the folder handled by the current update iteration.
+				$logFolderIds = isset($data['log_fId']) ? [$data['log_fId']] : $permAuth->folder_id;
+				foreach ($logFolderIds as $fId) {
 					$fldName = $this->db->fetchValue("SELECT `name` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$fId])['data'];
 
 					if ($log_newPerm !== $log_oldPerm)
@@ -1455,21 +1456,21 @@ class userAuth
 					# OWNER CHANGE LOGGING #
 					# -------------------- #
 					$log_curOwnerId = $data['log_curOwnerId'] !== "" ? intval($data['log_curOwnerId']) : "<USER REMOVED>";
+					$log_newOwnerId = is_array($data['newOwner']) ? ($data['newOwner'][$fId] ?? null) : $data['newOwner'];
 
 					// only do owner logging operation if new owner is not old owner
-					if ($log_curOwnerId !== $data['newOwner'][$fId]) {
+					if ($log_newOwnerId !== null && (string) $log_curOwnerId !== (string) $log_newOwnerId) {
 						$operDetail['action'] = "Folder Owner Change";
 
-						$log_newOwnerName = $this->db->fetchValue(("SELECT `name` FROM `users` WHERE `id` = ?"), [$data['newOwner'][$fId]])['data'];
+						$log_newOwnerName = $this->db->fetchValue(("SELECT `name` FROM `users` WHERE `id` = ?"), [$log_newOwnerId])['data'];
 						$log_fldName = $this->db->fetchValue("SELECT `name` FROM {$it_vars['i_rootFldTblName']} WHERE `id` = ?", [$fId])['data'];
 
 						$log_curOwnerName = is_int($log_curOwnerId) ? $this->db->fetchValue(("SELECT `name` FROM `users` WHERE `id` = ?"), [$log_curOwnerId])['data'] : "<USER REMOVED>";
 
 						// log action
 						if (empty($log_curOwnerName)) $log_curOwnerName = "<USER REMOVED>"; // when dealing with expired/non-existent user IDs
-						if (is_array($data['newOwner'])) $data['newOwner'] = $data['newOwner'][array_key_first($data['newOwner'])]; // handle array data -- only updating to one owner ever at a time
 						$this->writeLogEntry(
-							"Owner changed in [$permAuth->srcRef] module on folder ID [$fId] ($log_fldName) from userid [$log_curOwnerId] ($log_curOwnerName) to userid [{$data['newOwner']}] ($log_newOwnerName)",
+							"Owner changed in [$permAuth->srcRef] module on folder ID [$fId] ($log_fldName) from userid [$log_curOwnerId] ($log_curOwnerName) to userid [$log_newOwnerId] ($log_newOwnerName)",
 							$operLogname,
 							$operDetail
 						);

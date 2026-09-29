@@ -987,20 +987,31 @@ function toggleOpenClose(e) {
     let node = $(e.delegateTarget).parent();
     let k = node.attr('data-category');
     if (node.hasClass('closed')) {
-        node.removeClass('closed');
         structure[k].open = true;
+        // A refresh does not render rows for closed categories. Rebuild only
+        // when those rows are absent; otherwise a class toggle is sufficient.
+        if (node.children('tr.login').length === 0) {
+            renderList();
+            return;
+        }
+        node.removeClass('closed');
     } else {
         node.addClass('closed');
         structure[k].open = false;
     }
-    renderList();
+    updateExpandCollapseButtons();
 }
 
 function toggleOpenCloseAll(mode) {
     if (mode === 'expand') {
+        const missingRows = $('tbody.category.closed').toArray().some(node => $(node).children('tr.login').length === 0);
         $('tbody.category').removeClass('closed');
         for (let k in structure) {
             structure[k].open = true;
+        }
+        if (missingRows) {
+            renderList();
+            return;
         }
     } else {
         $('tbody.category').addClass('closed');
@@ -1008,7 +1019,6 @@ function toggleOpenCloseAll(mode) {
             structure[k].open = false;
         }
     }
-    renderList();
     updateExpandCollapseButtons();
 }
 

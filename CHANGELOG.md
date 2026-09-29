@@ -2,6 +2,13 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.10] - 2026-09-29
+
+### Fixed
+
+- Fixed a PHP error when saving permissions for multiple selected folders while retaining their existing owners.
+- Improved Activity Tracker performance for large datasets and made category expand/collapse operations responsive.
+
 ## [3.6.9] - 2026-09-23
 
 ### Added

@@ -1594,6 +1594,7 @@ class permAuth
 			$this->getIhTreeRecurs($fId, $it_vars);
 
 			// log actions 
+			$data['log_fId'] = $fId;
 			$this->myAuth->prepLog($data, "updatePerm", $returnData);
 
 			// standard returns

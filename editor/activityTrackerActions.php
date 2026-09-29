@@ -499,7 +499,8 @@ function fetchActivity($data, &$db, &$returnData): void
                     clientOpen,
                     (SELECT b.subType
                        FROM behaviour b
-                      WHERE b.passwordId = activity.passwordId
+					  WHERE b.loginId = activity.loginId
+						AND b.passwordId = activity.passwordId
 						AND b.testId = activity.testId
 						AND b.eventType = 'behaviour'
 						AND b.subType IN ('login','endTest','timeUp','navigatedPastEnd','adminCloseTest','scoringStarted','leaveTest','closeWindow','resumeTest','forceLogoff','reopenTest')
