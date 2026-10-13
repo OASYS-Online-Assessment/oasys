@@ -2,6 +2,13 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.12] - 2026-10-13
+
+### Fixed
+
+- Fixed Translation Review remaining empty for regular Content Manager users with permission to edit the page.
+- Added the missing error-dialog resources to Translation Review so request failures are displayed correctly.
+
 ## [3.6.11] - 2026-10-13
 
 ### Fixed

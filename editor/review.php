@@ -35,6 +35,8 @@
         includeJS("../inc/jsMultipleChoice/jsMultipleChoice.js");
         includeCSS("../inc/jsMultipleChoice/jsMultipleChoice.css");
         includeJS("../inc/js/jsModalWait.js");
+		includeJS("../inc/nxDialog/nxDialog.js");
+		includeCSS("../inc/nxDialog/nxDialog.css");
 
         /* main script for the manager */
         includeJS("inc/js/review.js");

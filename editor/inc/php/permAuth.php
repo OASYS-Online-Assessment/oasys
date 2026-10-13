@@ -88,7 +88,7 @@ class permAuth
 		# ------------------------------------------------------------------------------------------ #
 		# Determine referring page and set vars based on it, or exit with error code on bad referral #
 		# ------------------------------------------------------------------------------------------ #
-		$allowedSources = ['dashboard', 'backup', 'upgrader', 'systemSettings', 'l10n', 'users', 'content', 'tests', 'items', 'pages', 'testTakers', 'results', 'accountProp', 'activityTracker'];
+		$allowedSources = ['dashboard', 'backup', 'upgrader', 'systemSettings', 'l10n', 'users', 'content', 'tests', 'items', 'pages', 'review', 'testTakers', 'results', 'accountProp', 'activityTracker'];
 
 		switch ($action) {
 			case 'previewItem':
@@ -120,9 +120,9 @@ class permAuth
 			$this->returnData['error'] = $this->uiLang->translate("Could not determine section referral source.");
 			return;
 		}
-		// The attached page editor is part of the Content Manager and uses the
-		// same item-folder permission tables as items.php.
-		if ($this->srcRef === 'pages') $this->srcRef = 'items';
+		// The attached page editor and translation review are part of the Content
+		// Manager and use the same item-folder permission tables as items.php.
+		if (in_array($this->srcRef, ['pages', 'review'], true)) $this->srcRef = 'items';
 
 		# --------------------------------- #
 		# Load JSON permission schema files #
