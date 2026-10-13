@@ -99,14 +99,18 @@
                     callback: function (b) {
                         if(b === 'cancel') return;
                         if (context === 'editor') comObj.save(); // only in editor, not in assessment
-                        comObj.closeExternalEditor();
+                        // Let the close button's pointerup handler finish before removing its iframe.
+                        // Removing a document while it still owns pointer capture can leave Firefox
+                        // swallowing pointer events in subsequently opened preview windows.
+                        setTimeout(() => comObj.closeExternalEditor(), 0);
                     }
                 };
                 new nxDialog('overwriteDialog', dialogData, null);
             } else {
                 if (context === 'editor') comObj.save(); // only in editor, not in assessment
                 if (context === 'assessment') comObj.setExternalData(docData()); // only in assessment
-                comObj.closeExternalEditor();
+                // Let the close button's pointerup handler finish before removing its iframe.
+                setTimeout(() => comObj.closeExternalEditor(), 0);
             }
             
         };

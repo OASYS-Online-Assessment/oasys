@@ -2,6 +2,12 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.11] - 2026-10-13
+
+### Fixed
+
+- Fixed mouse input becoming unresponsive in a page preview after opening and closing the Concept Maps editor in the Content Manager.
+
 ## [3.6.10] - 2026-09-29
 
 ### Fixed
