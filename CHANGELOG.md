@@ -2,6 +2,13 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.13] - 2026-10-15
+
+### Fixed
+
+- Fixed Test Taker Manager assignment validation incorrectly rejecting tests that regular users could access in the Test Manager, including password, label, copy, creation, and CSV workflows.
+- Fixed containerized installations hiding the Content Manager for regular users when the unavailable Upgrader entry was removed.
+
 ## [3.6.12] - 2026-10-13
 
 ### Fixed

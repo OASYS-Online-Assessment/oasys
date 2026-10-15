@@ -25,8 +25,11 @@ if (in_array("systemsettings", $settings['editorButtons']) === true && $myAuth->
 
 /* special upgrader menu item removal for containerized environments */
 if (isset($_SERVER["OASYS_APP_RUNMODE"]) && $_SERVER["OASYS_APP_RUNMODE"] === "containerized") {
-    unset($settings['editorButtons'][array_search("upgrader", $settings['editorButtons'])]);
-    $settings['editorButtons'] = array_values($settings['editorButtons']);
+    $upgraderIndex = array_search("upgrader", $settings['editorButtons'], true);
+    if ($upgraderIndex !== false) {
+        unset($settings['editorButtons'][$upgraderIndex]);
+        $settings['editorButtons'] = array_values($settings['editorButtons']);
+    }
 }
 
 if ((isset($pageName) && $pageName === "upgrader") && (isset($_SERVER["OASYS_APP_RUNMODE"]) && $_SERVER["OASYS_APP_RUNMODE"] === "containerized")) {

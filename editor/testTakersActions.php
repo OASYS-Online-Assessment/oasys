@@ -3185,19 +3185,15 @@ function wizardCreateFromFile($data, rixPDO &$db, &$returnData)
         }
     }
 
-    $hasElevatedTestAccess = $myAuth->checkSA() || $myAuth->checkAdmin() || $myAuth->checkElevatedAdmin();
     $folderAccessCache = [];
     $canReadTest = function (int $testId) use (
-        &$db, &$myAuth, &$permAuth, &$testsById, &$folderAccessCache, $hasElevatedTestAccess
+        &$db, &$testsById, &$folderAccessCache
     ): array {
         if ($testId <= 0 || !array_key_exists($testId, $testsById)) return [false, 'missing'];
-        if ($hasElevatedTestAccess) return [true, 'ok'];
 
         $parentId = $testsById[$testId];
         if (!array_key_exists($parentId, $folderAccessCache)) {
-            $owner = $db->fetchValue("SELECT `owner` FROM `testFolders` WHERE `id` = ? LIMIT 1", [$parentId]);
-            $isOwner = empty($owner['error']) && (int)($owner['data'] ?? 0) === (int)$myAuth->userid;
-            $folderAccessCache[$parentId] = $permAuth->getAccessVal("tests", "fetchLibrary", "itemObject", $parentId) || $isOwner;
+            $folderAccessCache[$parentId] = ttCanReadTestFolder($parentId, $db);
         }
         return $folderAccessCache[$parentId] ? [true, 'ok'] : [false, 'denied'];
     };
@@ -5033,9 +5029,26 @@ function ttUserOwnsTestFolder(int $folderId, rixPDO &$db): bool
     return (int)($row['data']['owner'] ?? 0) === (int)$myAuth->userid;
 }
 
-function ttCanReadAssignedTest(int $testId, rixPDO &$db): array
+function ttCanReadTestFolder(int $folderId, rixPDO &$db): bool
 {
     global $myAuth, $permAuth;
+    if ($folderId <= 0) return false;
+    if ($myAuth->checkSA() || $myAuth->checkAdmin() || $myAuth->checkElevatedAdmin()) return true;
+    if (ttUserOwnsTestFolder($folderId, $db)) return true;
+
+    // Assignment requests originate in the Test Taker Manager. Permission
+    // lookups must nevertheless use the Test Manager folder-access table.
+    $previousSource = $permAuth->srcRef;
+    $permAuth->srcRef = 'tests';
+    try {
+        return $permAuth->getAccessVal('tests', 'fetchLibrary', 'itemObject', $folderId);
+    } finally {
+        $permAuth->srcRef = $previousSource;
+    }
+}
+
+function ttCanReadAssignedTest(int $testId, rixPDO &$db): array
+{
     static $cache = array();
 
     if ($testId <= 0) return array(false, 'missing');
@@ -5045,12 +5058,7 @@ function ttCanReadAssignedTest(int $testId, rixPDO &$db): array
             $cache[$testId] = array(false, 'missing');
         } else {
             $parentId = (int)($row['data']['parent'] ?? 0);
-            $hasAccess = ($myAuth->checkSA() || $myAuth->checkAdmin() || $myAuth->checkElevatedAdmin())
-                ? true
-                : (
-                    $permAuth->getAccessVal('tests', 'fetchLibrary', 'itemObject', $parentId)
-                    || ttUserOwnsTestFolder($parentId, $db)
-                );
+            $hasAccess = ttCanReadTestFolder($parentId, $db);
             $cache[$testId] = array($hasAccess, $hasAccess ? 'ok' : 'denied');
         }
     }
