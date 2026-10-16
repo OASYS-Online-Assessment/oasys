@@ -5684,7 +5684,7 @@ function addTests() {
         || mode === 'modifyselected') {
         dialogData = {
             buttons: [{
-                label: UILANG.m('cancel'), 'cancel': true, value: 'cancel'
+                label: UILANG.m('Close'), 'cancel': true, value: 'cancel'
             }, {
                 label: UILANG.m('Add to selected'), 'default': false, disabled: true, value: 'add2', keepOpen: true
             }, {
@@ -5698,7 +5698,7 @@ function addTests() {
     } else {
         dialogData = {
             buttons: [{
-                label: UILANG.m('cancel'), 'cancel': true, value: 'cancel'
+                label: UILANG.m('Close'), 'cancel': true, value: 'cancel'
             }, {
                 label: UILANG.m('Add to all'), 'default': false, disabled: true, value: 'add2all2', keepOpen: true
             }, {

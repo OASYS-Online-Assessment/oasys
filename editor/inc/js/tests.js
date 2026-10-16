@@ -1604,7 +1604,7 @@ function createTestStateSegmentedSwitch(parent) {
         '</div>'
     );
 
-    const testStateHelpHtml = UILANG.m('<p><strong>Draft</strong> is the working mode for a test. You can still change the test structure and content while you are preparing it.</p><p><strong>Published (Locked)</strong> protects a test after it is ready to use. The structure and test content are locked so existing results cannot be damaged by later changes.</p><p>You can publish a draft at any time. Switching a published test back to draft may be destricted when results of test takers exist you do not have access to.</p>');
+    const testStateHelpHtml = UILANG.m('<p><strong>Draft</strong> is the working mode for a test. You can change its structure and content while preparing it.</p><p><strong>Published (Locked)</strong> protects a test after it is ready to use. Linear and fluid test structures and their content are locked. For mutation tests, the mutation structure and all assigned linear tests are locked.</p><p>An assigned linear test cannot be switched back to Draft while it is part of a published mutation test. Set the mutation test to Draft first. Switching any published test back to Draft may also be restricted when results exist for test takers you cannot access.</p>');
     new OasysHelp('testStateHelp', {
         htmlContent: testStateHelpHtml,
         title: UILANG.m('Test state')
@@ -1666,6 +1666,15 @@ function setPublishedUiState() {
             buttons.testVariables.disable();
             buttons.testLabels.disable();
             buttons.testPools.disable();
+        } else if (serverData.testLevel.structure.type === 'mutation') {
+            $('#box_mutationStructure').addClass('published-structure-lock');
+            gui.boxes.mutationStructure.lock();
+            gui.mutationStructureView.lock('greyout');
+            mutationStructureTbButtons.addElements.disable();
+            mutationStructureTbButtons.clearStructure.disable();
+            mutationStructureTbButtons.loadExistingStructure.disable();
+            buttons.loadExistingMutationStructure.disable();
+            gui.boxes.properties.mutationMethod.lock();
         }
     } else {
         if (serverData.testLevel.structure.type === 'linear') {
@@ -1685,6 +1694,13 @@ function setPublishedUiState() {
             buttons.testVariables.enable();
             buttons.testLabels.enable();
             buttons.testPools.enable();
+        } else if (serverData.testLevel.structure.type === 'mutation') {
+            gui.boxes.mutationStructure.unlock();
+            gui.mutationStructureView.unlock();
+            mutationStructureTbButtons.addElements.enable();
+            mutationStructureTbButtons.loadExistingStructure.enable();
+            buttons.loadExistingMutationStructure.enable();
+            gui.boxes.properties.mutationMethod.unlock();
         }
     }
     updateClearStructureButtons();
@@ -1704,12 +1720,12 @@ function updateClearStructureButtons() {
     if (!serverData.testLevel || mode !== 'editTest') return;
     const testType = serverData.testLevel.structure.type;
     const items = serverData.testLevel.structure.items || [];
-    if (testType === 'linear' && !(isTestPublished() && testType !== 'mutation')) {
+    if (testType === 'linear' && !isTestPublished()) {
         structureTbButtons.loadExistingStructure.enable();
-    } else if (testType === 'mutation') {
+    } else if (testType === 'mutation' && !isTestPublished()) {
         mutationStructureTbButtons.loadExistingStructure.enable();
     }
-    if (!items.length || (isTestPublished() && testType !== 'mutation')) return;
+    if (!items.length || isTestPublished()) return;
 
     if (testType === 'linear') {
         structureTbButtons.clearStructure.enable();
@@ -3302,7 +3318,7 @@ function renderTestPreview() {
     tmPreviewAdjustStructureHeight();
     $(window).off('resize.tmPreviewStructure').on('resize.tmPreviewStructure', tmPreviewAdjustStructureHeight);
     if ($('#tmPreviewStateHelp').length) {
-        const testStateHelpHtml = UILANG.m('<p><strong>Draft</strong> is the working mode for a test. You can still change the test structure and content while you are preparing it.</p><p><strong>Published (Locked)</strong> protects a test after it is ready to use. The structure and test content are locked so existing results cannot be damaged by later changes.</p><p>You can publish a draft at any time. Switching a published test back to draft may be destricted when results of test takers exist you do not have access to.</p>');
+        const testStateHelpHtml = UILANG.m('<p><strong>Draft</strong> is the working mode for a test. You can change its structure and content while preparing it.</p><p><strong>Published (Locked)</strong> protects a test after it is ready to use. Linear and fluid test structures and their content are locked. For mutation tests, the mutation structure and all assigned linear tests are locked.</p><p>An assigned linear test cannot be switched back to Draft while it is part of a published mutation test. Set the mutation test to Draft first. Switching any published test back to Draft may also be restricted when results exist for test takers you cannot access.</p>');
         new OasysHelp('tmPreviewStateHelp', {
             htmlContent: testStateHelpHtml,
             title: UILANG.m('Test state')
@@ -11743,7 +11759,7 @@ function addItems() {
     if (testType === 'fluid') {
         dialogData = {
             buttons: [{
-                label: UILANG.m('cancel'),
+                label: UILANG.m('Close'),
                 'cancel': true,
                 value: 'cancel'
             }, {
@@ -11766,7 +11782,7 @@ function addItems() {
     } else {
         dialogData = {
             buttons: [{
-                label: UILANG.m('cancel'),
+                label: UILANG.m('Close'),
                 'cancel': true,
                 value: 'cancel'
             }, {
@@ -11983,7 +11999,7 @@ function addItems() {
 function addMutationItems() {
     let dialogData = {
         buttons: [{
-            label: UILANG.m('cancel'),
+            label: UILANG.m('Close'),
             'cancel': true,
             value: 'cancel'
         }, {

@@ -3234,7 +3234,7 @@ function resetResults($data, &$db, &$returnData)
 		}
 
 		if (isset($data['structure'])) {
-			if ($mSave === false && $currentState === 'published') {
+			if ($currentState === 'published') {
 				$returnData['error'] = $uiLang->translate('This test is Published (Locked). The test structure cannot be changed while the test is locked.');
 				die();
 			}
@@ -3398,7 +3398,7 @@ function resetResults($data, &$db, &$returnData)
 		}
 
 		$state = tmNormalizeTestState($structure['state'] ?? 'draft');
-		if ($state === 'published' && $testType !== 'mutation') {
+		if ($state === 'published') {
 			$returnData['error'] = $uiLang->translate('This test is Published (Locked). The test structure cannot be changed while the test is locked.');
 			return;
 		}
@@ -4669,6 +4669,10 @@ function resetResults($data, &$db, &$returnData)
 		$sourceStructure = json_decode($source['structure'] ?? '', true);
 		if (!is_array($targetStructure) || ($targetStructure['type'] ?? 'linear') !== 'mutation' || !is_array($sourceStructure) || ($sourceStructure['type'] ?? 'linear') !== 'mutation') {
 			$returnData['error'] = $uiLang->translate('Only mutation test structures can be imported here.');
+			return;
+		}
+		if (tmNormalizeTestState($targetStructure['state'] ?? 'draft') === 'published') {
+			$returnData['error'] = $uiLang->translate('This test is Published (Locked). The test structure cannot be changed while the test is locked.');
 			return;
 		}
 

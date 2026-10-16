@@ -2,6 +2,13 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.14] - 2026-10-16
+
+### Fixed
+
+- Renamed the misleading Cancel button to Close in Test Manager and Test Taker Manager page and test assignment dialogs, including the German and French labels.
+- Locked published mutation test structures, prevented their assigned linear tests from returning to Draft, and clarified the localized Test state help.
+
 ## [3.6.13] - 2026-10-15
 
 ### Fixed
