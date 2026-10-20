@@ -196,7 +196,6 @@ function global_showMessage(s, name = null, width = null) {
 		title: name || global_getText('global', 'error'),
 		width: width || 500
 	};
-	console.log(s);
 	new nxDialog('popupMessage', dialogData);
 }
 

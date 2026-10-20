@@ -38,6 +38,10 @@ function dashboard_init() {
 }
 
 function dashboard_click(testData) {
+	if (testData.activity?.status?.finished === true) {
+		global_showMessage(global_getText('dashboard', 'testFinished'));
+		return;
+	}
 	if(testData.available === false) {
 		global_showMessage(global_getText('dashboard', 'testNotAvailable'));
 		return;
