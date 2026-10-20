@@ -17,7 +17,7 @@ function skin_init() {
 		items: {}
 	};
 
-	skin.options.fontToggle = !!test.skin.skinOptions.dyslexicFont?.value;
+	skin.options.fontToggle = !!test.skin.skinOptions.dyslexicFont;
 	if (skin.options.fontToggle) {
 		let buttonData = {
 			theme: 'topButton',

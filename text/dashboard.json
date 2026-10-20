@@ -35,6 +35,12 @@
 	"FR": "Tâche non disponible pour le moment",
 	"LU": "Aufgab zu desem Moment net verfügbar"
   },
+  "testFinished":{
+	"EN": "This task has already been finished and is now locked.",
+	"DE": "Diese Aufgabe wurde bereits abgeschlossen und ist jetzt gesperrt.",
+	"FR": "Cette tâche a déjà été terminée et est maintenant verrouillée.",
+	"LU": "Dës Aufgab ass scho fäerdeg an ass elo gespaart."
+  },
   "noTestsAvailable": {
 	"EN": "No tasks available",
 	"DE": "Keine Aufgaben verfügbar",

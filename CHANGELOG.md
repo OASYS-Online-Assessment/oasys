@@ -2,6 +2,14 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.17] - 2026-10-20
+
+### Fixed
+- Fixed dyslexic button not showing even if activated in skin settings
+- Fixed incorrect error message in student dashboard when a task was already finished and the student tried to start it again
+- Now showing task of 2+ tests correctly in grey scale when all of the tests have been finished
+- Removed an errant console.log() statement
+
 ## [3.6.16] - 2026-10-20
 
 ### Fixed

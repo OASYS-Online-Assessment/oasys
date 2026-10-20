@@ -61,7 +61,7 @@ class DashboardTestItem {
 		this.oldTestsContainer = "pastTestsList";
 		this.state = this.setState();
 		this.placementContainer = this.setContainer();
-		this.available = data.available ?? true; //if not set, assume true
+		this.available = this.status.finished !== true && (data.available ?? true);
 
 		this.html = "";
 		this.setContainer();
