@@ -71,12 +71,15 @@ function resultsExportRead(string $token): ?array
 function resultsExportFilename(array $returnData, string $extension): string
 {
 	$prefix = match ($returnData['action'] ?? '') {
-		'fetchDetailedTestScore' => 'testscore',
-		'fetchBehaviourTiming' => 'behaviourTiming',
-		default => 'testresults',
+		'fetchDetailedTestScore' => 'scores',
+		'fetchBehaviourTiming' => 'time-spent',
+		default => 'answers',
 	};
 	$testId = (int)($returnData['testData']['id'] ?? 0);
-	$testName = (string)($returnData['testData']['name'] ?? 'test');
+	$testName = preg_replace('/[\x00-\x1F\x7F"\\\\\/:*?<>|]+/', '_', (string)($returnData['testData']['name'] ?? 'test'));
+	$testName = trim((string)$testName, " .\t\n\r\0\x0B");
+	if ($testName === '') $testName = 'test';
+	$extension = preg_replace('/[^a-z0-9]+/i', '', $extension) ?: 'csv';
 	return $prefix . '_id_' . $testId . '_' . $testName . '.' . $extension;
 }
 

@@ -2,6 +2,12 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.16] - 2026-10-20
+
+### Fixed
+
+- Fixed Results Manager exports losing the CSV filename extension in Chrome and gave answer, score, and time-spent exports distinct, browser-compatible filenames.
+
 ## [3.6.15] - 2026-10-20
 
 ### Added
