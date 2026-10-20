@@ -8,7 +8,7 @@ oasysRegisterActionAllowlists([
         'updateUserSettings', 'check', 'langChange', 'pwdChange', 'emailChange',
     ],
     'editor/activityTrackerActions.php' => [
-        'reopenTest', 'closeTest', 'addTime', 'resetActivity',
+        'reopenTest', 'closeTest', 'addTime', 'forceLogout', 'resetActivity',
         'fetchJourneySelection', 'fetchJourneyDetail',
     ],
     'editor/backupActions.php' => [

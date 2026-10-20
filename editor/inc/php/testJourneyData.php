@@ -144,7 +144,7 @@ function journeyFetchEventStatsByPassword(int $testId, rixPDO &$db): array
 
 function journeyFetchLifecycleByPassword(int $testId, rixPDO &$db): array
 {
-	$events = "'login','endTest','timeUp','navigatedPastEnd','adminCloseTest','scoringStarted','leaveTest','closeWindow','resumeTest','forceLogoff','reopenTest'";
+	$events = "'login','endTest','timeUp','navigatedPastEnd','adminCloseTest','adminForceLogout','scoringStarted','leaveTest','closeWindow','resumeTest','forceLogoff','reopenTest'";
 	$rows = $db->fetchTable(
 		"SELECT behaviour.passwordId, behaviour.subType
 		 FROM behaviour
@@ -371,7 +371,7 @@ function journeyIsLifecycleEvent(string $subType): bool
 {
 	return in_array($subType, [
 		'login', 'endTest', 'timeUp', 'navigatedPastEnd', 'adminCloseTest',
-		'scoringStarted', 'leaveTest', 'closeWindow', 'resumeTest', 'forceLogoff', 'reopenTest'
+		'adminForceLogout', 'scoringStarted', 'leaveTest', 'closeWindow', 'resumeTest', 'forceLogoff', 'reopenTest'
 	], true);
 }
 
@@ -449,6 +449,7 @@ function journeyBuildAnalysis(array $events, array $answers, array $pageMap): ar
 		if ($subType === 'closeWindow') $flags['closedWindow'] = true;
 		if ($subType === 'leaveTest') $flags['leftTest'] = true;
 		if ($subType === 'adminCloseTest') $flags['adminClosed'] = true;
+		if ($subType === 'adminForceLogout') $flags['forcedLogoff'] = true;
 		if ($subType === 'scoringStarted') $flags['scoringClosed'] = true;
 		if ($subType === 'forceLogoff') $flags['forcedLogoff'] = true;
 		if ($subType === 'reopenTest') $flags['reopened'] = true;
@@ -459,7 +460,7 @@ function journeyBuildAnalysis(array $events, array $answers, array $pageMap): ar
 		if (in_array($subType, ['startPlayback', 'pausePlayback', 'endPlayback', 'playbackEnded'], true)) $flags['mediaEvents']++;
 
 		$currentStartsSession = in_array($subType, ['login', 'resumeTest', 'reopenTest'], true);
-		$previousEndsSession = $prev && in_array((string)($prev['subType'] ?? ''), ['closeWindow', 'leaveTest', 'endTest', 'timeUp', 'navigatedPastEnd', 'adminCloseTest', 'scoringStarted', 'forceLogoff'], true);
+		$previousEndsSession = $prev && in_array((string)($prev['subType'] ?? ''), ['closeWindow', 'leaveTest', 'endTest', 'timeUp', 'navigatedPastEnd', 'adminCloseTest', 'adminForceLogout', 'scoringStarted', 'forceLogoff'], true);
 		$delta = ($currentStartsSession || $previousEndsSession)
 			? null
 			: journeySecondsBetween($prev['tsClient'] ?? null, $event['tsClient'] ?? null);
@@ -830,6 +831,8 @@ function journeyInterpretEvent(array $event, $data, array $pageMap, array $navig
 			return ['label' => 'Navigated past test end', 'detail' => 'Forced navigation reached beyond the final test page.'];
 		case 'adminCloseTest':
 			return ['label' => 'Closed by administrator', 'detail' => journeyKeyValueSummary($data)];
+		case 'adminForceLogout':
+			return ['label' => 'Forced logout by backend user', 'detail' => journeyKeyValueSummary($data)];
 		case 'scoringStarted':
 			return ['label' => 'Closed for scoring', 'detail' => 'Manual scoring was started for the open test.'];
 		case 'forceLogoff':
@@ -952,7 +955,7 @@ function journeyStatusLabel(
 {
 	$isClosed = $timeLeft !== null && (int)$timeLeft === 0;
 	if ($lifecycle === 'adminCloseTest' || $lifecycle === 'scoringStarted') return 'Closed';
-	if ($lifecycle === 'forceLogoff') return 'Forced logout';
+	if ($lifecycle === 'forceLogoff' || $lifecycle === 'adminForceLogout') return 'Forced logout';
 	if ($lifecycle === 'leaveTest') return 'Left test';
 	if ($lifecycle === 'closeWindow') return 'Window closed';
 	if ($lifecycle === 'reopenTest') return 'Reopened - waiting for login';

@@ -863,8 +863,8 @@ table#details a:focus {
 }
 
 #controls {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     margin-top: 14px;
 }
@@ -884,6 +884,7 @@ table#details a:focus {
     font-size: 13px;
     font-weight: 700;
     box-shadow: none;
+    width: 100%;
     transition: background-color .15s ease, border-color .15s ease, color .15s ease;
 }
 
@@ -909,11 +910,14 @@ table#details a:focus {
     background: #fff5df !important;
 }
 
+#btnForceLogout,
 #btnResetActivity {
     border-color: #bd3f4a !important;
     color: #9e2f3a !important;
 }
 
+#btnForceLogout:hover,
+#btnForceLogout:focus,
 #btnResetActivity:hover,
 #btnResetActivity:focus {
     background: #fff0f1 !important;

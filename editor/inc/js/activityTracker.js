@@ -207,6 +207,7 @@ function onDOMReady() {
     controls.append('<button id="btnIncreaseTime">' + UILANG.m('add time') + '</button>');
     controls.append('<button id="btnReopenTest">' + UILANG.m('reopen test') + '</button>');
     controls.append('<button id="btnCloseTest">' + UILANG.m('close test') + '</button>');
+    controls.append('<button id="btnForceLogout">' + UILANG.m('force logout') + '</button>');
     controls.append('<button id="btnResetActivity">' + UILANG.m('reset activity') + '</button>');
     controls.hide();
 
@@ -220,6 +221,10 @@ function onDOMReady() {
     });
     pointerHandler.listen($('#btnCloseTest'), {
         callbacks: {click: closeTest},
+        hoverClass: "hovered"
+    });
+    pointerHandler.listen($('#btnForceLogout'), {
+        callbacks: {click: forceLogout},
         hoverClass: "hovered"
     });
     pointerHandler.listen($('#btnResetActivity'), {
@@ -330,6 +335,30 @@ function reopenTest() {
                 let activity = getSelectedActivity();
                 if (!activity) return;
                 executeAction({passwordId: activity.passwordId, testId: selectedEntry.testId, action: 'reopenTest'});
+            }
+        }
+    );
+}
+
+function forceLogout() {
+    let dialogData = {
+        buttons: [
+            {label: UILANG.m('Cancel'), 'cancel': true, value: 'cancel'},
+            {label: UILANG.m('force logout'), 'default': true, value: 'confirm'}
+        ],
+        contents: '<div class="deleteConfirm"><div class="deleteConfirmText"><p>' + UILANG.m('Log this test taker out of the current session? Their answers, progress and remaining time will be kept. They can sign in again and continue the test.') + '</p></div></div>',
+        icon: "../images/warning.png",
+        iconWidth: 64,
+        title: UILANG.m('force logout'),
+        returnPromise: true,
+        width: 470
+    };
+    showDialog('forceLogoutDialog', dialogData).then(
+        (res) => {
+            if (res.button === 'confirm') {
+                let activity = getSelectedActivity();
+                if (!activity) return;
+                executeAction({passwordId: activity.passwordId, testId: selectedEntry.testId, action: 'forceLogout'});
             }
         }
     );
@@ -1173,6 +1202,7 @@ function showDetails(login, testId, passwordId) {
     });
     controls.toggle(activity.canWrite === true || Number(activity.canWrite) === 1);
     if (!controls.is(':visible')) return;
+    $('#btnForceLogout').toggle(Number(activity.clientOpen) === 1 && activity.status !== STATUS_CLOSED);
     //if status is closed, disable the "close test" button
     if (activity.status === STATUS_CLOSED) {
         $('#btnCloseTest').hide();

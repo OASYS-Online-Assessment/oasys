@@ -73,6 +73,9 @@ if ($action !== false) {
             case 'addTime':
                 addTime($action, $db, $returnData);
                 break;
+            case 'forceLogout':
+                forceLogout($action, $db, $returnData);
+                break;
             case 'resetActivity':
                 resetActivity($action, $db, $returnData);
                 break;
@@ -503,7 +506,7 @@ function fetchActivity($data, &$db, &$returnData): void
 						AND b.passwordId = activity.passwordId
 						AND b.testId = activity.testId
 						AND b.eventType = 'behaviour'
-						AND b.subType IN ('login','endTest','timeUp','navigatedPastEnd','adminCloseTest','scoringStarted','leaveTest','closeWindow','resumeTest','forceLogoff','reopenTest')
+						AND b.subType IN ('login','endTest','timeUp','navigatedPastEnd','adminCloseTest','adminForceLogout','scoringStarted','leaveTest','closeWindow','resumeTest','forceLogoff','reopenTest')
 					  ORDER BY b.eventId DESC
 					  LIMIT 1) AS lifecycle,
                     ROUND(progress*100) as progress
@@ -685,6 +688,37 @@ function addTime($action, &$db, &$returnData): void
     } elseif (($res['rows'] ?? 0) === 0) {
         $returnData['error'] = 'The activity was not changed.';
     }
+}
+
+function forceLogout($action, &$db, &$returnData): void
+{
+    global $myAuth;
+
+    $passwordId = isset($action['passwordId']) ? (int)$action['passwordId'] : null;
+    $testId = isset($action['testId']) ? (int)$action['testId'] : null;
+
+    if (!assertActivityAccess($passwordId, $testId, $db, $returnData, 'write')) return;
+
+    $res = $db->execute(
+        "UPDATE activity
+         SET clientOpen = 0, instructions = NULL, tsActiveServer = tsActiveServer
+         WHERE passwordId = ? AND testId = ?",
+        [$passwordId, $testId]
+    );
+    if ($res['error']) {
+        $returnData['error'] = 'The test taker could not be logged out.';
+        return;
+    }
+
+    OasysFrontendState::purge($passwordId, $testId);
+    OasysBehaviour::write($passwordId, $testId, [
+        'eventType' => 'behaviour',
+        'subType' => 'adminForceLogout',
+        'data' => [
+            'actorUserId' => $myAuth->userid,
+            'source' => 'activityTracker'
+        ]
+    ]);
 }
 
 function resetActivity($action, &$db, &$returnData): void

@@ -2,6 +2,12 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.15] - 2026-10-20
+
+### Added
+
+- Added a Force logout action to the Activity Tracker so authorized back-end users can release a stuck test session without resetting its answers, progress, activity, or remaining time.
+
 ## [3.6.14] - 2026-10-16
 
 ### Fixed
