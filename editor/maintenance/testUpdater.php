@@ -12,22 +12,27 @@
 			$this->db = $app->getDatabaseInstance();
 		}
 
-		public function checkAllTests(): void
+		public function checkAllTests(bool $simulate = false): void
 		{
 			$this->returnData['log'] = [];
 			$this->returnData['changeCount'] = 0;
-			$query = <<<'SQL'
-				UPDATE tests
-				SET skin = JSON_SET(skin, '$.skinOptions', JSON_OBJECT())
-				WHERE JSON_TYPE(JSON_EXTRACT(skin, '$.skinOptions')) = 'ARRAY'
+			$emptyArrayCondition = <<<'SQL'
+				JSON_TYPE(JSON_EXTRACT(skin, '$.skinOptions')) = 'ARRAY'
 					AND JSON_LENGTH(skin, '$.skinOptions') = 0
 				SQL;
-			$res = $this->db->execute($query);
-			$rows = (int)($res['rows'] ?? 0);
+			if ($simulate) {
+				$res = $this->db->fetchValue("SELECT COUNT(*) FROM tests WHERE $emptyArrayCondition");
+				$rows = (int)$res['data'];
+			} else {
+				$query = "UPDATE tests SET skin = JSON_SET(skin, '$.skinOptions', JSON_OBJECT()) WHERE $emptyArrayCondition";
+				$res = $this->db->execute($query);
+				$rows = (int)($res['rows'] ?? 0);
+			}
 			if ($rows > 0) {
 				$this->returnData['changeCount'] += $rows;
 				$rowLabel = $rows === 1 ? 'row' : 'rows';
-				$this->returnData['log'][] = "[tests] empty skin option arrays converted to objects ($rows $rowLabel)";
+				$action = $simulate ? 'would be converted' : 'converted';
+				$this->returnData['log'][] = "[tests] empty skin option arrays $action to objects ($rows $rowLabel)";
 			}
 
 			$query = <<<'SQL'
@@ -57,12 +62,14 @@
 					$skin->skinOptions->$key = $option->value;
 				}
 
-				$res = $this->db->update('tests', [
-					'skin' => json_encode($skin, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
-				], 'id = ?', [$test['id']]);
-				if ($res['rows'] === 1) {
+				$skinJson = json_encode($skin, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+				if (!$simulate) {
+					$res = $this->db->update('tests', ['skin' => $skinJson], 'id = ?', [$test['id']]);
+				}
+				if ($simulate || $res['rows'] === 1) {
 					$this->returnData['changeCount']++;
-					$this->returnData['log'][] = "[test: {$test['id']}] skin options reduced to their values";
+					$action = $simulate ? 'would be reduced' : 'reduced';
+					$this->returnData['log'][] = "[test: {$test['id']}] skin options $action to their values";
 				}
 			}
 		}
