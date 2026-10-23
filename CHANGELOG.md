@@ -2,6 +2,12 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.19] - 2026-10-23
+
+### Added
+
+- TestUpdater script that converts all legacy skin options to new format. It runs automatically after the update.
+
 ## [3.6.18] - 2026-10-23
 
 ### Fixed
