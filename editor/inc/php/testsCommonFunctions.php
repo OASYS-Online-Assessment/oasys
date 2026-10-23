@@ -5,6 +5,22 @@
 	require_once __DIR__ . "/registerActivity.php";
 	require_once __DIR__ . "/resultsExportFiles.php";
 
+	function tmEmptyMapAsObject(mixed $value): mixed
+	{
+		return is_array($value) && count($value) === 0 ? new stdClass() : $value;
+	}
+
+	function tmSkinDefaultValues(array $skinDefinition): array
+	{
+		$defaults = [];
+		foreach ($skinDefinition as $key => $option) {
+			if (array_key_exists('defaultValue', $option)) {
+				$defaults[$key] = $option['defaultValue'];
+			}
+		}
+		return $defaults;
+	}
+
 	/** @noinspection SqlResolve */
 	function fetchLibrary($data, &$db, &$returnData): void
 	{
@@ -459,7 +475,11 @@
 			$skinString = null;
 		} else {
 			$labels = '{"Introduction":{"default":"no","headline": {"EN":"Introduction","DE":"Einleitung","FR":"Introduction","LU":"Aleedung"},"button": {"EN":"Intro","DE":"Intro","FR":"Intro","LU":"Intro"}},"Page":{"default":"yes","headline": {"EN":"Page [@counter_labelgroup] of [@total_labelgroup]","DE":"Seite [@counter_labelgroup] von [@total_labelgroup]","FR":"Page [@counter_labelgroup] sur [@total_labelgroup]","LU":"Säit [@counter_labelgroup] vun [@total_labelgroup]"},"button": {"EN":"[@counter_total]","DE":"[@counter_total]","FR":"[@counter_total]","LU":"[@counter_total]"}},"Test-Index":{"default":"no","headline": {"EN":"Index","DE":"Verzeichnis","FR":"Index","LU":"Index"},"button": {"EN":"Index","DE":"Index","FR":"Index","LU":"Index"}},"Closing Screen":{"default":"no","headline": {"EN":"End","DE":"Ende","FR":"Fin","LU":"Enn"},"button": {"EN":"End","DE":"Ende","FR":"Fin","LU":"Enn"}}}';
-			$skinString = '{"skin":"' . $defaultSkin . '","skinOptions":[]}';
+			$skins = \Oasys\OasysSettings::findSkins();
+			$skinString = json_encode([
+				'skin' => $defaultSkin,
+				'skinOptions' => (object)tmSkinDefaultValues($skins[$defaultSkin]['options'] ?? [])
+			], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 		}
 
 		if ($testType !== 'mutation') unset($defaultOptions['mutationMethod']);
@@ -724,7 +744,7 @@
 			if ($skinNeedsUpdate) {
 				$skinData = [
 					'skin' => $skinId,
-					'skinOptions' => $skinDefinition
+					'skinOptions' => tmSkinDefaultValues($skinDefinition)
 				];
 				saveSkinAssignment(['id' => $data['dbId'], 'skinData' => $skinData, 'skinSwitch' => true, 'resetSkinOptions' => true], $db, $returnData);
 			}
@@ -2464,7 +2484,7 @@ function resetResults($data, &$db, &$returnData)
 						$oldLabelId = $structureItem['labelID'];
 
 						//create new structure string
-						array_push($structureSave, array('hiddenID' => $res4['id'], 'labelID' => $oldLabelId, 'overrides' => $structureItem['overrides'], 'scripts' => $structureItem['scripts']));
+						array_push($structureSave, array('hiddenID' => $res4['id'], 'labelID' => $oldLabelId, 'overrides' => tmEmptyMapAsObject($structureItem['overrides']), 'scripts' => tmEmptyMapAsObject($structureItem['scripts'])));
 					} else {
 						$returnData['poolError'] = true;
 					}
@@ -3260,10 +3280,10 @@ function resetResults($data, &$db, &$returnData)
 						$structureSave[$i]['labelID'] = $labelDefault;
 					}
 					//ActionField (Overrides)
-					$structureSave[$i]['overrides'] = $structureSave[$i]['actionField'];
+					$structureSave[$i]['overrides'] = tmEmptyMapAsObject($structureSave[$i]['actionField']);
 					unset($structureSave[$i]['actionField']);
 					//ActionButton (Scripts)
-					$structureSave[$i]['scripts'] = $structureSave[$i]['actionButton'];
+					$structureSave[$i]['scripts'] = tmEmptyMapAsObject($structureSave[$i]['actionButton']);
 					unset($structureSave[$i]['actionButton']);
 				}
 				$structureSaveComplete = array('type' => $data['testtype'], 'state' => $requestedState, 'items' => $structureSave);
@@ -3723,6 +3743,7 @@ function resetResults($data, &$db, &$returnData)
 			}
 			if ($skinTouched) {
 				$updates[] = 'skin=?';
+				$skinArr['skinOptions'] = (object)($skinArr['skinOptions'] ?? []);
 				$params[] = json_encode($skinArr, JSON_UNESCAPED_UNICODE);
 			}
 			if ($activeNew !== null) {
@@ -4286,6 +4307,11 @@ function resetResults($data, &$db, &$returnData)
 					$cleanItem['scripts'] = $cleanItem['actionButton'];
 				}
 				unset($cleanItem['actionButton']);
+			}
+			foreach (['overrides', 'scripts'] as $mapName) {
+				if (array_key_exists($mapName, $cleanItem)) {
+					$cleanItem[$mapName] = tmEmptyMapAsObject($cleanItem[$mapName]);
+				}
 			}
 			$importableItems[] = $cleanItem;
 			$importablePageCount++;
@@ -5261,6 +5287,7 @@ function resetResults($data, &$db, &$returnData)
 				}
 			}
 		}
+		$cleanSkinData['skinOptions'] = (object)$cleanSkinData['skinOptions'];
 
 		$skinDataJson = json_encode($cleanSkinData);
 		$db->prepare("UPDATE tests SET skin=? WHERE id=?");
@@ -5270,7 +5297,7 @@ function resetResults($data, &$db, &$returnData)
 		if (isset($data['resetSkinOptions']) && $data['resetSkinOptions'] == true) {
 			$structureData = json_decode($result['data']['structure'] ?? '', true);
 			foreach ($structureData['items'] as $key => $value) {
-				$structureData['items'][$key]['overrides'] = [];
+				$structureData['items'][$key]['overrides'] = new stdClass();
 			}
 			$structureDataJson = json_encode($structureData);
 			$db->prepare("UPDATE tests SET structure=? WHERE id=?");
@@ -5463,10 +5490,10 @@ function resetResults($data, &$db, &$returnData)
 				$newStructure[$i]['labelID'] = $labelDefault;
 			}
 			//ActionField (Overrides)
-			$newStructure[$i]['overrides'] = $newStructure[$i]['actionField'];
+			$newStructure[$i]['overrides'] = tmEmptyMapAsObject($newStructure[$i]['actionField']);
 			unset($newStructure[$i]['actionField']);
 			//ActionButton (Scripts)
-			$newStructure[$i]['scripts'] = $newStructure[$i]['actionButton'];
+			$newStructure[$i]['scripts'] = tmEmptyMapAsObject($newStructure[$i]['actionButton']);
 			unset($newStructure[$i]['actionButton']);
 		}
 
@@ -6255,7 +6282,7 @@ function resetResults($data, &$db, &$returnData)
 			unset($structure[$i]['type']);
 			unset($structure[$i]['itemGroup']);
 			//ActionButton (Scripts)
-			$structure[$i]['scripts'] = $structure[$i]['actionButton'];
+			$structure[$i]['scripts'] = tmEmptyMapAsObject($structure[$i]['actionButton']);
 			unset($structure[$i]['actionButton']);
 		}
 		$structureSave = array('items' => $structure);

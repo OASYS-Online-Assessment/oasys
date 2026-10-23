@@ -2,6 +2,14 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.20] - 2026-10-23
+
+### Fixed
+
+- New tests now store the selected skin's resolved defaults consistently as a JSON object.
+- Tests whose selected skin is no longer installed now save the fallback skin in the same scalar option format.
+- Newly saved empty per-item skin override and script maps use JSON objects instead of arrays.
+
 ## [3.6.19] - 2026-10-23
 
 ### Added
