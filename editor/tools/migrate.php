@@ -41,20 +41,27 @@ try {
 	$settings =& $config->getSettingsArray();
 
 	require_once __DIR__ . '/../maintenance/pageUpdater.php';
+	require_once __DIR__ . '/../maintenance/testUpdater.php';
 
 	$updater = new pageUpdater($returnData);
 	$updater->checkAllPages();
 
-	$changes = array_values(array_filter(
-		$returnData['log'] ?? [],
-		static fn(mixed $entry): bool => is_string($entry) && $entry !== ''
-	));
-	if (($returnData['changeCount'] ?? 0) > 0 && count($changes) > 0) {
-		$logEntry = '[' . date('Y-m-d H:i:s') . "] Page migration\n";
-		$logEntry .= implode("\n", $changes) . "\n";
-		$logFile = __DIR__ . '/../../logs/migrate.log';
-		if (file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX) === false) {
-			throw new RuntimeException('Could not write the migration log.');
+	$testReturnData = [];
+	$testUpdater = new testUpdater($testReturnData);
+	$testUpdater->checkAllTests();
+
+	foreach (['Page' => $returnData, 'Test' => $testReturnData] as $type => $migrationData) {
+		$changes = array_values(array_filter(
+			$migrationData['log'] ?? [],
+			static fn(mixed $entry): bool => is_string($entry) && $entry !== ''
+		));
+		if (($migrationData['changeCount'] ?? 0) > 0 && count($changes) > 0) {
+			$logEntry = '[' . date('Y-m-d H:i:s') . "] $type migration\n";
+			$logEntry .= implode("\n", $changes) . "\n";
+			$logFile = __DIR__ . '/../../logs/migrate.log';
+			if (file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX) === false) {
+				throw new RuntimeException('Could not write the migration log.');
+			}
 		}
 	}
 	$exitCode = 0;
