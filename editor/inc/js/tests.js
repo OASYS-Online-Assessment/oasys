@@ -3552,12 +3552,14 @@ function abortEditing(caller) {
                     startAjax('saveTest', {
                         id: serverData.testLevel.id,
                         options: serverData.testLevel.options,
+                        saveReason: 'close-test',
                         mSave: true
                     });
                 } else {
                     startAjax('saveTest', {
                         id: serverData.testLevel.id,
                         options: serverData.testLevel.options,
+                        saveReason: 'close-test',
                         currentSkin: serverData.testLevel.skin.skin
                     });
                 }
@@ -13002,6 +13004,8 @@ function startAjax(action, data) {
 	if (action === 'saveTest' && serverData.testLevel &&
 		String(payload.id) === String(serverData.testLevel.id) && serverData.testLevel.editRevision) {
 		payload.editRevision = serverData.testLevel.editRevision;
+		payload.editFieldRevisions = serverData.testLevel.editFieldRevisions;
+		payload.saveReason = payload.saveReason || (payload.startPreview ? 'preview' : 'save-test');
 	}
     delete payload._requestToken;
     delete payload._previewCheckToken;
@@ -13013,6 +13017,16 @@ function startAjax(action, data) {
     return $.ajax({
         data: params,
         success: function(res) {
+            // Preview keeps the editor open instead of fetching the saved test again.
+            // Advance only this request's baseline; a delayed response must not
+            // replace a revision loaded since the request was sent.
+            if (action === 'saveTest' && res.startPreview && res.error === false && !res.fatalError &&
+                res.editRevision && serverData.testLevel &&
+                String(payload.id) === String(serverData.testLevel.id) &&
+                serverData.testLevel.editRevision === payload.editRevision) {
+                serverData.testLevel.editRevision = res.editRevision;
+                serverData.testLevel.editFieldRevisions = res.editFieldRevisions || null;
+            }
             if (typeof requestToken !== 'undefined') res._requestToken = requestToken;
             if (typeof previewCheckToken !== 'undefined') res._previewCheckToken = previewCheckToken;
             if (typeof previewCheckTestId !== 'undefined') res._previewCheckTestId = previewCheckTestId;
@@ -13835,12 +13849,14 @@ function ajaxSuccess(res) {
         case 'saveMetaTagsChange':
             serverData.testLevel.metatags = res.meta;
             serverData.testLevel.editRevision = res.editRevision || serverData.testLevel.editRevision;
+            serverData.testLevel.editFieldRevisions = res.editFieldRevisions || serverData.testLevel.editFieldRevisions;
             gui.metaView.setItems(serverData.testLevel.metatags, true);
             updateMetaTagCounter(metaTbText, Object.keys(serverData.testLevel.metatags).length);
             break;
         case 'newMetaTag':
             serverData.testLevel.metatags = res.meta;
             serverData.testLevel.editRevision = res.editRevision || serverData.testLevel.editRevision;
+            serverData.testLevel.editFieldRevisions = res.editFieldRevisions || serverData.testLevel.editFieldRevisions;
             gui.metaView.setItems(serverData.testLevel.metatags, true);
             updateMetaTagCounter(metaTbText, Object.keys(serverData.testLevel.metatags).length);
             break;
@@ -13857,6 +13873,7 @@ function ajaxSuccess(res) {
 	            }
 	            serverData.testLevel = res.data;
 			serverData.testLevel.editRevision = res.editRevision || null;
+			serverData.testLevel.editFieldRevisions = res.editFieldRevisions || null;
             serverData.testLevel.testpools = res.testpools;
             serverData.testLevel.labels = res.labels;
             serverData.testLevel.activityData = res.activityData;

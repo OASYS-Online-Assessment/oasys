@@ -491,6 +491,7 @@
 		$parameters = array($data['dbId']);
 		$result = $db->fetchRow($query, $parameters);
 		$returnData['editRevision'] = tmTestEditRevision($result['data'] ?? array());
+		$returnData['editFieldRevisions'] = tmTestEditFieldRevisions($result['data'] ?? array());
 		//json block for structure
 		$jsonData = json_decode($result['data']['structure'] ?? '', true);
 		$testType = $jsonData['type'];
@@ -1094,6 +1095,7 @@
 		}
 		$saved = $db->fetchRow('SELECT * FROM tests WHERE id=? LIMIT 1', array($testId));
 		$returnData['editRevision'] = tmTestEditRevision($saved['data'] ?? array());
+		$returnData['editFieldRevisions'] = tmTestEditFieldRevisions($saved['data'] ?? array());
 	}
 
 	function testsSearch($data, &$db, &$returnData): void
@@ -1313,6 +1315,7 @@
 			$returnData['meta'] = $structure;
 		}
 		$returnData['editRevision'] = tmTestEditRevision($result['data'] ?? array());
+		$returnData['editFieldRevisions'] = tmTestEditFieldRevisions($result['data'] ?? array());
 	}
 
 	// end meta tags -----------------------------------
@@ -3143,6 +3146,7 @@ function resetResults($data, &$db, &$returnData)
 		$currentRevision = tmTestEditRevision($result['data']);
 		if (isset($data['editRevision']) && !hash_equals($currentRevision, (string)$data['editRevision'])) {
 			$db->rollback();
+			tmLogTestEditConflict($data, $result['data'], $db);
 			$returnData['error'] = $uiLang->translate('This test has been changed by another user. Your changes were not saved; the current version will be reloaded.');
 			$returnData['reloadFolder'] = true;
 			$returnData['closeEditMode'] = true;
@@ -3367,6 +3371,7 @@ function resetResults($data, &$db, &$returnData)
 		$db->commit();
 		$saved = $db->fetchRow('SELECT * FROM tests WHERE id=? LIMIT 1', array($data['id']));
 		$returnData['editRevision'] = tmTestEditRevision($saved['data'] ?? array());
+		$returnData['editFieldRevisions'] = tmTestEditFieldRevisions($saved['data'] ?? array());
 	}
 
 	function clearTestStructure($data, &$db, &$returnData): void
@@ -7074,6 +7079,62 @@ function resetResults($data, &$db, &$returnData)
 			$revisionData[$field] = $testRow[$field] ?? null;
 		}
 		return hash('sha256', json_encode($revisionData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+	}
+
+
+	/** Diagnostic fingerprints only; never return or log the underlying field values. */
+	function tmTestEditFieldRevisions(array $testRow): array
+	{
+		$revisions = [];
+		foreach (['name', 'active', 'structure', 'labels', 'options', 'info', 'skin', 'variables', 'metadata', 'parent'] as $field) {
+			$revisions[$field] = hash('sha256', json_encode($testRow[$field] ?? null, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+		}
+		// Separate runtime rotation from actual structure edits in mutation tests.
+		$structure = json_decode($testRow['structure'] ?? '', true);
+		if (is_array($structure)) {
+			$revisions['structure.pointer'] = hash('sha256', json_encode($structure['pointer'] ?? null));
+			unset($structure['pointer']);
+			$revisions['structure.withoutPointer'] = hash('sha256', json_encode($structure, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+		}
+		return $revisions;
+	}
+
+	/** Best effort: diagnostics must never change conflict handling or include test content. */
+	function tmLogTestEditConflict(array $data, array $testRow, rixPDO &$db): void
+	{
+		global $myAuth;
+		try {
+			$currentFields = tmTestEditFieldRevisions($testRow);
+			$baseline = is_array($data['editFieldRevisions'] ?? null) ? $data['editFieldRevisions'] : [];
+			$changedFields = [];
+			foreach ($currentFields as $field => $hash) {
+				$previous = $baseline[$field] ?? null;
+				if (is_string($previous) && preg_match('/\A[a-f0-9]{64}\z/D', $previous) && !hash_equals($hash, $previous)) {
+					$changedFields[] = $field;
+				}
+			}
+			$structure = json_decode($testRow['structure'] ?? '', true);
+			$reason = $data['saveReason'] ?? null;
+			$submittedRevision = $data['editRevision'] ?? null;
+			$lastEdit = tmFetchTestLastBackendEdit((int)$testRow['id'], $db);
+			$event = [
+				'event' => 'test_edit_conflict',
+				'timestamp' => gmdate('c'),
+				'testId' => (int)$testRow['id'],
+				'userId' => (int)($myAuth->userid ?? 0),
+				'testType' => in_array($structure['type'] ?? null, ['linear', 'fluid', 'mutation'], true) ? $structure['type'] : 'unknown',
+				'saveReason' => in_array($reason, ['close-test', 'preview', 'save-test'], true) ? $reason : 'unknown',
+				'submittedRevision' => is_string($submittedRevision) && preg_match('/\A[a-f0-9]{64}\z/D', $submittedRevision) ? $submittedRevision : null,
+				'currentRevision' => tmTestEditRevision($testRow),
+				'baselineAvailable' => !empty($baseline),
+				'changedFields' => $changedFields,
+				'requestedFields' => array_values(array_intersect(['name', 'options', 'structure', 'structureState', 'metaData'], array_keys($data))),
+				'lastBackendEdit' => $lastEdit === null ? null : ['userId' => $lastEdit['userId'], 'timestamp' => $lastEdit['ts']],
+			];
+			error_log('[OASYS test edit conflict] ' . json_encode($event, JSON_UNESCAPED_SLASHES));
+		} catch (Throwable $e) {
+			error_log('[OASYS test edit conflict] Diagnostic collection failed.');
+		}
 	}
 
 	function prepXp($field, $fmt, $delim)

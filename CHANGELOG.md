@@ -2,6 +2,13 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.18] - 2026-10-23
+
+### Fixed
+
+- Fixed Test Manager reporting that another user changed a test when closing the editor after changing the timer minutes and opening a preview.
+- Added content-free revision-conflict diagnostics to help investigate other concurrent-change reports.
+
 ## [3.6.17] - 2026-10-20
 
 ### Fixed
