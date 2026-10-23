@@ -17,6 +17,20 @@
 			$this->returnData['log'] = [];
 			$this->returnData['changeCount'] = 0;
 			$query = <<<'SQL'
+				UPDATE tests
+				SET skin = JSON_SET(skin, '$.skinOptions', JSON_OBJECT())
+				WHERE JSON_TYPE(JSON_EXTRACT(skin, '$.skinOptions')) = 'ARRAY'
+					AND JSON_LENGTH(skin, '$.skinOptions') = 0
+				SQL;
+			$res = $this->db->execute($query);
+			$rows = (int)($res['rows'] ?? 0);
+			if ($rows > 0) {
+				$this->returnData['changeCount'] += $rows;
+				$rowLabel = $rows === 1 ? 'row' : 'rows';
+				$this->returnData['log'][] = "[tests] empty skin option arrays converted to objects ($rows $rowLabel)";
+			}
+
+			$query = <<<'SQL'
 				SELECT id, skin
 				FROM tests
 				WHERE JSON_TYPE(
