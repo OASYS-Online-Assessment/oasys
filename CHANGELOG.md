@@ -2,6 +2,11 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.21] - 2026-10-26
+
+### Fixed
+- Added missing `\PDO::MYSQL_ATTR_INIT_COMMAND` attribute to the database connection to ensure proper UTF-8 encoding and collation for MariaDB databases. This is necessary for servers where the default connection uses a different collation.
+
 ## [3.6.20] - 2026-10-23
 
 ### Fixed

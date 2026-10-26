@@ -86,7 +86,13 @@
 				'errorHandling' => $parameters['errorHandling'] ?? 0,
 				'errorVarKey' => $parameters['errorVarKey'] ?? "",
 				'flags' => $parameters['flags'] ?? [],
-				'attributes' => $parameters['attributes'] ?? []
+				'attributes' => array_replace(
+					$parameters['attributes'] ?? [],
+					[
+						\PDO::MYSQL_ATTR_INIT_COMMAND =>
+							"SET NAMES utf8mb4 COLLATE utf8mb4_unicode_520_ci"
+					]
+				)
 			];
 
 			if (array_key_exists('errorVar', $parameters)) {
