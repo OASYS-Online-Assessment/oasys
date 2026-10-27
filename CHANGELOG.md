@@ -2,6 +2,11 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.22] - 2026-10-27
+
+### Fixed
+- Upgraded previous fix to also run on PHP 8.5, ensuring proper UTF-8 encoding and collation for MariaDB databases across supported PHP versions.
+
 ## [3.6.21] - 2026-10-26
 
 ### Fixed
