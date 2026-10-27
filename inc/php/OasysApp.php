@@ -77,6 +77,10 @@
 		{
 			$app = self::getInstance();
 			$dbConfig = $app->getDbConfig();
+			// Prefer the PHP 8.4+ constant; the PDO alias is deprecated in PHP 8.5.
+			$initCommandAttribute = defined('Pdo\\Mysql::ATTR_INIT_COMMAND')
+				? \Pdo\Mysql::ATTR_INIT_COMMAND
+				: \PDO::MYSQL_ATTR_INIT_COMMAND;
 			$rixPDOConfig = [
 				'db' => $dbConfig->db,
 				'user' => $dbConfig->user,
@@ -89,7 +93,7 @@
 				'attributes' => array_replace(
 					$parameters['attributes'] ?? [],
 					[
-						\PDO::MYSQL_ATTR_INIT_COMMAND =>
+						$initCommandAttribute =>
 							"SET NAMES utf8mb4 COLLATE utf8mb4_unicode_520_ci"
 					]
 				)
