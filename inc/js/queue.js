@@ -244,82 +244,96 @@ function sendQueue(comment) {
 	}
 }
 
-function ajaxConnection(data) {
+async function ajaxConnection(data) {
 	data.test = test;
 	data.challenge = challenge;
 	tsTransmit = new Date().getTime() / 1000;
 	skippedTrigger = false;
-	const xhr = new XMLHttpRequest();
-	xhr.open('post', settings.path + "saveData.php", true);
-	xhr.timeout = settings.ajaxTimeout;
-	xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-	xhr.onreadystatechange = function () {
-		let status;
-		let data;
-		if (xhr.readyState === XMLHttpRequest.DONE) {
-			status = xhr.status;
-			if (status === 200 && xhr.responseText) {
-				try {
-					data = JSON.parse(xhr.responseText);
-					if (data.fatalError) {
-						postMessage({error: true, errorMsg: data.fatalError});
-						clearInterval(timer);
-						timer = -1;
-					} else if (data.error) {
-						postMessage({error: true, errorMsg: data.error});
-						clearInterval(timer);
-						timer = -1;
-					} else {
-						xhrSuccess(data);
-					}
-				} catch (e) {
-					console.error("JSON parse error: " + e);
-					console.warn(xhr.responseText);
-					// Your data to be logged
-					let dataToSend = new Date().toLocaleString() + '\n';
-					dataToSend += 'queue JSON parse error: ' + e + '\n';
-					dataToSend += 'queue responseText: ' + xhr.responseText + '\n';
-					dataToSend += '\n';
-
-					// Use the 'fetch' API to send the data to the server
-					fetch(settings.path + 'queueLogger.php', {
-						method: 'POST',
-						body: dataToSend
-					});
-					status = 0;
-				}
-			}
-			if (status === 0) {
-				/* timeout => try and resend the data bundle */
-				networkErrorCount++;
-				if (debugQueue) console.log("no response from server ... errorcount", networkErrorCount);
-				if (networkErrorCount === 1) {
-					clearInterval(timer);
-					timer = setInterval(sendQueue, 5000, 'error timer');
-				}
-				if (networkErrorCount === settings.retryCount) {
-					if (debugQueue) console.log("server can no longer be reached ... pausing test");
-					postMessage({error: false, action: 'pauseTest'});
-					/*
-					 At this point we told the core that there is no more connection. The core will now tell the timer
-					 thread to stop count down (if timer is used) and remember the time left when test was paused. This
-					 information will then be sent back via the core to the queue thread which then stops trying to
-					 send payload but tries to reestablish connection first with the information of how much time is
-					 still left.
-					 */
-				}
-				waitingForResponse = false;
-			}
-			if (status !== 0 && status !== 200) {
+	const controller = new AbortController();
+	// Keep the timeout active until the entire response body has arrived, as with XHR.
+	const timeout = settings.ajaxTimeout > 0
+		? setTimeout(() => controller.abort(), settings.ajaxTimeout)
+		: null;
+	let status = 0;
+	let responseText = '';
+	try {
+		if (debugQueue) console.log("sending data", data);
+		const response = await fetch(settings.path + 'saveData.php', {
+			method: 'POST',
+			credentials: 'same-origin',
+			headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+			body: UTF8ToBase64(JSON.stringify(data)),
+			// A blob URL cannot serve as an HTTP referrer. Use the same-origin application URL.
+			referrer: settings.path,
+			referrerPolicy: 'same-origin',
+			signal: controller.signal
+		});
+		responseText = await response.text();
+		status = response.status;
+	} catch (e) {
+		// Network failures, timeouts and interrupted response bodies all retry the same bundle.
+		if (debugQueue) console.warn('Queue request failed:', e);
+	} finally {
+		clearTimeout(timeout);
+	}
+	if (status === 200) {
+		try {
+			data = JSON.parse(responseText);
+			if (data.fatalError) {
+				postMessage({error: true, errorMsg: data.fatalError});
 				clearInterval(timer);
 				timer = -1;
-				postMessage({error: true, errorMsg: "AJAX request returned status " + status});
+			} else if (data.error) {
+				postMessage({error: true, errorMsg: data.error});
+				clearInterval(timer);
+				timer = -1;
+			} else {
+				xhrSuccess(data);
 			}
+		} catch (e) {
+			console.error("JSON parse error: " + e);
+			console.warn(responseText);
+			let dataToSend = new Date().toLocaleString() + '\n';
+			dataToSend += 'queue JSON parse error: ' + e + '\n';
+			dataToSend += 'queue responseText: ' + responseText + '\n';
+			dataToSend += '\n';
 
+			// Logging is best effort and must not interrupt retries.
+			fetch(settings.path + 'queueLogger.php', {
+				method: 'POST',
+				body: dataToSend,
+				referrer: settings.path,
+				referrerPolicy: 'same-origin'
+			}).catch(error => console.warn('Queue error log failed:', error));
+			status = 0;
 		}
-	};
-	if (debugQueue) console.log("sending data", data);
-	xhr.send(UTF8ToBase64(JSON.stringify(data)));
+	}
+	if (status === 0) {
+		/* timeout => try and resend the data bundle */
+		networkErrorCount++;
+		if (debugQueue) console.log("no response from server ... errorcount", networkErrorCount);
+		if (networkErrorCount === 1) {
+			clearInterval(timer);
+			timer = setInterval(sendQueue, 5000, 'error timer');
+		}
+		if (networkErrorCount === settings.retryCount) {
+			if (debugQueue) console.log("server can no longer be reached ... pausing test");
+			postMessage({error: false, action: 'pauseTest'});
+			/*
+			 At this point we told the core that there is no more connection. The core will now tell the timer
+			 thread to stop count down (if timer is used) and remember the time left when test was paused. This
+			 information will then be sent back via the core to the queue thread which then stops trying to
+			 send payload but tries to reestablish connection first with the information of how much time is
+			 still left.
+			 */
+		}
+		waitingForResponse = false;
+	}
+	if (status !== 0 && status !== 200) {
+		clearInterval(timer);
+		timer = -1;
+		postMessage({error: true, errorMsg: "AJAX request returned status " + status});
+	}
 }
 
 function xhrSuccess(res) {

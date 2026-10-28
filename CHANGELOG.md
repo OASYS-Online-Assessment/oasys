@@ -2,6 +2,11 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.23] - 2026-10-28
+
+### Fixed
+- Fixed a problem where saveData.php would be called without a refer, causing some firewalls to respond with a 403 error.
+
 ## [3.6.22] - 2026-10-27
 
 ### Fixed
