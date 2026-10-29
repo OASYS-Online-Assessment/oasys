@@ -2,6 +2,12 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.24] - 2026-10-29
+
+### Changed
+
+- Updated the OASYS User Manual and Administration Manual.
+
 ## [3.6.23] - 2026-10-28
 
 ### Fixed
