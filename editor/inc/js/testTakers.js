@@ -1562,10 +1562,16 @@ function setLibPerms() {
     });
 }
 
+function syncWizardSetPasswordAction() {
+    const studentBulkAddActive = mode === 'add2selected' && selHasStudent === true;
+    $('#wPasswords_button_setPassword').toggle(studentBulkAddActive);
+}
+
 /* Wizard Start*/
 function buildWizard(add2sel) {
     wizardId = 1;
     wizState = false;
+    syncWizardSetPasswordAction();
     const wizardMainframe = $('#wiz_mainfr');
     wizardMainframe.empty();
     $('#wInactiveMsg').hide();
@@ -3431,6 +3437,8 @@ function abortEditing() {
             });
             break;
         case 'wizard':
+            selHasStudent = false;
+            syncWizardSetPasswordAction();
             showMenu();
             showSection(gui.s1, [gui.s2, gui.s3], function () {
                 mode = 'browsing';
@@ -3444,6 +3452,8 @@ function abortEditing() {
             break;
         case 'add2selected':
             const wizardReturnTesteeId = serverData.testLevel && serverData.testLevel.id ? 't' + serverData.testLevel.id : (selection[0] && selection[0].id);
+            selHasStudent = false;
+            syncWizardSetPasswordAction();
             showMenu();
             showSection(gui.s1, [gui.s2, gui.s3], function () {
                 mode = 'browsing';
@@ -4259,6 +4269,7 @@ function setPasswordForLabel(sender, obj) {
                     }
                 });
                 gui.wpasswords.setItems(ttPreparePasswordListItems(wizardData.pwds));
+                syncWizardSetPasswordAction();
                 gui.wpasswords.setSelection([obj.id]);
                 if (stuLog || selHasStudent) {
                     if (wizardData.pwds.length === 1) {
@@ -4883,7 +4894,7 @@ function newPassword(sender, button, name, tag) {
                 }
                 wizardData.pwds.push(fill);
                 gui.wpasswords.setItems(ttPreparePasswordListItems(wizardData.pwds));
-                if (!stuLog && !selHasStudent) $('#wPasswords_button_setPassword').hide();
+                syncWizardSetPasswordAction();
                 gui.wpasswords.setSelection([wizardId]);
                 wizardSelectionChanged(gui.wpasswords.getSelection());
                 let wizTextSi, wizTextPlu;
@@ -5126,6 +5137,7 @@ function deletePassword(sel, button) {
                 return true;
             });
             gui.wpasswords.setItems(ttPreparePasswordListItems(wizardData.pwds));
+            syncWizardSetPasswordAction();
             if (stuLog || selHasStudent) {
                 if (wizardData.pwds.length === 1) {
                     $(wpasswordsTbText).html(wizardData.pwds.length + ' ' + UILANG.m('label'));
@@ -5218,6 +5230,7 @@ function editPassword(sel, button, name, tag) {
                     }
                 });
                 gui.wpasswords.setItems(ttPreparePasswordListItems(wizardData.pwds));
+                syncWizardSetPasswordAction();
                 gui.wpasswords.setSelection([tId]);
                 if (stuLog || selHasStudent) {
                     if (wizardData.pwds.length === 1) {

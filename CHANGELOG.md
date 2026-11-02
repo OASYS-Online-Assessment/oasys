@@ -2,6 +2,12 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.26] - 2026-11-02
+
+### Fixed
+
+- Fixed the student-only Set Password action remaining visible in regular-login wizard and bulk-edit workflows after cancelling student-login bulk editing.
+
 ## [3.6.25] - 2026-10-30
 
 ### Changed
