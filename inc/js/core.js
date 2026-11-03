@@ -577,7 +577,7 @@ function core_parseItem(fields, location) {
 		};
 		const currentValue = answers[state[location].id][fields[i].id];
 		if (plugins[type]) {
-			state.fieldInstances[i] = plugins[type].constructor(target, fields[i], itemData, currentValue, state[location + 'Language']);
+			state.fieldInstances[i] = new plugins[type].constructor(target, fields[i], itemData, currentValue, state[location + 'Language']);
 		}
 	}
 

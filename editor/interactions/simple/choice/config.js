@@ -354,6 +354,34 @@ window.interactionConfigs.choice = {
 									}
 								}
 							]
+						},
+						{
+							"id": "filter",
+							"type": "propsDropDown",
+							"settings": {
+								"label": "input filter",
+								"path": ["filter"],
+								"options": [
+									{"value": "none", "label": "none"},
+									{"value": "letter_single", "label": "a single letter"},
+									{"value": "num_digit", "label": "numbers (single digit)"},
+									{"value": "num_entire_pos", "label": "numbers (integer, positive)"},
+									{"value": "num_entire", "label": "numbers (integer)"},
+									{"value": "num_decimal_pos", "label": "numbers (decimal, positive)"},
+									{"value": "num_decimal", "label": "numbers (decimal)"},
+									{"value": "date_DDMMYYYY", "label": "date (DD.MM.YYYY)"},
+									{"value": "custom", "label": "custom"}
+								]
+							}
+						},
+						{
+							"type": "propsToggleDiv",
+							"settings": {"path": ["filter"], "conditions": ["custom"]},
+							"children": [{
+								"id": "pattern",
+								"type": "propsTextField",
+								"settings": {"label": "custom pattern (regex)", "path": ["pattern"]}
+							}]
 						}
 					]
 				}

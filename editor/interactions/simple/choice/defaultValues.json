@@ -13,6 +13,8 @@
   {"value": 0, "localized": false, "flags": [], "path": ["textfields", "multiple"]},
   {"value": "m", "localized": false, "flags": [], "path": ["size"]},
   {"value": "", "localized": false, "flags": [], "path": ["width"]},
+  {"value": "none", "localized": false, "flags": [], "path": ["filter"]},
+  {"value": "", "localized": false, "flags": [], "path": ["pattern"]},
   {"value": "vertical", "localized": false, "flags": [], "path": ["layout"]},
   {"value": 10, "localized": false, "flags": [], "path": ["rowgap"]},
   {"value": 50, "localized": false, "flags": [], "path": ["colgap"]},

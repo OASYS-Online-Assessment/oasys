@@ -2,6 +2,16 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.27] - 2026-11-03
+
+### Added
+
+- Added input filters to text fields attached to single-choice and multiple-choice answers, with the same numeric, date, single-letter, and custom pattern options as normal text field interactions. Existing choice text fields default to no filter.
+
+### Fixed
+
+- Fixed a problem where the wrong text field was focused when a choice answer with a linked text field was selected.
+
 ## [3.6.26] - 2026-11-02
 
 ### Fixed
