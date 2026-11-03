@@ -837,7 +837,7 @@
 					} else {
 						$linkType = 'includes';
 					}
-					$this->createChoiceTextfield($cnf->id, $cnf->choices[$i]->value, $linkType, $tfId, $tfCode, $cnf->width);
+					$this->createChoiceTextfield($cnf->id, $cnf->choices[$i]->value, $linkType, $tfId, $tfCode, $cnf->width, $block->filter ?? 'none', $block->pattern ?? '');
 					foreach ($cnf->choices[$i]->label as $lang => $lbl) {
 						$this->fields->{$cnf->id}->choices[$i]->label->$lang = $lbl . " <span class='oasysTag oasysTextfield' data-id='$tfCode'></span>";
 						$this->fields->{$cnf->id}->choices[$i]->link = $tfId; //id of text field linked
@@ -854,7 +854,7 @@
 
 		}
 
-		private function createChoiceTextfield($id, $value, $linkType, $tfId, $tfCode, $width): void
+		private function createChoiceTextfield($id, $value, $linkType, $tfId, $tfCode, $width, $filter, $pattern): void
 		{
 			$cnf = new stdClass();
 			$cnf->id = $tfId;
@@ -875,6 +875,14 @@
 
 			$cnf->alignment = 'left';
 			$cnf->width = $width;
+
+			$cnf->inputMode = '';
+			if ($filter === 'custom') {
+				$cnf->pattern = $pattern;
+			} else {
+				$cnf->inputMode = $this->getInputMode($filter);
+				$cnf->pattern = $this->getFilter($filter);
+			}
 
 			//define the link to the choice that regulates if the text field is required or not
 			$cnf->link = ['master' => $id, 'logic' => $linkType, 'value' => $value];
