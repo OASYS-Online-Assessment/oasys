@@ -231,7 +231,7 @@ function core_itemPositionUpdated() {
 //this function tells the skin to update any positions of items due to the loading of an image which may have changed the layout
 function core_imageLoadHandler(element) {
 	core_itemPositionUpdated();
-	$(element).off('load');
+	$(element).off('load.oasysImageLayout');
 }
 
 function core_executeHooks(scope) {
@@ -522,7 +522,7 @@ function core_setItemContent() {
 	} else {
 		mainDiv = $('#main');
 	}
-	mainDiv.find('img').on('load', (event) => core_imageLoadHandler(event.target));
+	mainDiv.find('img').off('load.oasysImageLayout').on('load.oasysImageLayout', (event) => core_imageLoadHandler(event.target));
 
 	core_setImageErrorHandlers();
 	core_launchItemTimer();
@@ -532,21 +532,52 @@ function core_setItemContent() {
 }
 
 function core_setImageErrorHandlers() {
-	//we need to set error handlers for images that are not yet loaded
-	//this is necessary to avoid broken images if firewall blocks access to images
-	$('img[src^="fetchMediaFile.php"]').off('error').on('error', function () {
-		let retryCount = $(this).data('retryCount');
-		if (typeof (retryCount) === 'undefined') retryCount = 0;
-		console.warn('loading image failed ... retrying', this.src);
-		if (retryCount < 2) {
-			$(this).data('retryCount', retryCount + 1);
-			$(this).attr('src', $(this).attr('src'));
-		} else {
-			//get the fileid from the src attribute
-			const fileid = $(this).attr('src').match(/fileid=([0-9]+)/)[1];
-			global_internalError(sf(global_getText('test', "imageLoadError"), fileid), global_getText('global', "error"), true);
+	// Match relative and absolute media URLs, including URLs changed by an earlier retry.
+	const mediaURL = new URL('fetchMediaFile.php', document.baseURI);
+	$('img').filter(function () {
+		try {
+			const url = new URL(this.src, document.baseURI);
+			return url.origin === mediaURL.origin && url.pathname === mediaURL.pathname;
+		} catch (e) {
+			return false;
 		}
-	});
+	}).off('.oasysImageError')
+		.on('load.oasysImageError', function () {
+			clearTimeout($(this).data('imageRetryTimer'));
+			$(this).removeData('imageRetryTimer').removeData('imageErrorReported').data('retryCount', 0);
+		}).on('error.oasysImageError', function () {
+			const image = $(this);
+			// Ignore stale error events after recovery or navigation away from this image.
+			if (!this.isConnected || (this.complete && this.naturalWidth > 0)) return;
+			if (image.data('imageRetryTimer') !== undefined || image.data('imageErrorReported')) return;
+			const retryCount = image.data('retryCount') ?? 0;
+			const source = this.src;
+			const url = new URL(source, document.baseURI);
+			const fileid = url.searchParams.get('fileid') ?? 'unknown';
+			const context = {
+				pageId: image.closest('#stimulus').length > 0 ? state.stimulus?.id ?? state.currentItemId : state.currentItemId,
+				imageId: fileid,
+				imageElementId: this.id || null,
+				imageURL: source,
+				retryCount: retryCount
+			};
+			console.warn('Loading image failed', context);
+			if (retryCount < 2) {
+				// Give transient network/filter failures time to recover and avoid cached error responses.
+				image.data('imageRetryTimer', setTimeout(() => {
+					image.removeData('imageRetryTimer');
+					if (!this.isConnected || this.src !== source || (this.complete && this.naturalWidth > 0)) return;
+					image.data('retryCount', retryCount + 1);
+					url.searchParams.set('_oasysImageRetry', Date.now() + '-' + (retryCount + 1));
+					this.src = url.href;
+				}, 500 * (retryCount + 1)));
+				return;
+			}
+			image.data('imageErrorReported', true);
+			const error = new Error('Image failed to load after two retries: ' + fileid);
+			global_prepareJSErrorReport({error: error}, context);
+			global_internalError(sf(global_getText('test', 'imageLoadError'), fileid), global_getText('global', 'error'), true);
+		});
 }
 
 function core_parseItem(fields, location) {

@@ -2,17 +2,37 @@
 
 	register_shutdown_function("whenTheShitHitsTheFan");
 	use Oasys\OasysApp;
+	use Oasys\OasysSettings;
 	use Random\RandomException;
 
 	$action = filter_input(INPUT_GET, 'action') ?? filter_input(INPUT_POST, 'action');
 
 	require_once 'inc/php/initSettings.php';
+	/** @var rixPDO $db
+     * @var OasysSettings $config */
 
     try {
         $serialNumber = bin2hex(random_bytes(6));
     } catch (RandomException $e) {
         $serialNumber = uniqid();
     }
+
+	// Test cookie storage without creating frontend state. A unique name avoids conflicts between tabs.
+	/** @var array $settings */
+	$cookieProbe = [
+		'name' => 'oasysCookieProbe_' . $serialNumber,
+		'value' => $serialNumber,
+		'path' => $settings['JSrootURL'],
+		'secure' => $settings['cookieSecure'] ?? false,
+		'sameSite' => $settings['cookieSameSite'] ?? 'Lax',
+	];
+	setcookie($cookieProbe['name'], $cookieProbe['value'], [
+		'expires' => time() + 300, // Also clean up if JavaScript never runs.
+		'path' => $cookieProbe['path'],
+		'secure' => $cookieProbe['secure'],
+		'httponly' => false,
+		'samesite' => $cookieProbe['sameSite'],
+	]);
 
 	/* find a custom landing page defined in a test */
 	$customLandingPage = null;
@@ -135,14 +155,27 @@
 				$landingPageManifestData = [];
 			}
 			?>
+			window.cookieProbeResult = (() => {
+				const probe = <?php echo json_encode($cookieProbe, $jsonHexFlags); ?>;
+				const result = {accepted: false, error: null};
+				const attributes = '; path=' + probe.path + '; SameSite=' + probe.sameSite + (probe.secure ? '; Secure' : '');
+				try {
+					result.accepted = document.cookie.split(';').some(cookie => cookie.trim() === probe.name + '=' + probe.value);
+				} catch (e) {
+					result.error = e.name;
+				}
+				try {
+					document.cookie = probe.name + '=; Max-Age=0' + attributes;
+				} catch (e) {
+					// The probe expires automatically if browser policy prevents explicit cleanup.
+				}
+				return result;
+			})();
 			window.studentStateStorageKey = 'oasysStudentFrontendInstance:' + <?php echo json_encode($settings['JSrootURL'], $jsonHexFlags); ?>;
 			window.restoreStudentState = false;
 			window.serialNumber = <?php echo json_encode($serialNumber, $jsonHexFlags); ?>;
 			try {
-				const navigationEntry = performance.getEntriesByType('navigation')[0];
-				const isReload = navigationEntry
-					? navigationEntry.type === 'reload'
-					: performance.navigation?.type === 1;
+				const isReload = performance.getEntriesByType('navigation')[0]?.type === 'reload';
 				const storedSerialNumber = sessionStorage.getItem(window.studentStateStorageKey);
 				if (window.top === window && isReload && /^[a-f0-9]{12,13}$/.test(storedSerialNumber ?? '')) {
 					window.serialNumber = storedSerialNumber;

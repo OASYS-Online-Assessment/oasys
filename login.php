@@ -24,6 +24,7 @@
 	require_once __DIR__ . '/inc/php/loginData.php';
 	require_once __DIR__ . '/inc/php/helperRoutines.php';
 	require_once __DIR__ . '/inc/php/OasysFrontendState.php';
+	require_once __DIR__ . '/inc/php/frontendClientErrors.php';
 	require_once __DIR__ . '/inc/php/OasysLdapAuthenticator.php';
 
 	use Oasys\FrontEnd\OasysFrontendState;
@@ -41,6 +42,12 @@
 	}
 
 	$serialNumber = $data['serialNumber'];
+	if (oasysRejectUnknownAction(__FILE__, $action, $returnData)) exit;
+	// This follow-up request must not initialize state or issue a replacement cookie.
+	if ($action === 'verifyStateCookie') {
+		verifyStateCookie($data, $db, $returnData);
+		exit;
+	}
 	$parentSerialNumber = $data['parentSerialNumber'] ?? null;
 	$state = OasysFrontendState::getInstance($serialNumber, true);
 	if ($parentSerialNumber) {
@@ -61,12 +68,27 @@
 	//call function whose name is given by the $action variable
 	//(the name of the function must obviously exactly match the string in $action)
 	//an action function will always be given the $data sent by the client, a pointer to the database object and a pointer to the global $returnData array
-	if (oasysRejectUnknownAction(__FILE__, $action, $returnData)) exit;
 	$action($data, $db, $returnData);
 
 	/*
 	 * actions
 	 */
+
+	function verifyStateCookie(array $data, rixPDO &$db, array &$returnData): void
+	{
+		// The cookie is HttpOnly, so verify it on the request following successful login.
+		if (is_string($_COOKIE['oasysStateFrontend'] ?? null) && $_COOKIE['oasysStateFrontend'] !== '') {
+			return;
+		}
+		oasysLogFrontendClientError('Login failed: frontend state cookie is missing after login.', [
+			'action' => 'verifyStateCookie',
+			'login' => $data['login'] ?? null,
+			'testId' => $data['testId'] ?? null,
+			'pageId' => $data['pageId'] ?? null,
+			'serialNumber' => $data['serialNumber'],
+		]);
+		$returnData['error'] = 'stateCookieMissing';
+	}
 
 	//the $db and $returnData variables MUST be given by reference
 	function login(array $data, rixPDO &$db, array &$returnData): void

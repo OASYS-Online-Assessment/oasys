@@ -910,6 +910,7 @@ function loader_cacheMediaFiles() {
     /* iterate through global variable test.items and in every item iterate through metadata.paths
        to copy all relevant data into loader.mediaMetaData, then start loading the files */
     debug_log("loader", `loader_cacheMediaFiles()`);
+    loader.mediaMetaData = {}; // Only preload media referenced by the current test.
     for (let i in test.items) {
         let item = test.items[i];
         if (typeof (item.metadata) === 'undefined' || typeof (item.metadata.paths) === 'undefined') continue;
@@ -932,6 +933,8 @@ function loader_cacheMediaFiles() {
 function loader_fetchMediaFiles() {
     debug_log("loader", `loader_fetchMediaFiles(mediaManifest)`);
 	if (objectLength(loader.mediaMetaData) === 0) {
+		loader_hideWaitDialog('core');
+		core_mediaFilesLoaded();
 		return;
 	}
     const params = {
@@ -942,7 +945,7 @@ function loader_fetchMediaFiles() {
 	$.ajax({
         data: params,
         url: 'loader.php',
-        type: 'GET',
+        type: 'POST', // Keep large media manifests out of the URL (proxy/WAF URL limits).
         timeout: 300000, // 5 minutes timeout for loading media files
 
 		xhr: function () {
@@ -968,29 +971,50 @@ function loader_fetchMediaFiles() {
     }).done(function (res, textStatus, jqXHR) {
         debug_variable("loader", res);
 		console.log(res);
-        if (res.sender !== 'OASYS' || res.fatalError || res.error) {
-            /*	The caching of media files happens in the background to enhance performance of front end,
-                however it is not mandatory. So if any error happens we'll silently fail and media files
-                are then loaded on the fly instead of from the cache. */
-            return;
+		if (loader_handleMissingMediaFile(res)) return;
+        if (res?.sender !== 'OASYS' || res.fatalError || res.error) {
+			// Release the wait dialog and offer on-demand loading when optional caching fails.
+			loader_mediaCacheFailed(jqXHR, 'error');
+			return;
         }
         loader_storeMediaFiles(res.data);
     }).fail(function (jqXHR, textStatus, errorThrown) {
-        // handle timeout or other AJAX failures — silently fail (media caching is optional)
-        debug_log("loader", `loader_fetchMediaFiles.fail(jqXHR, textStatus, errorThrown)`);
-		loader_hideWaitDialog('core');
-		if (butler_checkOption('waitForMediaCache') === true) {
-			if (textStatus === 'timeout') {
-				global_errorDialog("mediaCacheTimeout", null, core_mediaFilesLoaded);
-			} else {
-				global_errorDialog("mediaCacheLoadError", null, core_mediaFilesLoaded);
-			}
-		} else {
-			console.warn("loader_fetchMediaFiles: ajax error — skipping cache.", textStatus, errorThrown, jqXHR && (jqXHR.responseText || jqXHR.responseJSON));
-			core_mediaFilesLoaded();
-		}
-        // no retry or UI dialog here — let media load on demand instead
+		if (loader_handleMissingMediaFile(jqXHR.responseJSON)) return;
+		loader_mediaCacheFailed(jqXHR, textStatus, errorThrown);
     });
+}
+
+function loader_handleMissingMediaFile(res) {
+	if (res?.sender !== 'OASYS' || res.error !== 'mediaFileMissing') return false;
+	const mediaId = res.mediaId;
+	const page = Object.values(test.items).find(item => Object.values(item.metadata?.paths ?? {})
+		.some(path => String(path.mediaId) === String(mediaId)));
+	global_prepareJSErrorReport({error: new Error('Media file not found during preloading: ' + mediaId)}, {
+		mediaId: mediaId,
+		imageId: res.mimeType?.startsWith('image/') ? mediaId : null,
+		pageId: page?.id ?? null,
+		stage: 'mediaPreload',
+		httpStatus: 404
+	});
+	loader_hideWaitDialog('core');
+	if (butler_checkOption('waitForMediaCache') === true) {
+		global_internalError(sf(global_getText('global', 'mediaFileMissing'), mediaId), global_getText('global', 'error'), true);
+	} else {
+		// Background caching remains optional; a missing file will also fail if requested by a page.
+		console.warn('Media file not found during preloading:', mediaId);
+	}
+	return true;
+}
+
+function loader_mediaCacheFailed(jqXHR, textStatus, errorThrown) {
+	debug_log('loader', 'loader_fetchMediaFiles failed', textStatus, errorThrown);
+	loader_hideWaitDialog('core');
+	if (butler_checkOption('waitForMediaCache') === true) {
+		global_errorDialog(textStatus === 'timeout' ? 'mediaCacheTimeout' : 'mediaCacheLoadError', null, core_mediaFilesLoaded);
+	} else {
+		console.warn('loader_fetchMediaFiles: ajax error — skipping cache.', textStatus, errorThrown, jqXHR?.responseText || jqXHR?.responseJSON);
+		core_mediaFilesLoaded();
+	}
 }
 
 function loader_storeMediaFiles(files) {

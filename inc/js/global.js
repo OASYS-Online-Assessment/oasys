@@ -32,7 +32,12 @@ function global_init() {
 	window.pointerHandler = jsPointerHandler.instance;
 	keyboardHandler.permissionHandler(global_mayAcceptKeyStrokes);
 
-	if (!navigator.cookieEnabled) {
+	if (!navigator.cookieEnabled || window.cookieProbeResult?.accepted === false) {
+		global_prepareJSErrorReport({error: new Error('Cookie test failed before login.')}, {
+			navigatorCookieEnabled: navigator.cookieEnabled,
+			cookieProbeAccepted: window.cookieProbeResult?.accepted ?? null,
+			cookieProbeError: window.cookieProbeResult?.error ?? null
+		});
 		global_internalError(global_getText("global", "cookiesDisabled"), global_getText("global", "error"));
 		global_goToErrorPage();
 		return;
@@ -49,40 +54,49 @@ function global_init() {
 	}
 }
 
-function global_prepareJSErrorReport(event) {
-	const error = event.error;
-	const message = error.message;
+function global_prepareJSErrorReport(event, context = {}) {
+	const error = event.error ?? {};
+	const message = error.message ?? event.message ?? 'Unknown JavaScript error';
 	const stack = error.stack;
-	const filename = event.filename;
-	const lineno = event.lineno;
-	const colno = event.colno;
+	const filename = event.filename || error.fileName;
+	const lineno = event.lineno || error.lineNumber;
+	const colno = event.colno || error.columnNumber;
 	let realFilename;
 
 	if (/^blob:/.test(filename)) {
-		realFilename = Object.entries(loader.blobURLs ?? {}).find(([key, value]) => value === filename)[0];
+		realFilename = Object.entries(loader.blobURLs ?? {}).find(([key, value]) => value === filename)?.[0] ?? filename;
 	} else {
 		realFilename = filename;
 	}
 
-	let errorReport = new Date().toLocaleString() + '\n';
-	errorReport += 'Error: ' + message + '\n';
-	errorReport += 'File: ' + realFilename + '\n';
-	errorReport += 'Line: ' + lineno + '\n';
-	errorReport += 'Column: ' + colno + '\n';
-	errorReport += 'Stack: ' + stack + '\n';
-	errorReport += '\n';
+	// Synthetic errors (e.g. failed images) have a stack but no ErrorEvent source coordinates.
+	const lines = [new Date().toLocaleString(), 'Error: ' + message];
+	if (realFilename) lines.push('File: ' + realFilename);
+	if (lineno > 0) lines.push('Line: ' + lineno);
+	if (colno > 0) lines.push('Column: ' + colno);
+	if (stack) lines.push('Stack: ' + stack);
 
-	global_sendErrorReport(errorReport);
+	global_sendErrorReport(lines.join('\n'), context);
 }
 
-function global_sendErrorReport(report) {
-	// Use the 'fetch' API to send the data to the server
-	if (!state.testPaused) {
-		fetch(settings.rootURL + 'feClientErrorLogger.php', {
-			method: 'POST',
-			body: report
-		});
-	}
+function global_sendErrorReport(report, context = {}) {
+	const details = {
+		login: window.testee?.login ?? window.student?.login?.name ?? null,
+		testId: window.test?.id ?? null,
+		pageId: window.state?.currentItemId ?? null,
+		stimulusId: window.state?.stimulus?.id ?? null,
+		serialNumber: window.serialNumber ?? null,
+		mode: window.mode ?? null,
+		...context
+	};
+	// Error reporting must also work while the test is paused and must not throw another error.
+	return fetch(settings.rootURL + 'feClientErrorLogger.php', {
+		method: 'POST',
+		credentials: 'same-origin',
+		keepalive: true,
+		headers: {'Content-Type': 'application/json'},
+		body: JSON.stringify({report: report, context: details})
+	}).catch(() => console.warn('Could not send frontend error report.'));
 }
 
 //get translation of a string

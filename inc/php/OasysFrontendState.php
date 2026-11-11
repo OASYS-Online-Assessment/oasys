@@ -182,7 +182,7 @@
 		private static function getStateId(): string
 		{
 			global $settings;
-			if (isset($_COOKIE['oasysStateFrontend'])) {
+			if (is_string($_COOKIE['oasysStateFrontend'] ?? null) && $_COOKIE['oasysStateFrontend'] !== '') {
 				return $_COOKIE['oasysStateFrontend'];
 			} else {
 				try {
