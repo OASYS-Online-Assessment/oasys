@@ -2,6 +2,11 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.29] - 2026-11-11
+
+### Fixed
+- Fixed the name of listdocumentsBlocked.png to listDocumentsBlocked.png in watchlist.css, interface.css and for the file name itself in 2 places
+
 ## [3.6.28] - 2026-11-11
 
 ### Added
