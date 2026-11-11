@@ -461,6 +461,27 @@
 			$returnData['error'] = 'No media files to load!';
 			return;
 		}
+
+		// Check availability before cache validation, Content-Length, or streaming any media.
+		// Otherwise a missing file produces a truncated response that the browser may wait on.
+		$mediaInformation = [];
+		foreach ($list as $item) {
+			$id = $item['id'];
+			$checksum = $item['checksum'] ?? '';
+			$information = MediaTool::getFileInformation($id, $checksum);
+			if (!$information || !MediaTool::fileExists($id, $checksum, $information)) {
+				$returnData['sender'] = 'OASYS';
+				$returnData['error'] = 'mediaFileMissing';
+				$returnData['mediaId'] = $id;
+				$returnData['mimeType'] = $information ? MediaTool::getMimeType($id, $checksum, $information) : null;
+				http_response_code(404);
+				header('Content-Type: application/json; charset=UTF-8');
+				header('Cache-Control: no-store');
+				echo json_encode($returnData);
+				return;
+			}
+			$mediaInformation[$id] = $information;
+		}
 		$mediaIds = implode(',', $mediaIds);
 
 		//create etag for the media files
@@ -472,15 +493,16 @@
 		}
 		$eTag = '"' . $res['data'] . '"';
 
-		//if browser cache is still up to date, do not send data
-		if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim($_SERVER['HTTP_IF_NONE_MATCH']) === $eTag) {
+		// Only GET/HEAD requests can use a 304 response. POST manifests are carried in the body.
+		$cacheableRequest = in_array($_SERVER['REQUEST_METHOD'], ['GET', 'HEAD'], true);
+		if ($cacheableRequest && isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim($_SERVER['HTTP_IF_NONE_MATCH']) === $eTag) {
 			http_response_code(304);
 			exit;
 		}
 
 		header("Content-Type: application/json; charset=UTF-8");
-		header("Cache-Control: max-age=0, must-revalidate, public");
-		header("ETag: $eTag");
+		header($cacheableRequest ? 'Cache-Control: max-age=0, must-revalidate, public' : 'Cache-Control: no-store');
+		if ($cacheableRequest) header("ETag: $eTag");
 
 		//calculate and set Content-Length header
 		$length = 52; // initial length for '{"action":"loadMediaFiles","sender":"OASYS","data":{'
@@ -491,9 +513,9 @@
 			}
 			$first = false;
 			$length += strlen($item['id']) + 28; // for '"id":{"mimeType":"","data":""}'
-			$length += strlen(MediaTool::getMimeType($item['id'], $item['checksum'] ?? ''));
+			$length += strlen(MediaTool::getMimeType($item['id'], $item['checksum'] ?? '', $mediaInformation[$item['id']]));
 			// estimate base64 length
-			$mediaSize = MediaTool::getFileSize($item['id'], $item['checksum'] ?? '');
+			$mediaSize = MediaTool::getFileSize($item['id'], $item['checksum'] ?? '', $mediaInformation[$item['id']]);
 			$base64Size = 4 * ceil($mediaSize / 3);
 			$length += $base64Size;
 		}
@@ -511,7 +533,7 @@
 			}
 			$first = false;
 			echo '"' . $item['id'] . '":{"mimeType":"';
-			echo MediaTool::getMimeType($item['id'], $item['checksum'] ?? '');
+			echo MediaTool::getMimeType($item['id'], $item['checksum'] ?? '', $mediaInformation[$item['id']]);
 			echo '","data":"';
 			if (function_exists('ob_flush')) @ob_flush();
 			flush();
@@ -524,7 +546,7 @@
 				['line-length' => 0] // no line breaks
 			);
 
-			MediaTool::getMediaStream($item['id'], $item['checksum'] ?? '', $out);
+			MediaTool::getMediaStream($item['id'], $item['checksum'] ?? '', $out, $mediaInformation[$item['id']]);
 
 			//remove base64 filter in order to output JSON info correctly
 			stream_filter_remove($filter);

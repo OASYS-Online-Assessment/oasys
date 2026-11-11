@@ -1,4 +1,10 @@
 {
+  "stateCookieMissing": {
+	"EN": "The OASYS session cookie was not received. Your browser or device policy may be blocking it. Please allow cookies for this site and reload the page. If the problem persists, contact technical support.",
+	"DE": "Das OASYS-Sitzungscookie wurde nicht empfangen. Ihr Browser oder eine Geräterichtlinie blockiert es möglicherweise. Bitte erlauben Sie Cookies für diese Website und laden Sie die Seite neu. Falls das Problem weiterhin besteht, kontaktieren Sie den technischen Support.",
+	"FR": "Le cookie de session OASYS n'a pas été reçu. Votre navigateur ou une règle de gestion de l'appareil le bloque peut-être. Veuillez autoriser les cookies pour ce site et recharger la page. Si le problème persiste, contactez le support technique.",
+	"LU": "Den OASYS-Sessiounscookie gouf net empfaangen. Äre Browser oder eng Astellung vun Ärem Apparat blockéiert en eventuell. Erlaabt w.e.g. Cookies fir dëse Site a lued d'Säit nei. Wann de Problem bestoe bleift, kontaktéiert den technesche Support."
+  },
   "cookiesDisabled": {
 	"EN": "Cookies are disabled in your browser. Please enable them and reload this page in order to proceed.",
 	"DE": "Die Cookies in Ihrem Browser sind ausgeschaltet. Bitte schalten Sie diese ein und laden Sie die Seite neu!",
@@ -58,6 +64,12 @@
 	"DE": "Sie haben keine Berechtigung, dies anzusehen. Stellen Sie sicher, dass Sie im Editor angemeldet sind und die erforderlichen Leseberechtigungen besitzen.",
 	"FR": "Vous n'avez pas la permission de prévisualiser ceci. Assurez-vous d'être connecté à l'éditeur et de disposer des autorisations de lecture nécessaires.",
 	"LU": "Dir hutt keng Berechtegung fir dëst ze kucken. Vergewëssert Iech, datt Dir am Editor ageloggt sidd an déi néideg Liesberechtegungen hutt."
+  },
+  "mediaFileMissing": {
+	"EN": "The media file with the id '%@' is missing or unavailable. Please contact technical support.",
+	"DE": "Die Mediendatei mit der Id '%@' fehlt oder ist nicht verfügbar. Bitte kontaktieren Sie den technischen Support.",
+	"FR": "Le fichier multimédia avec l'identifiant '%@' est manquant ou indisponible. Veuillez contacter le support technique.",
+	"LU": "D'Mediendatei mat der Id '%@' feelt oder ass net verfügbar. Kontaktéiert w.e.g. den technesche Support."
   },
   "mediaCacheTimeout": {
 	"EN": "The connection is too slow to cache all media files up front. They will be loaded as needed.",

@@ -5,6 +5,7 @@
 
 	require_once __DIR__ . '/inc/php/initSettings.php';
 	require_once __DIR__ . '/inc/php/OasysFrontendState.php';
+	require_once __DIR__ . '/inc/php/frontendClientErrors.php';
 	require_once __DIR__ . '/editor/inc/php/OasysBackendState.php';
 	require_once __DIR__ . '/editor/inc/php/MediaTool.php';
 
@@ -31,6 +32,10 @@
 		/* fetching a media file is only allowed when logged into the
 		front end or editor of OASYS in order to prevent link sharing */
 		if (!$active) {
+			oasysLogFrontendClientError('Media request denied: frontend state cookie is missing or inactive.', [
+				'imageId' => filter_input(INPUT_GET, 'fileid', FILTER_SANITIZE_NUMBER_INT),
+				'httpStatus' => 401,
+			]);
 			http_response_code(401);
 			die();
 		}

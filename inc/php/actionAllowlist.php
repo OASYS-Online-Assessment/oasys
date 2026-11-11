@@ -12,6 +12,7 @@ oasysRegisterActionAllowlists([
         'login',
         'preview',
 		'restoreStudentLogin',
+		'verifyStateCookie',
     ],
     'score.php' => [
         'fetchScore',

@@ -266,7 +266,7 @@ function login_cleanup() {
 
 function login_submit(automatedLogin) {
 	debug_log("login", `login_submit(${automatedLogin})`);
-	loader_registerAjaxHandler('login', "login.php", true, false, login_ajaxSuccess);
+	loader_registerAjaxHandler('login', "login.php", true, false, login_verifyStateCookie);
 	if (!automatedLogin) {
 		testee.login = $('#tfLogin').val();
 		testee.password = $('#tfPassword').val();
@@ -299,7 +299,7 @@ function login_submit(automatedLogin) {
 
 function login_restoreStudentState() {
 	debug_log("login", 'login_restoreStudentState()');
-	loader_registerAjaxHandler('login', "login.php", true, false, login_ajaxSuccess);
+	loader_registerAjaxHandler('login', "login.php", true, false, login_verifyStateCookie);
 	loader_startAjax('login', 'restoreStudentLogin', {
 		serialNumber: testee.serialNumber,
 		tsClient: new Date().getTime() / 1000
@@ -310,6 +310,24 @@ function login_openEditor() {
 	debug_log("login", `login_openEditor()`);
 	const editorUrl = settings.rootURL + 'editor';
 	window.open(editorUrl, '_blank');
+}
+
+function login_verifyStateCookie(res) {
+	const successfulLogin = (res.action === 'login' || res.action === 'preview') && !res.data?.loginError;
+	const restoredLogin = res.action === 'restoreStudentLogin' && res.data?.restored === true;
+	if (!successfulLogin && !restoredLogin) {
+		login_ajaxSuccess(res);
+		return;
+	}
+	// Preserve login round-trip timing; the cookie check must not affect timer synchronization.
+	res.data.tsClientResponse = new Date().getTime() / 1000;
+	loader_registerAjaxHandler('stateCookie', 'login.php', true, false, () => login_ajaxSuccess(res));
+	loader_startAjax('stateCookie', 'verifyStateCookie', {
+		serialNumber: testee.serialNumber,
+		login: res.data.login?.name ?? testee.login ?? null,
+		testId: res.data.test?.id ?? null,
+		pageId: parameters.data?.itemId ?? null
+	});
 }
 
 function login_ajaxSuccess(res) {
@@ -335,7 +353,7 @@ function login_ajaxSuccess(res) {
 			if (res.data.language) {
 				testee.language = res.data.language;
 			}
-			res.data.tsClientResponse = new Date().getTime() / 1000;
+			res.data.tsClientResponse ??= new Date().getTime() / 1000;
 			timer = {
 				settings: {
 					tsDelta: Math.round((res.data.tsClientResponse + res.data.tsClient) / 2 - res.data.tsServer),
@@ -372,7 +390,7 @@ function login_ajaxSuccess(res) {
 				}
 				break;
 			}
-			data.tsClientResponse = new Date().getTime() / 1000;
+			data.tsClientResponse ??= new Date().getTime() / 1000;
 			if (res.debug) console.log(res.debug);
 			if (res.data.login.studentLogin !== true) {
 				/* not a student login, we log straight into the test */

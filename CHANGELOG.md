@@ -2,6 +2,24 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.28] - 2026-11-11
+
+### Added
+
+- Added frontend error logging with login, test, page, media, session, and browser context in `logs/fe_client_errors.txt`, including reports while tests are paused, cookie failures, and denied media requests. Reports remain available when database initialization fails.
+
+### Changed
+
+- Media preloading now sends file manifests by POST to avoid proxy and firewall URL-length limits, with response caching adjusted for the request method.
+
+### Fixed
+
+- Added a browser cookie-storage check before login and verification that the session cookie is received after login, preview, or student-session restoration, with a clear error when cookies are blocked. Empty or invalid frontend state cookies now trigger creation of a new state cookie.
+- Fixed media preloading hanging on missing files by checking file availability before streaming and reporting the missing media ID.
+- Fixed media preloading retaining files from previous tests or leaving the loading dialog open when no media is needed or optional caching fails, allowing on-demand loading after cache failures.
+- Improved failed-image recovery with delayed, cache-busting retries for relative and absolute media URLs, independent image-load handlers, and detailed error reports after two unsuccessful retries.
+- Made JavaScript error reporting tolerate missing error details and unresolved blob URLs, and handle report-delivery failures without generating another error.
+
 ## [3.6.27] - 2026-11-03
 
 ### Added
