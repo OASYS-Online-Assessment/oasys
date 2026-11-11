@@ -11161,7 +11161,7 @@ div#multiPermsWarningContainer img {
 }
 
 .filerBlocked.typefile {
-    background-image: url("../../../images/listdocumentsBlocked.png") !important;
+    background-image: url("../../../images/listDocumentsBlocked.png") !important;
 }
 
 /* toggle blocked item view icon for filer */

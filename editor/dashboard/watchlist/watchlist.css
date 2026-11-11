@@ -235,7 +235,7 @@ ul[id^="watchlist"] li.folder {
 .tTakerTemplate { background-image: url(./images/template.png);      background-size: 1.5em; }
 
 /* Blocked variants */
-.itemsGroup.blocked   { background-image: url(./images/listdocumentsBlocked.png); background-size: 1.5em; }
+.itemsGroup.blocked   { background-image: url(./images/listDocumentsBlocked.png); background-size: 1.5em; }
 .testLinear.blocked   { background-image: url(./images/testBlocked.png);          background-size: 1.5em; }
 .testFluid.blocked    { background-image: url(./images/testFluidBlocked.png);     background-size: 1.5em; }
 .testMutation.blocked { background-image: url(./images/testMutationBlocked.png);  background-size: 1.5em; }
