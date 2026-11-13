@@ -12,9 +12,32 @@
 
 	//data is a JSON encoded associative array that contains all the necessary data for the action to be performed
 	//(the array must be manually JSON encoded before sending to get past max_input_vars limitation)
-	$data = filter_input(INPUT_GET, 'data') ?? filter_input(INPUT_POST, 'data');
-	if ($data) {
-		$data = json_decode($data ?? '', true);
+	$rawGetData = filter_input(INPUT_GET, 'data');
+	$rawData = $rawGetData ?? filter_input(INPUT_POST, 'data');
+	$data = $rawData;
+	if (is_string($rawData)) {
+		$data = json_decode($rawData, true);
+		$jsonError = json_last_error();
+		$jsonErrorMessage = json_last_error_msg();
+		if ($jsonError !== JSON_ERROR_NONE) {
+			// Preserve malformed payloads even if database initialization later fails.
+			require_once __DIR__ . '/inc/php/frontendClientErrors.php';
+			oasysLogFrontendClientError('loader.php: malformed JSON in request data', [
+				'action' => $action,
+				'dataSource' => $rawGetData !== null ? 'GET' : 'POST',
+				'jsonError' => $jsonError,
+				'jsonErrorMessage' => $jsonErrorMessage,
+				'method' => $_SERVER['REQUEST_METHOD'] ?? null,
+				'contentType' => $_SERVER['CONTENT_TYPE'] ?? null,
+				'contentLength' => $_SERVER['CONTENT_LENGTH'] ?? null,
+				'remoteAddress' => $_SERVER['REMOTE_ADDR'] ?? null,
+				'referer' => $_SERVER['HTTP_REFERER'] ?? null,
+				'rawData' => $rawData,
+				'rawDataBase64' => base64_encode($rawData),
+				'rawQueryString' => $_SERVER['QUERY_STRING'] ?? '',
+				'rawBodyBase64' => base64_encode(file_get_contents('php://input')),
+			]);
+		}
 	}
 	if (!$data) {
 		$data = array();
