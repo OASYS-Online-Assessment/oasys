@@ -2,6 +2,16 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.30] - 2026-11-13
+
+### Added
+- Added malformed JSON diagnostics for `loader.php` requests in `logs/fe_client_errors.txt`, including request details, the original data, and Base64 copies of the data and request body for payload analysis.
+
+### Fixed
+- Fixed a bug preventing menu languages to be configured
+- Fixed frontend client error logging failing when the log destination is a pipe or another stream that does not support exclusive locks.
+- Removed cookie-support error logging on initial page load to avoid repeated log entries from health monitors; the cookie check and user-facing error remain active.
+
 ## [3.6.29] - 2026-11-11
 
 ### Fixed

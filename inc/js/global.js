@@ -33,11 +33,6 @@ function global_init() {
 	keyboardHandler.permissionHandler(global_mayAcceptKeyStrokes);
 
 	if (!navigator.cookieEnabled || window.cookieProbeResult?.accepted === false) {
-		global_prepareJSErrorReport({error: new Error('Cookie test failed before login.')}, {
-			navigatorCookieEnabled: navigator.cookieEnabled,
-			cookieProbeAccepted: window.cookieProbeResult?.accepted ?? null,
-			cookieProbeError: window.cookieProbeResult?.error ?? null
-		});
 		global_internalError(global_getText("global", "cookiesDisabled"), global_getText("global", "error"));
 		global_goToErrorPage();
 		return;

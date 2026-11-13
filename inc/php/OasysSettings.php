@@ -56,7 +56,7 @@
 			$newMenuLanguages = [];
 
 			foreach ($menuLanguages as $lng) {
-				if (!isset($languages[$lng])) {
+				if (!isset($this->languages[$lng])) {
 					$invalidValueDetected = true;
 				} else {
 					$newMenuLanguages[] = $lng;
