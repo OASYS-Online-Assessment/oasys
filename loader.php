@@ -1,6 +1,9 @@
 <?php
 
 	//action is a string that defines what action to perform
+	use Oasys\OasysApp;
+	use Oasys\OasysSettings;
+
 	$action = filter_input(INPUT_GET, 'action') ?? filter_input(INPUT_POST, 'action');
 	if (!$action) {
 		$action = "";
@@ -57,15 +60,11 @@
 	$returnData['action'] = $action; //when returning we must specify which action was performed
 	$returnData['error'] = false; //if there is an error, this will contain a string with the error message
 
-	$results = $db->results();
-	if ($results['error']) {
-		$returnData['error'] = 'mySQL connection error';
-		die();
-	}
-
 	$manifest = [];
 	$eTag = '';
 	if (oasysRejectUnknownAction(__FILE__, $action, $returnData)) exit;
+
+	/** @var rixPDO $db */
 	$action($data, $db, $returnData);
 
 	/*
@@ -82,7 +81,7 @@
 
 		if ($data['type'] === 'switchMode') {
 			if ($data['mode'] === 'login' && isset($data['landingPagePath'])) {
-				$landingPagePath = \Oasys\OasysApp::resolveLandingPageDirectory((string)$data['landingPagePath']);
+				$landingPagePath = OasysApp::resolveLandingPageDirectory((string)$data['landingPagePath']);
 				if ($landingPagePath === false) {
 					$returnData['error'] = "Error: invalid parameter 'landingPagePath'!";
 					http_response_code(400);
@@ -94,7 +93,7 @@
 				getManifest($data['mode'], ['customLandingPage' => true]);
 			} elseif ($data['mode'] === 'test') {
 				checkParams($data, array('skinPath'));
-				$skinPath = \Oasys\OasysApp::resolveSkinDirectory((string)$data['skinPath']);
+				$skinPath = OasysApp::resolveSkinDirectory((string)$data['skinPath']);
 				if ($skinPath === false) {
 					$returnData['error'] = "Error: invalid parameter 'skinPath'!";
 					http_response_code(400);
@@ -161,7 +160,7 @@
 				$text = [];
 				if (file_exists($fname)) {
 					$text = file_get_contents($fname);
-					$text = json_decode($text ?? '', true);
+					$text = json_decode($text, true);
 				}
 				foreach ($results['data'] as $k => $values) {
 					foreach ($values as $lng => $value) {
@@ -221,7 +220,7 @@
 
 			case 'skins':
 
-				$contents['skins'] = \Oasys\OasysSettings::findSkins();
+				$contents['skins'] = OasysSettings::findSkins();
 				break;
 
 			case 'settings':
@@ -284,7 +283,7 @@
 					$manifestFileEntries = [];
 					if (file_exists($manifestFile)) {
 						$manifestFileContent = file_get_contents($manifestFile);
-						$manifestFileContent = json_decode($manifestFileContent ?? '', true);
+						$manifestFileContent = json_decode($manifestFileContent, true);
 						if ($manifestFileContent) {
 							foreach ($manifestFileContent as $entry) {
 								if (isset($entry['url'])) {
@@ -446,14 +445,12 @@
 		$pattern = '/url\(\s*([\'"]?)(?![a-z]+:|\/)([^\'")]+)\1\s*\)/i';
 
 		// Replace callback to prefix the path
-		$css = preg_replace_callback($pattern, function ($matches) use ($base) {
+		return preg_replace_callback($pattern, function ($matches) use ($base) {
 			$quote = $matches[1] ?: '';
 			$relativePath = $matches[2];
 			$prefixedPath = $base . $relativePath;
 			return "url($quote$prefixedPath$quote)";
 		}, $css);
-
-		return $css;
 	}
 
 	function loadMediaFiles(array $data, rixPDO &$db, array &$returnData): void
