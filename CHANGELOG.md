@@ -2,6 +2,13 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.31] - 2026-11-17
+
+### Fixed
+
+- Blocked emojis in frontend login and password fields before submitting requests to prevent firewall encoding warnings, with localized validation messages.
+- Fixed drag-and-drop insertion positioning by keeping slot positions separate for each drop zone.
+
 ## [3.6.30] - 2026-11-13
 
 ### Added

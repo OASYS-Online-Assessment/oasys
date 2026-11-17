@@ -5,6 +5,12 @@
 	"FR": "Le login et mot de passe que vous avez entré ne sont pas valides.",
 	"LU": "De Login an d'Passwuert, déi agetippt goufen, sinn net valid."
   },
+  "emojisNotAllowed": {
+	"EN": "Emojis are not allowed in the login or password. Please remove them and try again.",
+	"DE": "Emojis sind im Login oder Passwort nicht erlaubt. Bitte entfernen Sie diese und versuchen Sie es erneut.",
+	"FR": "Les emojis ne sont pas autorisés dans le login ou le mot de passe. Veuillez les supprimer et réessayer.",
+	"LU": "Emojie sinn am Login oder am Passwuert net erlaabt. Huelt se wgl. eraus a probéiert nach eng Kéier."
+  },
   "ldapError": {
 	"EN": "The LDAP login service is currently unavailable. Please try again later or contact an administrator.",
 	"DE": "Der LDAP-Anmeldedienst ist derzeit nicht verfügbar. Bitte versuchen Sie es später erneut oder wenden Sie sich an einen Administrator.",

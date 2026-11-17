@@ -37,7 +37,6 @@
 	let dgData = global.jsDNDManager.dgData;
 	let dzCounter = 1;
 	let dgCounter = 1;
-	let slotPositions = [];
 
 	function jsDragAndDrop_init() {
 
@@ -441,6 +440,7 @@
 
 
 		let items = this.items = [];
+		let slotPositions = [];
 
 		let updateBox = this.updateBox = function () {
 			dzBox = self.dzBox = {

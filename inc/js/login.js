@@ -294,6 +294,13 @@ function login_submit(automatedLogin) {
 	if (typeof (state.skipTest) !== "undefined") {
 		loginDetails.previousTestId = state.skipTest;
 	}
+	// Check the final credentials, including values supplied by automated logins.
+	const forbiddenEmoji = /[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\u20E3]/u;
+	if (forbiddenEmoji.test(loginDetails.login ?? '') || forbiddenEmoji.test(loginDetails.password ?? '')) {
+		$('#login_main').css('visibility', 'visible');
+		global_errorDialog(global_getText('login', 'emojisNotAllowed'), null, () => login_buildForm());
+		return;
+	}
 	loader_startAjax('login', parameters.action ?? 'login', loginDetails);
 }
 
