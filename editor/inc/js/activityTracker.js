@@ -29,6 +29,7 @@ let requestSequence = 0;
 let latestAppliedRequest = 0;
 let activeRequest = null;
 let actionInFlight = false;
+let authenticationLost = false;
 let refreshIndicatorTimer = null;
 let refreshIndicatorStartedAt = 0;
 let activityJourney = {
@@ -1237,7 +1238,10 @@ async function activityJourneyRequest(action) {
                 data: JSON.stringify({requestKind: 'journey'}),
                 action: JSON.stringify(action)
             },
-            success: resolve,
+            success: response => {
+                if (response.forceLoginRedirect) ajaxSuccess(response);
+                resolve(response);
+            },
             error: (_xhr, status, error) => reject(new Error(error || status))
         });
     });
@@ -1482,6 +1486,7 @@ async function selectActivityJourneyRun(passwordId, testId) {
 /* server communication */
 
 function startAjax(data, action = {}) {
+    if (authenticationLost) return;
     const requestId = ++requestSequence;
     const isAction = Boolean(action && action.action);
     const requestData = Object.assign({}, data, {
@@ -1502,7 +1507,11 @@ function startAjax(data, action = {}) {
 }
 
 function ajaxError(jqXHR, textStatus, errorThrown) {
-    if (textStatus === 'abort') return;
+    if (textStatus === 'abort' || authenticationLost) return;
+    if (jqXHR?.responseJSON?.forceLoginRedirect) {
+        ajaxSuccess(jqXHR.responseJSON);
+        return;
+    }
     if (typeof waitDialog !== 'undefined') waitDialog.hide();
     setActivityRefreshIndicator('error');
     actionInFlight = false;
@@ -1517,9 +1526,19 @@ function ajaxError(jqXHR, textStatus, errorThrown) {
 }
 
 function ajaxSuccess(res) {
+    if (authenticationLost) return;
     if (typeof waitDialog !== 'undefined') waitDialog.hide();
     const responseId = Number(res.requestId) || 0;
-    if (responseId < latestAppliedRequest) return;
+    // Authentication failures must be handled even when the response is older.
+    if (res.forceLoginRedirect) {
+        authenticationLost = true;
+        profile.live = false;
+        activityJourney.wasLive = false;
+        if (timeoutPointer !== null) clearTimeout(timeoutPointer);
+        timeoutPointer = null;
+    } else if (responseId < latestAppliedRequest) {
+        return;
+    }
     latestAppliedRequest = responseId;
     if (res.requestKind === 'action') {
         actionInFlight = false;
@@ -1628,6 +1647,7 @@ function setActivityRefreshIndicator(state) {
 }
 
 function scheduleActivityRefresh() {
+    if (authenticationLost) return;
     if (timeoutPointer !== null) clearTimeout(timeoutPointer);
     timeoutPointer = setTimeout(fetchNewData, 5000);
 }
