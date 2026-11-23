@@ -87,8 +87,13 @@
 	$res = $db->fetchValue('SELECT instructions FROM activity WHERE passwordId = ? AND testId = ?', [$data['test']['passwordId'], $data['test']['testId']]);
 	$instructions = [];
 	if ($res['rows'] > 0 && $res['data'] !== null) {
-		//json decode the instructions and write an empty array if the decoding fails
-		$returnData['instructions'] = json_decode($res['data'], true) ?? [];
+		$queuedInstructions = json_decode($res['data'], true);
+		// Discard time-up commands queued by the previous reconnect check.
+		$returnData['instructions'] = array_values(array_filter(
+			is_array($queuedInstructions) ? $queuedInstructions : [],
+			static fn($instruction) => ($instruction['command'] ?? null) !== 'timeUp'
+				|| ($instruction['reason'] ?? null) !== 'hackingAttempt'
+		));
 		// now erase the instructions so that they are not sent again
 		$db->update('activity', ['instructions' => NULL], "passwordId = ? AND testId = ?", [$data['test']['passwordId'], $data['test']['testId']]);
 		$instructions = $returnData['instructions'];
@@ -219,7 +224,7 @@
 			exit();
 		} elseif ($payloadId === -2) {
 			/*
-			 * In this case the client had lost connection to the server and finally managed to connect again (see payloadId === 3).
+			 * In this case the client had lost connection to the server and finally managed to connect again (see payloadId === -3).
 			 * Since the timer was stopped, we now need to set a new login timestamp and timeLeftAtLogin value.
 			 */
 			checkParams($data, ['timeLeftAtFailure']);
@@ -231,14 +236,8 @@
 			$timeLeftAtFailure = max(0, (int)$data['timeLeftAtFailure']);
 			$timeLeftAtLastContact = max(0, (int)$timeLeftAtLogin - max(0, $secondsSinceLogin));
 
-			//sanitize timeLeftAtFailure to not be higher than what server calculates
+			// Log the discrepancy and continue with the normal reconnect.
 			if ($timeLeftAtFailure > $timeLeftAtLastContact) {
-				$instructions = json_encode([['command' => 'timeUp', 'reason' => 'hackingAttempt']]);
-
-				//the following line is commented out for now until we are sure there are no false positives
-				//TODO: uncomment the commented part of the next line
-				$db->update('activity', [/*'timeLeftAtLogin' => 0, 'timeLeft' => 0,*/ 'instructions' => $instructions], "passwordId = ? AND testId = ?", [$data['test']['passwordId'], $data['test']['testId']]);
-
 				$logData = [];
 				$logData['loginId'] = $data['test']['loginId'];
 				$logData['passwordId'] = $data['test']['passwordId'];
@@ -246,11 +245,8 @@
 				$logData['serialNumber'] = $data['test']['serialNumber'];
 				$logData['tsClient'] = milliseconds2DateString($data['tsClient']);
 				$logData['timeLeft'] = $timeLeftAtFailure;
-				$logData['log'] = "time left hacking attempt detected: client reported $timeLeftAtFailure seconds left at failure, server calculated $timeLeftAtLastContact seconds left at last contact ($tsActiveServer)";
+			$logData['log'] = "reconnect timer discrepancy: client reported $timeLeftAtFailure seconds left at failure, server calculated $timeLeftAtLastContact seconds left at last contact ($tsActiveServer)";
 				$db->insert("logClient", $logData);
-
-				$returnData = [];
-				exit();
 			}
 
 			$loginData = ['timeLeftAtLogin' => $timeLeftAtFailure, 'timeLeft' => $timeLeftAtFailure, 'passwordId' => $data['test']['passwordId'], 'testId' => $data['test']['testId']];
