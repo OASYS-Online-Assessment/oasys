@@ -2,6 +2,14 @@
 
 All notable changes to OASYS are documented in this file.
 
+## [3.6.32] - 2026-11-23
+
+### Fixed
+- Fixed a problem with the ResizeObserver in image interactions
+- Fixed a problem with sessions running out while Activity Tracker was open.
+- Fixed a problem of log files being visible but no text could be selected and copied
+- Removed the "hacking attempt" error, due to false positives
+
 ## [3.6.31] - 2026-11-17
 
 ### Fixed
