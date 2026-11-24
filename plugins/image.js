@@ -30,27 +30,33 @@
 
 		/* options */
 		if (!options) return;
+		let lastWidth;
 
 		//if ratio is given, check width of image and calculate height -> keep space free before image has loaded
 		if (typeof(options.ratio) !== 'undefined' && !isNaN(options.ratio[language])) {
-			let ratio = options.ratio[language];
+			const ratio = options.ratio[language];
 			adjustHeight(ratio);
 
-			//check if image is resized due to window size changes and update height
-			//thanks to ChatGPT for pointing out this solution ;-)
+			// Height changes also notify this observer; only respond to width changes.
 			const image = element.get(0);
-			const observer = new ResizeObserver(entries => {
-				for (let entry of entries) {
+			let resizeFrame = null;
+			const observer = new ResizeObserver(() => {
+				if (resizeFrame !== null || element.outerWidth() === lastWidth) return;
+				// Defer layout writes until the next frame to avoid a resize notification loop.
+				resizeFrame = requestAnimationFrame(() => {
+					resizeFrame = null;
 					adjustHeight(ratio);
-				}
+				});
 			});
 			observer.observe(image);
 		}
 
 		function adjustHeight(ratio) {
-			let w = element.outerWidth();
-			let h = w / ratio;
+			const w = element.outerWidth();
+			if (w === lastWidth) return;
+			const h = w / ratio;
 			element.css('height', h + 'px');
+			lastWidth = w;
 		}
 
 		return this;

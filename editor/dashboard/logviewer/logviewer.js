@@ -267,7 +267,7 @@ export default class LogViewer {
                     <div class="logv-dialog">
                     <div class="logv-dialogPath">${this.escapeHtml(d.fullPath || d.path || "")}</div>
                     ${info}
-                    <pre class="logv-pre" id="${this.id}_previewPre">${this.escapeForPre(d.content || "")}</pre>
+                    <pre class="logv-pre" id="${this.id}_previewPre" tabindex="0">${this.escapeForPre(d.content || "")}</pre>
                     </div>
                     `;
 
