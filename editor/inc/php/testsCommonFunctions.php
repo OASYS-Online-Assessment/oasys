@@ -7193,10 +7193,17 @@ function resetResults($data, &$db, &$returnData)
 			exit;
 		}
 
-		// flip date around to conform to ISO 8601 which MariaDB uses for comparison, and how our dates are stored
-		$s_date = date("Y-m-d", strtotime(date($s_date)));
-		$e_date = date("Y-m-d", strtotime(date($e_date)));
-		$e_date .= " 23:59:59"; // makes the end date value INCLUSIVE instead of EXCLUSIVE of the date itself
+		foreach ([$s_date, $e_date] as $value) {
+			[$day, $month, $year] = array_map('intval', explode('-', $value));
+			if (!checkdate($month, $day, $year)) {
+				$returnData['error'] = $uiLang->translate("Date format not valid! Please use DD-MM-YYYY only.");
+				exit;
+			}
+		}
+
+		// Include the whole selected date range, including fractional seconds.
+		$s_date = DateTimeImmutable::createFromFormat('!d-m-Y', $s_date)->format('Y-m-d');
+		$e_date = DateTimeImmutable::createFromFormat('!d-m-Y', $e_date)->modify('+1 day')->format('Y-m-d');
 
 		$query = "SELECT
 			activity.passwordId AS passwordId,
@@ -7212,7 +7219,7 @@ function resetResults($data, &$db, &$returnData)
 			JOIN logins ON logins.id = activity.loginId
 			JOIN passwords ON passwords.id = activity.passwordId
 		WHERE
-			testId = ? AND activity.tsActiveServer > ? AND activity.tsActiveServer < ?";
+			testId = ? AND activity.tsActiveServer >= ? AND activity.tsActiveServer < ?";
 
 		$results = $db->fetchTable($query, [$testId, $s_date, $e_date], 'passwordId');
 		return $results['data'];

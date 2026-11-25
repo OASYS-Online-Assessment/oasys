@@ -1348,10 +1348,10 @@ function exportAnswers(expAnsOpts, button) {
         $("#date_start, #date_end").on("blur", function() {
             if (isValidDate(this.value) === false) {
                 this.value = "";
-                $(this).css("background-color", "initial");
-                $(this).css("color", "#000");
-                ansDiag.enableButton("dl");
+                $(this).trigger("input");
             }
+            const invalidDate = $("#date_start, #date_end").toArray().some(field => field.value !== "" && !isValidDate(field.value));
+            if (invalidDate) ansDiag.disableButton("dl");
         });
 
         /* Use JSON toggle switch section */
@@ -1638,10 +1638,10 @@ function exportBehaviour_timing(expAnsOpts, button) {
         $("#date_start, #date_end").on("blur", function() {
             if (isValidDate(this.value) === false) {
                 this.value = "";
-                $(this).css("background-color", "initial");
-                $(this).css("color", "#000");
-                ansDiag.enableButton("dl");
+                $(this).trigger("input");
             }
+            const invalidDate = $("#date_start, #date_end").toArray().some(field => field.value !== "" && !isValidDate(field.value));
+            if (invalidDate) ansDiag.disableButton("dl");
         });
 
         /* File type selection section */

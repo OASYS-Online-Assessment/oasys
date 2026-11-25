@@ -471,9 +471,9 @@ class OasysScoring
 			return $this->headers;
 		} else {
 			$headersMinimized = [];
-			foreach ($this->headers as $header) {
+			foreach ($this->headers as $key => $header) {
 				// Take only the first elements from each header
-				$headersMinimized[] = array_slice($header, 0, $this->headerColumnOffset);
+				$headersMinimized[$key] = array_slice($header, 0, $this->headerColumnOffset);
 			}
 			return $headersMinimized;
 		}
@@ -488,9 +488,9 @@ class OasysScoring
 			return $this->scoreData;
 		} else {
 			$scoreDataMinimized = [];
-			foreach ($this->scoreData as $score) {
+			foreach ($this->scoreData as $passwordId => $score) {
 				// Take only the first elements from each header
-				$scoreDataMinimized[] = array_slice($score, 0, $this->headerColumnOffset);
+				$scoreDataMinimized[$passwordId] = array_slice($score, 0, $this->headerColumnOffset);
 			}
 			return $scoreDataMinimized;
 		}
