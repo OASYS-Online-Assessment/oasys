@@ -528,14 +528,13 @@ function fetchActivity($data, &$db, &$returnData): void
     $returnData['data'] = [];
     if (count($logins) === 0) return;
 
-    // Build password map from the visible rows only (avoid a second query)
+    // Decrypt each distinct password from the visible rows with one configuration lookup.
     $passwords = [];
     foreach ($logins as $row) {
         $enc = $row['password'];
-        if (!isset($passwords[$enc])) {
-            $passwords[$enc] = Crypt::decryptString($enc);
-        }
+        $passwords[$enc] = $enc;
     }
+    $passwords = Crypt::decryptStrings($passwords);
 
     /* group data into hierarchy */
     $out = [];
