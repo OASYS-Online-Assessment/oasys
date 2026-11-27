@@ -57,7 +57,6 @@
 		private ?string $errorVarKey;
 		private ?PDOStatement $statement;
 		private mixed $logFile;
-		private ?array $parameters;
 
 		public static function getInstance(string $key, array &$config): self
 		{
@@ -271,7 +270,6 @@
 			} else {
 				$res['rows'] = $this->rows;
 				$res['id'] = $this->id;
-				if ($res['id'] != $this->id) $res['id'] = $this->id;
 				$res['data'] = $this->data;
 			}
 			return $res;
@@ -384,7 +382,6 @@
 			}
 			if ($this->error) return $this->results();
 			if (!$this->hasConnection()) return $this->results();
-			$this->parameters = $parameters;
 			try {
 				$this->statement->execute($parameters);
 				$result = $this->statement;
@@ -470,7 +467,6 @@
 				error_log("rixPDO fetchPrepared [$this->debugId]");
 			}
 			if ($this->error) return $this->results();
-			$this->parameters = $parameters;
 			$formats = array("table", "tablenum", "row", "rownum", "column", "value");
 			if (!in_array(strtolower($format), $formats)) {
 				$this->setError(0, "Unkown format specified: " . $format);
@@ -741,7 +737,6 @@
 			if ($res !== true) {
 				return $res;
 			}
-			$this->parameters = $parameters;
 			$this->clearError();
 			$fileData = null;
 			try {
@@ -844,7 +839,6 @@
 				$valuesString = '';
 				$values = array();
 				$firstRound = true;
-				$rowNum = 0;
 				foreach ($data as $idx => $row) {
 					//to guarantee, that the keys are in the same order in each row, we have to sort every row by key
 					ksort($row);
@@ -853,7 +847,6 @@
 						$this->setError(0, "Wrong count of fields in row $rowCount. Expected $keyCount, but found " . count($row) . "!\n\n" . print_r($row, true));
 						return $this->results();
 					}
-					$rowNum++;
 					if (!$firstRound) {
 						$valuesString .= ', ';
 					} else {
@@ -937,17 +930,14 @@
 			return implode('.', $parts);
 		}
 
-		private function identifierString($identifiers, $parantheses = true): string
+		private function identifierString($identifiers): string
 		{
 			$keys = [];
 			foreach ($identifiers as $identifier) {
 				$keys[] = $this->quoteIdentifier($identifier);
 			}
 			$s = implode(', ', $keys);
-			if ($parantheses) {
-				$s = "($s)";
-			}
-			return $s;
+			return "($s)";
 		}
 
 		/*
@@ -1019,7 +1009,7 @@
 		 */
 
 
-		private function addBackticks($s)
+/*		private function addBackticks($s)
 		{
 			if ($this->debug) {
 				error_log("rixPDO addBackticks [$this->debugId]");
@@ -1033,6 +1023,7 @@
 			}
 			return $s;
 		}
+*/
 
 		public function quote($string, $parameterType = PDO::PARAM_STR): string|false
 		{
@@ -1163,7 +1154,6 @@
 				$fileColumn = array($fileColumn);
 			}
 
-			$this->parameters = $parameters;
 			$keys = [];
 			foreach ($data as $k => $v) {
 				$keys[] = '`' . $k . '` = :' . $k;
@@ -1226,7 +1216,6 @@
 			if ($this->debug) {
 				error_log("rixPDO update [$this->debugId] in $table");
 			}
-			$this->parameters = $parameters;
 			$updatesString = $this->keyString($data, false, false, '`', '`=?');
 			$values = array_values($data);
 			if ($parameters) {
@@ -1445,7 +1434,7 @@
 					}
 
 					$errorInfo = $this->statement->errorInfo();
-					if (is_array($errorInfo) && isset($errorInfo[0]) && $errorInfo[0] !== '00000') {
+					if (isset($errorInfo[0]) && $errorInfo[0] !== '00000') {
 						$totalErrors++;
 						$rowsetReports[] = [
 							'rowset' => $rowsetIdx,
@@ -1508,7 +1497,7 @@
 				'errorLine' => $e->getLine()
 			];
 		} finally {
-			$this->statement?->closeCursor();
+			$this->statement->closeCursor();
 		}
 
 		$this->rows = $totalAffectedRows;
@@ -1594,5 +1583,6 @@ v2.03	2026-09-23
 	- added inTransaction() to expose the connection's transaction status; returns false when disconnected
 v2.04	2026-11-27
 	- open and close the database log only when appending an error; report append failures to the PHP error log
+	- some code cleanup
 
 */
