@@ -1,7 +1,7 @@
 <?php
 
 /**
- * OasysBackendState v1.4
+ * OasysBackendState v1.4.1
  * This class replaces sessions for storing temporary data on the server side for a specific user. It stores data
  * in a database table instead of files, which makes it usable in a load-balanced environment.
  * Each user is identified by a stateId stored in a cookie sent alongside each request like session cookies.
@@ -9,13 +9,15 @@
  * dependencies: StateExpiredException.php, InvalidKeyException.php, rixPDO.php, database.php
  *
  * version history:
- * v1.0		initial release, forked from OasysFrontendState v1.1.2
- * v1.1		fixed $timeOut not being set from settings, and switched its unit from seconds to minutes
- * v1.2		made several methods static
+ * v1.0.0	initial release, forked from OasysFrontendState v1.1.2
+ * v1.1.0	fixed $timeOut not being set from settings, and switched its unit from seconds to minutes
+ * v1.2.0	made several methods static
  * 			added a number of new static methods required for systemstate management
- * v1.3		separated the backend-login inactivity threshold from the state/session timeout
- * v1.4		sampled stale-state cleanup once per request with a 1-in-100 chance, skipping open transactions
+ * v1.3.0	separated the backend-login inactivity threshold from the state/session timeout
+ * v1.4.0	sampled stale-state cleanup once per request with a 1-in-100 chance, skipping open transactions
  * 			checked current-state expiry independently and used direct activity cutoffs preserving timeout boundaries
+ * v1.4.1	open and close the backend state log only when appending an error; report append failures to the PHP error log
+ * 			record initialization errors even if a state ID has not been assigned yet
  *
  * usage:
  *    Creating a new instance or getting one that already exists:
@@ -49,8 +51,7 @@ use rixPDO;
 class OasysBackendState
 {
 	private static ?OasysBackendState $instance;
-	private string $logFile = __DIR__ . '/../../../logs/OasysStateBackend.txt';
-	private mixed $logHandle;
+	private const string LOG_FILE = __DIR__ . '/../../../logs/OasysStateBackend.txt';
 	private string $stateId;
 	private static int $timeOut = 2 * 60;
 	private static int $inactivityTimeOut = 10;
@@ -69,7 +70,6 @@ class OasysBackendState
 		static::$timeOut = $this->settings->getProperty('sessionTimeout') ?? static::$timeOut;
 		static::$inactivityTimeOut = $this->settings->getProperty('backendInactivityTimeout') ?? static::$inactivityTimeOut;
 		$this->db = $this->settings->getDatabaseInstance();
-		$this->openLogFile();
 
 		//get stateId from cookie or create new one
 		$this->stateId = $this->getStateId();
@@ -102,11 +102,6 @@ class OasysBackendState
 	// Prevent unserialization
 	public function __wakeup()
 	{
-	}
-
-	public function __destruct()
-	{
-		$this->closeLogFile();
 	}
 
 	/**
@@ -158,27 +153,12 @@ class OasysBackendState
 		$this->unsetDataProperty($property);
 	}
 
-	private function openLogFile(): void
-	{
-		if ((!file_exists($this->logFile) && is_writable(dirname($this->logFile))) || is_writable($this->logFile)) {
-			$this->logHandle = fopen($this->logFile, 'a');
-		} else {
-			$this->logHandle = false;
-			error_log("OasysBackendState error: cannot open log file " . $this->logFile . " for writing");
-		}
-	}
-
 	private function log(string $message): void
 	{
-		if (isset($this->logHandle) && is_resource($this->logHandle)) {
-			fwrite($this->logHandle, date('Y-m-d H:i:s') . " [$this->stateId] $message\n");
-		}
-	}
-
-	private function closeLogFile(): void
-	{
-		if (isset($this->logHandle) && is_resource($this->logHandle)) {
-			fclose($this->logHandle);
+		$stateId = $this->stateId ?? '';
+		$logEntry = date('Y-m-d H:i:s') . " [$stateId] $message\n";
+		if (@file_put_contents(self::LOG_FILE, $logEntry, FILE_APPEND) !== strlen($logEntry)) {
+			error_log("OasysBackendState error: could not append to log file '" . self::LOG_FILE . "'");
 		}
 	}
 

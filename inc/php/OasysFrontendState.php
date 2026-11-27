@@ -1,7 +1,7 @@
 <?php
 
 	/**
-	 * OasysFrontendState v1.2.3
+	 * OasysFrontendState v1.2.4
 	 * This class is used to manage the state of the Oasys frontend. It replaces sessions and has the
 	 * advantage of working atomically with the database. This means that 2 parallel running PHP scripts
 	 * can work on the same state without any problems.
@@ -20,6 +20,8 @@
 	 * v1.2.3:
 	 * 		sampled stale-state cleanup once per request with a 1-in-100 chance, skipping open transactions
 	 * 		checked current-state expiry independently and used direct activity cutoffs preserving timeout boundaries
+	 * v1.2.4:
+	 * 		open and close the frontend state log only when appending an error; report append failures to the PHP error log
 	 * usage:
 	 *    Creating a new instance:
 	 *        $state = OasysFrontendState::getInstance($instanceId, true);
@@ -67,8 +69,7 @@
 			'loginId', 'passwordId', 'testId', 'studentId', 'preview'
 		];
 
-		private string $logFile;
-		private mixed $logHandle;
+		private const string LOG_FILE = __DIR__ . '/../../logs/OasysState.txt';
 		private string $stateId;
 		private string $instanceId;
 		private static int $timeOut = 2 * 60 * 60; //states are cleaned after 2 hours of no activity
@@ -80,9 +81,6 @@
 		 */
 		private function __construct(string $instanceId, bool $init)
 		{
-			$this->logFile = __DIR__ . "/../../logs/OasysState.txt";
-			$this->openLogFile();
-
 			//clean out any states that have overstayed their welcome
 			$this->cleanStaleStates();
 
@@ -115,11 +113,6 @@
 		// Prevent unserialization
 		public function __wakeup()
 		{
-		}
-
-		public function __destruct()
-		{
-			$this->closeLogFile();
 		}
 
 		/**
@@ -155,27 +148,11 @@
 			}
 		}
 
-		private function openLogFile(): void
-		{
-			if ((!file_exists($this->logFile) && is_writable(dirname($this->logFile))) || is_writable($this->logFile)) {
-				$this->logHandle = fopen($this->logFile, 'a');
-			} else {
-				$this->logHandle = false;
-				error_log("OasysState error 01: log file '$this->logFile' is not writeable");
-			}
-		}
-
 		private function log(string $message): void
 		{
-			if (isset($this->logHandle) && is_resource($this->logHandle)) {
-				fwrite($this->logHandle, date('Y-m-d H:i:s') . " [$this->stateId, $this->instanceId] $message\n");
-			}
-		}
-
-		private function closeLogFile(): void
-		{
-			if (isset($this->logHandle) && is_resource($this->logHandle)) {
-				fclose($this->logHandle);
+			$logEntry = date('Y-m-d H:i:s') . " [$this->stateId, $this->instanceId] $message\n";
+			if (@file_put_contents(self::LOG_FILE, $logEntry, FILE_APPEND) !== strlen($logEntry)) {
+				error_log("OasysState error: could not append to log file '" . self::LOG_FILE . "'");
 			}
 		}
 

@@ -4,7 +4,7 @@
 
 	class.rixPDO.php
 	wrapper around PDO for mySQL
-	version 2.03
+	version 2.04
 
 	version history at the end of the file
 
@@ -57,7 +57,6 @@
 		private ?string $errorVarKey;
 		private ?PDOStatement $statement;
 		private mixed $logFile;
-		private mixed $logHandle;
 		private ?array $parameters;
 
 		public static function getInstance(string $key, array &$config): self
@@ -169,16 +168,6 @@
 				error_log("rixPDO connect [$this->debugId]");
 			}
 			$this->clearError();
-			if ($this->logFile) {
-				if ((!file_exists($this->logFile) && is_writable(dirname($this->logFile))) || is_writable($this->logFile)) {
-					$this->logHandle = fopen($this->logFile, 'a');
-				} else {
-					$this->logHandle = false;
-					error_log("rixPDO error 01: log file '$this->logFile' is not writeable");
-				}
-			} else {
-				$this->logHandle = false;
-			}
 			try {
 				// Existing attributes
 				$pdoAttributes = [
@@ -226,11 +215,13 @@
 			if ($this->debug) {
 				error_log("rixPDO writeLog [$this->debugId]");
 			}
-			if (isset($this->logHandle) && is_resource($this->logHandle)) {
-				$now = new DateTimeImmutable();
-				$timeStamp = $now->format('Y-m-d H:i:s.u');
-				$logEntry = "$timeStamp $msg\n" . $this->query . "\n\n";
-				fwrite($this->logHandle, $logEntry);
+			if (!$this->logFile) {
+				return;
+			}
+			$timeStamp = (new DateTimeImmutable())->format('Y-m-d H:i:s.u');
+			$logEntry = "$timeStamp $msg\n" . $this->query . "\n\n";
+			if (@file_put_contents($this->logFile, $logEntry, FILE_APPEND) !== strlen($logEntry)) {
+				error_log("rixPDO error: could not append to log file '$this->logFile'");
 			}
 		}
 
@@ -309,9 +300,6 @@
 				$this->rollback();
 			}
 			$this->con = null;
-			if (isset($this->logHandle) && is_resource($this->logHandle)) {
-				fclose($this->logHandle);
-			}
 		}
 
 		private function hasConnection(): bool
@@ -1604,5 +1592,7 @@ v2.02	2026-06-18
 	- modifications in executeBatch() method
 v2.03	2026-09-23
 	- added inTransaction() to expose the connection's transaction status; returns false when disconnected
+v2.04	2026-11-27
+	- open and close the database log only when appending an error; report append failures to the PHP error log
 
 */
