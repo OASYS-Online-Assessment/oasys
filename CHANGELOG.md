@@ -20,6 +20,7 @@ All notable changes to OASYS are documented in this file.
 
 - Pass the cached media type to the player for preloaded audio and video when the browser supports that type, avoiding incorrect guesses from `blob:` URLs.
 - Prevent an exception when a text field loses focus after the answer queue worker has stopped. Keep the final answer in the buffer for the last save attempt.
+- Prevent database log writes from failing on oversized frontend login names. Show the first 30 characters followed by an ellipsis for longer names, and keep lockout counts separate for distinct logins with the same prefix.
 - Fix failures in totals-only score exports and use the actual export columns in Excel and OpenOffice reports.
 - Keep downloads disabled while either date is invalid when exporting answers, scores, or behaviour and timing data.
 - Validate calendar dates when resetting results by date and include the whole selected range, including records with fractional timestamps on the end date.

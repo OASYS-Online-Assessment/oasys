@@ -474,6 +474,21 @@
 		return strtolower(trim($login));
 	}
 
+	function truncateFrontendLoginForLog(string $login): string
+	{
+		$prefix = preg_match('/\A.{0,30}/su', $login, $matches) === 1 ? $matches[0] : substr($login, 0, 30);
+		return $prefix === $login ? $login : $prefix . '…';
+	}
+
+	function frontendLoginLogScopes(string $loginKey): array
+	{
+		// Keep counting matching failures and lockouts recorded before truncation was added.
+		return [
+			'scope=login;loginHash=' . hash('sha256', $loginKey) . ';',
+			strlen($loginKey) <= 255 ? 'scope=login;login=' . rawurlencode($loginKey) . ';' : null,
+		];
+	}
+
 	function rejectFrontendLoginAttempt(rixPDO &$db, array &$returnData, OasysFrontendState $state, string $login, string $reason): void
 	{
 		$lockStatus = registerFrontendLoginFailure($db, $login, $reason);
@@ -490,31 +505,40 @@
 	{
 		global $settings;
 		$loginKey = normalizeLoginThrottleKey($login);
-		$encodedLogin = rawurlencode($loginKey);
+		$loginLabel = truncateFrontendLoginForLog($login);
+		$scopes = frontendLoginLogScopes($loginKey);
+		[$hashScope, $legacyScope] = $scopes;
 		$encodedReason = rawurlencode($reason);
-		$data = "scope=login;login=$encodedLogin;reason=$encodedReason";
+		$lockData = $legacyScope;
+		$data = $legacyScope . "reason=$encodedReason";
+		if ($loginLabel !== $login || $legacyScope === null || strlen($data) > 255) {
+			// Use the full login's hash for matching and keep the readable label at the end.
+			$loginLabel = preg_replace('/[[:cntrl:]]/u', '?', $loginLabel);
+			$lockData = $hashScope . "login=$loginLabel";
+			$data = $hashScope . "reason=$encodedReason;login=$loginLabel";
+		}
 		$db->insert("logErrors", ['message' => 'frontendLoginFailure', 'data' => $data]);
 
 		$window = $settings['frontendFailedAttemptWindow'];
 		$countByLoginQuery = "SELECT COUNT(*) FROM logErrors
 			WHERE message='frontendLoginFailure'
 			AND tsServer >= (NOW() - INTERVAL $window SECOND)
-			AND data LIKE ?";
-		$countByLogin = (int)($db->fetchValue($countByLoginQuery, ["%scope=login;login=$encodedLogin;%"])['data'] ?? 0);
-		if ($countByLogin >= $settings['frontendMaxFailedAttempts'] && frontendLockMinutesRemaining($db, "scope=login;login=$encodedLogin;") === 0) {
-			$db->insert("logErrors", ['message' => 'frontendLoginLock', 'data' => "scope=login;login=$encodedLogin;"]);
+			AND (LOCATE(?, data) = 1 OR LOCATE(?, data) = 1)";
+		$countByLogin = (int)($db->fetchValue($countByLoginQuery, $scopes)['data'] ?? 0);
+		if ($countByLogin >= $settings['frontendMaxFailedAttempts'] && frontendLockMinutesRemaining($db, $scopes) === 0) {
+			$db->insert("logErrors", ['message' => 'frontendLoginLock', 'data' => $lockData]);
 		}
 
 		return getFrontendLoginLockStatus($db, $login);
 	}
 
-	function frontendLockMinutesRemaining(rixPDO &$db, string $scopeData): int
+	function frontendLockMinutesRemaining(rixPDO &$db, array $scopes): int
 	{
 		global $settings;
 		$lockTsQuery = "SELECT UNIX_TIMESTAMP(tsServer) FROM logErrors
-			WHERE message='frontendLoginLock' AND data LIKE ?
+			WHERE message='frontendLoginLock' AND (LOCATE(?, data) = 1 OR LOCATE(?, data) = 1)
 			ORDER BY id DESC LIMIT 1";
-		$lastLockTimestamp = (int)($db->fetchValue($lockTsQuery, ["%$scopeData%"])['data'] ?? 0);
+		$lastLockTimestamp = (int)($db->fetchValue($lockTsQuery, $scopes)['data'] ?? 0);
 		if ($lastLockTimestamp === 0) {
 			return 0;
 		}
@@ -528,8 +552,7 @@
 	function getFrontendLoginLockStatus(rixPDO &$db, string $login): array
 	{
 		$loginKey = normalizeLoginThrottleKey($login);
-		$encodedLogin = rawurlencode($loginKey);
-		$remainingMinutes = frontendLockMinutesRemaining($db, "scope=login;login=$encodedLogin;");
+		$remainingMinutes = frontendLockMinutesRemaining($db, frontendLoginLogScopes($loginKey));
 		return [
 			'locked' => $remainingMinutes > 0,
 			'minutesRemaining' => $remainingMinutes
@@ -796,6 +819,11 @@
 	}
 
 	function logError(rixPDO &$db, string $message, ?array $data): void{
+		foreach (['login', 'username'] as $field) {
+			if (is_string($data[$field] ?? null)) {
+				$data[$field] = truncateFrontendLoginForLog($data[$field]);
+			}
+		}
 		$encodedData = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}';
 		$truncate = static fn(string $value): string => function_exists('mb_strcut')
 			? mb_strcut($value, 0, 255, 'UTF-8')
