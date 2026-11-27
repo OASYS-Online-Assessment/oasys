@@ -56,6 +56,12 @@ function global_prepareJSErrorReport(event, context = {}) {
 	const filename = event.filename || error.fileName;
 	const lineno = event.lineno || error.lineNumber;
 	const colno = event.colno || error.columnNumber;
+
+	// Browsers can hide all diagnostic details for a script error.
+	if ((message === 'Script error.' || message === 'Script error') && !filename && !stack && !(lineno > 0) && !(colno > 0)) {
+		return;
+	}
+
 	let realFilename;
 
 	if (/^blob:/.test(filename)) {
