@@ -1,7 +1,44 @@
 "use strict";
 /* global $, landingPage, landingPagePath, landingPageManifest */
 
-$(loader_init);
+loader_start();
+
+function loader_start() {
+    const jquery = window.jQuery;
+    const missing = [];
+
+    if (typeof jquery !== 'function') {
+        missing.push('jQuery');
+    } else {
+        if (!jquery.ui?.version) missing.push('jQuery UI');
+        if (typeof jquery.fn?.draggable !== 'function') missing.push('jQuery UI draggable');
+        for (const name of ['easeInOutBack', 'easeOutBack', 'easeOutQuint']) {
+            if (typeof jquery.easing?.[name] !== 'function') missing.push('jQuery easing ' + name);
+        }
+    }
+
+    if (missing.length === 0) {
+        jquery(loader_init);
+        return;
+    }
+
+    // The usual error dialog and reporter are unavailable before startup.
+    document.addEventListener('DOMContentLoaded', function () {
+        document.getElementById('startupError').hidden = false;
+    }, {once: true});
+
+    const message = 'OASYS startup blocked. Missing browser dependencies: ' + missing.join(', ');
+    console.error(message);
+    window.fetch?.('feClientErrorLogger.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        keepalive: true,
+        body: JSON.stringify({
+            report: new Date().toLocaleString() + '\nError: ' + message,
+            context: {mode: 'startup', serialNumber: window.serialNumber}
+        })
+    }).catch(() => console.warn('Could not send startup error report.'));
+}
 
 function loader_init() {
     debug_log("loader", `loader_init()`);

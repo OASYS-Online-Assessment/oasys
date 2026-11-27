@@ -14,11 +14,7 @@ $TBS->ResetVarRef(false); // eliminate all globally pulled vars from use
 # Preconfigure Report Data Variables #
 # ---------------------------------- #
 
-if (in_array($fmt, ["openoffice", "excel"]) && isset($detail) && $detail === "total") {
-    $legend = ['', 'login', 'tag', 'metainfo', 'lastActivity', 'total'];
-} else {
-    $legend = $returnData['csvHeaders']['legend']; // all horizontal legend keys
-}
+$legend = $returnData['csvHeaders']['legend']; // same columns as the exported rows
 
 $headers = $returnData['csvHeaders']; // all vertical property keys
 unset($headers['legend']); // remove legend from vertical property key set

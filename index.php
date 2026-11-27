@@ -267,6 +267,10 @@
 	</head>
 
 	<body>
+	<section id="startupError" role="alert" hidden>
+		<h1>OASYS could not start</h1>
+		<p>A required component did not load. Reload this page. If the problem persists, contact support.</p>
+	</section>
     <iframe id="studentLoginFrame" name="studentLoginFrame" class="hidden"></iframe>
     <iframe id="externalEditor" class="hidden"></iframe>
 	<div id="contentWrapper"></div>

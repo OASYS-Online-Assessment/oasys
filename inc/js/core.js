@@ -1139,7 +1139,7 @@ function core_userEvent(event) {
 						type: 'deleteEvent',
 						eventId: ev.eventId
 					};
-					workers.queue.postMessage(message);
+					workers.queue?.postMessage(message);
 				}
 			}
 		}
@@ -1148,16 +1148,19 @@ function core_userEvent(event) {
 		if (!event.editInProgress) {
 			event.eventId = ++state.eventCounter;
 			events[event.eventId] = event;
-			workers.queue.postMessage(event);
+			workers.queue?.postMessage(event);
 		}
 
 	} else {
 
 		event.eventId = ++state.eventCounter;
 		events[event.eventId] = event;
-		workers.queue.postMessage(event);
+		workers.queue?.postMessage(event);
 
 	}
+
+	// An error dialog can blur a field after cleanup. Keep the event for the final beacon.
+	if (!workers.queue) return;
 
 	if (event.subType !== 'scripting') {
 		let script = fetchFromObjPath(test, ['items', state.currentItemId, 'scripts', 'onActivity']);

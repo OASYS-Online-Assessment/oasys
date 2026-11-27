@@ -2,7 +2,31 @@
 
 All notable changes to OASYS are documented in this file.
 
-## [3.6.32] - 2026-11-23
+## \[3.6.33] - 2026-11-27
+
+### Added
+
+- Check that jQuery and the required jQuery UI functions are available before starting the frontend. If a dependency is missing, show a reload message and report the missing component.
+- Report browser media errors, rejected Play requests, and unavailable playback renderers with the affected media field and the available error details. Limit reporting to one entry per player.
+
+### Changed
+
+- Open the database log and both state logs (frontend and backend) only when appending an error, reducing shared filesystem activity during normal requests.
+- Reuse the encryption configuration for all password decryptions in each Activity Tracker refresh, reducing configuration file reads.
+- Skip generic `Script error.` reports when the browser provides no source location or stack trace.
+- Remove unused code from the database wrapper.
+
+### Fixed
+
+- Pass the cached media type to the player for preloaded audio and video when the browser supports that type, avoiding incorrect guesses from `blob:` URLs.
+- Prevent an exception when a text field loses focus after the answer queue worker has stopped. Keep the final answer in the buffer for the last save attempt.
+- Prevent database log writes from failing on oversized frontend login names. Show the first 30 characters followed by an ellipsis for longer names, and keep lockout counts separate for distinct logins with the same prefix.
+- Fix failures in totals-only score exports and use the actual export columns in Excel and OpenOffice reports.
+- Keep downloads disabled while either date is invalid when exporting answers, scores, or behaviour and timing data.
+- Validate calendar dates when resetting results by date and include the whole selected range, including records with fractional timestamps on the end date.
+- Properly escaped square brackets in this changelog file to avoid misinterpretation as Markdown links.
+
+## \[3.6.32] - 2026-11-23
 
 ### Fixed
 - Fixed a problem with the ResizeObserver in image interactions
@@ -10,14 +34,14 @@ All notable changes to OASYS are documented in this file.
 - Fixed a problem of log files being visible but no text could be selected and copied
 - Removed the "hacking attempt" error, due to false positives
 
-## [3.6.31] - 2026-11-17
+## \[3.6.31] - 2026-11-17
 
 ### Fixed
 
 - Blocked emojis in frontend login and password fields before submitting requests to prevent firewall encoding warnings, with localized validation messages.
 - Fixed drag-and-drop insertion positioning by keeping slot positions separate for each drop zone.
 
-## [3.6.30] - 2026-11-13
+## \[3.6.30] - 2026-11-13
 
 ### Added
 - Added malformed JSON diagnostics for `loader.php` requests in `logs/fe_client_errors.txt`, including request details, the original data, and Base64 copies of the data and request body for payload analysis.
@@ -27,12 +51,12 @@ All notable changes to OASYS are documented in this file.
 - Fixed frontend client error logging failing when the log destination is a pipe or another stream that does not support exclusive locks.
 - Removed cookie-support error logging on initial page load to avoid repeated log entries from health monitors; the cookie check and user-facing error remain active.
 
-## [3.6.29] - 2026-11-11
+## \[3.6.29] - 2026-11-11
 
 ### Fixed
 - Fixed the name of listdocumentsBlocked.png to listDocumentsBlocked.png in watchlist.css, interface.css and for the file name itself in 2 places
 
-## [3.6.28] - 2026-11-11
+## \[3.6.28] - 2026-11-11
 
 ### Added
 
@@ -50,7 +74,7 @@ All notable changes to OASYS are documented in this file.
 - Improved failed-image recovery with delayed, cache-busting retries for relative and absolute media URLs, independent image-load handlers, and detailed error reports after two unsuccessful retries.
 - Made JavaScript error reporting tolerate missing error details and unresolved blob URLs, and handle report-delivery failures without generating another error.
 
-## [3.6.27] - 2026-11-03
+## \[3.6.27] - 2026-11-03
 
 ### Added
 
@@ -60,40 +84,40 @@ All notable changes to OASYS are documented in this file.
 
 - Fixed a problem where the wrong text field was focused when a choice answer with a linked text field was selected.
 
-## [3.6.26] - 2026-11-02
+## \[3.6.26] - 2026-11-02
 
 ### Fixed
 
 - Fixed the student-only Set Password action remaining visible in regular-login wizard and bulk-edit workflows after cancelling student-login bulk editing.
 
-## [3.6.25] - 2026-10-30
+## \[3.6.25] - 2026-10-30
 
 ### Changed
 
 - Updated the OASYS Administration Manual.
 
-## [3.6.24] - 2026-10-29
+## \[3.6.24] - 2026-10-29
 
 ### Changed
 
 - Updated the OASYS User Manual and Administration Manual.
 
-## [3.6.23] - 2026-10-28
+## \[3.6.23] - 2026-10-28
 
 ### Fixed
 - Fixed a problem where saveData.php would be called without a refer, causing some firewalls to respond with a 403 error.
 
-## [3.6.22] - 2026-10-27
+## \[3.6.22] - 2026-10-27
 
 ### Fixed
 - Upgraded previous fix to also run on PHP 8.5, ensuring proper UTF-8 encoding and collation for MariaDB databases across supported PHP versions.
 
-## [3.6.21] - 2026-10-26
+## \[3.6.21] - 2026-10-26
 
 ### Fixed
 - Added missing `\PDO::MYSQL_ATTR_INIT_COMMAND` attribute to the database connection to ensure proper UTF-8 encoding and collation for MariaDB databases. This is necessary for servers where the default connection uses a different collation.
 
-## [3.6.20] - 2026-10-23
+## \[3.6.20] - 2026-10-23
 
 ### Fixed
 
@@ -101,19 +125,19 @@ All notable changes to OASYS are documented in this file.
 - Tests whose selected skin is no longer installed now save the fallback skin in the same scalar option format.
 - Newly saved empty per-item skin override and script maps use JSON objects instead of arrays.
 
-## [3.6.19] - 2026-10-23
+## \[3.6.19] - 2026-10-23
 
 ### Added
 
 - TestUpdater script that converts all legacy skin options to new format. It runs automatically after the update.
 
-## [3.6.18] - 2026-10-23
+## \[3.6.18] - 2026-10-23
 
 ### Fixed
 
 - Fixed Test Manager reporting that another user changed a test when closing the editor after changing the timer minutes and opening a preview.
 
-## [3.6.17] - 2026-10-20
+## \[3.6.17] - 2026-10-20
 
 ### Fixed
 - Fixed dyslexic button not showing even if activated in skin settings
@@ -121,53 +145,53 @@ All notable changes to OASYS are documented in this file.
 - Now showing task of 2+ tests correctly in grey scale when all of the tests have been finished
 - Removed an errant console.log() statement
 
-## [3.6.16] - 2026-10-20
+## \[3.6.16] - 2026-10-20
 
 ### Fixed
 
 - Fixed Results Manager exports losing the CSV filename extension in Chrome and gave answer, score, and time-spent exports distinct, browser-compatible filenames.
 
-## [3.6.15] - 2026-10-20
+## \[3.6.15] - 2026-10-20
 
 ### Added
 
 - Added a Force logout action to the Activity Tracker so authorized back-end users can release a stuck test session without resetting its answers, progress, activity, or remaining time.
 
-## [3.6.14] - 2026-10-16
+## \[3.6.14] - 2026-10-16
 
 ### Fixed
 
 - Renamed the misleading Cancel button to Close in Test Manager and Test Taker Manager page and test assignment dialogs, including the German and French labels.
 - Locked published mutation test structures, prevented their assigned linear tests from returning to Draft, and clarified the localized Test state help.
 
-## [3.6.13] - 2026-10-15
+## \[3.6.13] - 2026-10-15
 
 ### Fixed
 
 - Fixed Test Taker Manager assignment validation incorrectly rejecting tests that regular users could access in the Test Manager, including password, label, copy, creation, and CSV workflows.
 - Fixed containerized installations hiding the Content Manager for regular users when the unavailable Upgrader entry was removed.
 
-## [3.6.12] - 2026-10-13
+## \[3.6.12] - 2026-10-13
 
 ### Fixed
 
 - Fixed Translation Review remaining empty for regular Content Manager users with permission to edit the page.
 - Added the missing error-dialog resources to Translation Review so request failures are displayed correctly.
 
-## [3.6.11] - 2026-10-13
+## \[3.6.11] - 2026-10-13
 
 ### Fixed
 
 - Fixed mouse input becoming unresponsive in a page preview after opening and closing the Concept Maps editor in the Content Manager.
 
-## [3.6.10] - 2026-09-29
+## \[3.6.10] - 2026-09-29
 
 ### Fixed
 
 - Fixed a PHP error when saving permissions for multiple selected folders while retaining their existing owners.
 - Improved Activity Tracker performance for large datasets and made category expand/collapse operations responsive.
 
-## [3.6.9] - 2026-09-23
+## \[3.6.9] - 2026-09-23
 
 ### Added
 - CHANGELOG.md (this file), SECURITY.md, and README.md have been added.
@@ -176,20 +200,20 @@ All notable changes to OASYS are documented in this file.
 - Cleaning routine of FrontendState and BackendState classes have been made less aggressive.
 - rixPDO updated to v2.03 adding the inTransaction() method.
 
-## [3.6.8] - 2026-09-22
+## \[3.6.8] - 2026-09-22
 
 ### Added
 
 - Slider interaction now supports showing tick marks for subdivisions.
 
-## [3.6.7] - 2026-09-10
+## \[3.6.7] - 2026-09-10
 
 ### Fixed
 
 - Corrected the database migration files included in the release package.
 - Updated the release version metadata.
 
-## [3.6.6] - 2026-09-05
+## \[3.6.6] - 2026-09-05
 
 ### Added
 
@@ -210,39 +234,39 @@ All notable changes to OASYS are documented in this file.
 - Fixed several dashboard and results-display issues.
 - Fixed inconsistent loading-state and modal behavior.
 
-## [3.6.5] - 2026-09-04
+## \[3.6.5] - 2026-09-04
 
 ### Fixed
 
 - Restored an additional line of code that was unintentionally left disabled during the 3.6.3 update.
 
-## [3.6.4] - 2026-09-02
+## \[3.6.4] - 2026-09-02
 
 ### Fixed
 
 - Restored a line of code that had been left disabled during debugging.
 
-## [3.6.3] - 2026-09-01
+## \[3.6.3] - 2026-09-01
 
 ### Changed
 
 - Removed a blocking database-integrity check from the dashboard so that detected problems can be reported without preventing dashboard access.
 
-## [3.6.2] - 2026-08-31
+## \[3.6.2] - 2026-08-31
 
 ### Fixed
 
 - Corrected the system check when the database patch list is empty.
 - Corrected validation of the mandatory OpenSSL PHP extension.
 
-## [3.6.1] - 2026-08-31
+## \[3.6.1] - 2026-08-31
 
 ### Fixed
 
 - Fixed a system-check failure that occurred when the database patch list was empty.
 - Fixed reporting of the mandatory OpenSSL PHP extension.
 
-## [3.6.0] - 2026-08-27
+## \[3.6.0] - 2026-08-27
 
 ### New features
 

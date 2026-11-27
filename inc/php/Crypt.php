@@ -172,12 +172,25 @@ class Crypt {
         return openssl_encrypt($data, $cfg['method'], $cfg['key'], 0, $cfg['iv']);
     }
 
-    public static function decryptString($data): false|string
+	public static function decryptString($data): false|string
 	{
-		foreach (self::getAesConfigs() as $cfg) {
-			$plain = self::decryptWithConfig((string)$data, $cfg);
+		return self::decryptWithConfigs((string)$data, self::getAesConfigs());
+	}
+
+	public static function decryptStrings(array $values): array
+	{
+		if ($values === []) return [];
+
+		$configs = self::getAesConfigs();
+		return array_map(static fn($data) => self::decryptWithConfigs((string)$data, $configs), $values);
+	}
+
+	private static function decryptWithConfigs(string $data, array $configs): false|string
+	{
+		foreach ($configs as $cfg) {
+			$plain = self::decryptWithConfig($data, $cfg);
 			if ($plain !== false && mb_check_encoding($plain, 'UTF-8')) return $plain;
 		}
 		return false;
-    }
+	}
 }

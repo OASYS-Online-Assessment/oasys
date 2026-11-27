@@ -55,6 +55,7 @@
 		let duration;
 		let playing = false;
 		let showTimer = false;
+		let playbackErrorReported = false;
 
 		/* optional settings */
 		if (!options) return;
@@ -87,17 +88,43 @@
 			span.css('width', widthString);
 		}
 
-		const html = `<${options.mediaType} id='${options.id}' src='${options.file[language]}' style='max-width: 100%' playsinline>`;
+		const source = options.file[language];
+		const isBlobSource = String(source).startsWith('blob:');
+		const cachedId = isBlobSource ? Object.keys(loader.mediaURLs).find(id => loader.mediaURLs[id] === source) : undefined;
+		const mimeType = cachedId !== undefined ? loader.mediaCache[cachedId]?.type : undefined;
+		const html = `<${options.mediaType} id='${options.id}' src='${source}' style='max-width: 100%' playsinline>`;
 		span.html(html);
+		// MediaElement guesses video/mp4 for extensionless URLs unless given a type.
+		const mediaNode = span.children().get(0);
+		if (mimeType && mediaNode?.canPlayType(mimeType)) {
+			mediaNode.setAttribute('type', mimeType);
+		}
 
 		let instance = new MediaElementPlayer(options.id, {
-			success: function (mediaElement, node, instance) {
+			success: function (mediaElement, node, player) {
+				$(mediaElement).on('error', playbackError);
+				// The HTML5 renderer does not forward every native media error.
+				if (node && node !== mediaElement) $(node).on('error', playbackError);
+				// MediaElement's Play button does not report rejected play requests.
+				const play = player.play;
+				player.play = function (...args) {
+					const playback = play.apply(this, args);
+					if (playback === null && mediaElement.renderer === null) {
+						reportPlaybackError('Media playback could not start: no playback renderer available', 'play');
+					}
+					playback?.catch?.(error => {
+						// Pausing or leaving the page can cancel an in-flight play request.
+						if (error?.name === 'AbortError' || node?.isConnected === false) return;
+						const detail = error?.message || String(error ?? 'No browser error details');
+						reportPlaybackError(`Media play request rejected (${error?.name ?? 'Error'}): ${detail}`, 'play');
+					});
+					return playback;
+				};
 				mediaElement.load();
 				$(mediaElement).on('playing', playBackHasStarted);
 				$(mediaElement).on('pause', playBackIsPaused);
 				$(mediaElement).on('ended', playBackHasEnded);
 				$(mediaElement).on('timeupdate', playBackProgress);
-				$(mediaElement).on('error', playbackError);
 				if (options.disableControls) {
 					parent.addClass('oasys__mejs__disableControls');
 					mediaElement.setCurrentTime(startTime);
@@ -234,7 +261,30 @@
 		}
 
 		function playbackError(e) {
-			console.error('Error occurred: ' + e.target.error.code);
+			// MediaElement can call listeners with a synthetic event whose target is null.
+			const event = e.originalEvent ?? e;
+			const mediaError = event.target?.error ?? event.detail?.target?.originalNode?.error;
+			const code = mediaError?.code;
+			const message = mediaError?.message || event.message || 'No browser error details';
+			reportPlaybackError(`Media playback failed${code ? ` (code ${code})` : ''}: ${message}`, 'mediaError');
+		}
+
+		function reportPlaybackError(message, stage) {
+			if (playbackErrorReported) return;
+			playbackErrorReported = true;
+
+			const error = new Error(message);
+			console.error(error);
+			global_prepareJSErrorReport({error, filename: 'plugins/audioVideo.js'}, {
+				stage: stage,
+				mediaItemId: item.id,
+				mediaFieldId: options.id,
+				mediaType: options.mediaType,
+				mediaLanguage: language,
+				mediaSource: isBlobSource ? 'preloaded' : 'url',
+				mediaId: cachedId ?? null,
+				mediaMimeType: mimeType ?? null
+			});
 		}
 
 		return this;

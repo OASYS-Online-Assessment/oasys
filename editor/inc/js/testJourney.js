@@ -1745,10 +1745,10 @@ async function exportScore(expScrOpts, button) {
         $("#s_date_start, #s_date_end").on("blur", function() {
             if (isValidDate(this.value) === false) {
                 this.value = "";
-                $(this).css("background-color", "initial");
-                $(this).css("color", "#000");
-                scrDiag.enableButton("dl");
+                $(this).trigger("input");
             }
+            const invalidDate = $("#s_date_start, #s_date_end").toArray().some(field => field.value !== "" && !isValidDate(field.value));
+            if (invalidDate) scrDiag.disableButton("dl");
         });
 
         /* init file type dropdown option list */
